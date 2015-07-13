@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import bisect
+import csv
 import cPickle as pickle
 from collections import defaultdict as ddict
 import functools
@@ -13,10 +14,10 @@ import numpy
 from lxml import etree as etree
 from matplotlib import pyplot as plt
 
-from pymzml import run
-from pyteomics import mass
+import pymzml
+import pyteomics
 
-import msfunctions.common as cFU
+import pyms.auxiliary as aux
 
 
 class ContainerItem(object):
@@ -77,7 +78,7 @@ class ItemContainer(object):
             else:
                 selector = functools.partial(operator.eq, filterTargetValue)
 
-        specfiles = self.specfiles if specfiles == None else cFU.toList(specfiles)
+        specfiles = self.specfiles if specfiles == None else aux.toList(specfiles)
         items = list()
         for specfile in specfiles:
             items.extend(self.container[specfile])
@@ -110,7 +111,7 @@ class ItemContainer(object):
                               selector=selector
                               )
         arrays = dict()
-        attributes = set(['containerId', 'id', 'specfile'] + cFU.toList(attributes))
+        attributes = set(['containerId', 'id', 'specfile'] + aux.toList(attributes))
         for key in attributes:
             arrays[key] = list()
 
@@ -200,6 +201,109 @@ class SiContainer(ItemContainer):
                 _siContainer.ionLists[key]['mz'] = mzList
                 _siContainer.ionLists[key]['i'] = iList
         return _siContainer
+
+
+class SpectrumIdentificationItem(ContainerItem):
+    """Representation of a msn sequence annotation (Peptide Spectrum Match)"""
+    def __init__(self, identifier, specfile):
+        super(SpectrumIdentificationItem, self).__init__(identifier, specfile)
+
+
+class SiiContainer(ItemContainer):
+    """
+    ItemContainer for msn spectrum identifications (Peptide Spectrum Matches),
+    SiiContainer ... Spectrum Identification Item Container.
+    see also 'class::SiContainer' (Spectrum Item Container) which contains spectrum data.
+    """
+    def __init__(self):
+        super(SiiContainer, self).__init__()
+
+    def addSiInfo(self, siContainer, specfiles=None, attributes=['obsMz', 'rt', 'charge']):
+        """ Copy attributes into sii from the corresponding SpectrumItem in siContainer,
+        if an attribute is not presend in the SpectrumItem the attribute value is set to None
+        Attribute examples: 'obsMz', 'rt', 'charge', 'TIC', 'IIT', 'ms1Id'
+        """
+        specfiles = self.specfiles if specfiles == None else aux.toList(specfiles)
+
+        for specfile in specfiles:
+            if specfile not in self.specfiles:
+                print(specfile, 'not present in siiContainer.')
+            elif specfile not in siContainer.specfiles:
+                print(specfile, 'not present in siContainer.')
+            else:
+                for sii in self.container[specfile]:
+                    si = siContainer.index[sii.containerId]
+                    for attribute in attributes:
+                        setattr(sii, attribute, getattr(si, attribute, None))
+
+
+    def calcMz(self, specfiles=None, guessCharge=True):
+        # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
+        specfiles = self.specfiles if specfiles is None else aux.toList(specfiles)
+        tempPeptideMasses = dict()
+        for specfile in specfiles:
+            if specfile not in self.specfiles:
+                print(specfile, 'not present in siiContainer.')
+            else:
+                for sii in self.getItems(specfiles=specfile):
+                    charge = sii.charge
+                    peptide = sii.peptide
+                    if peptide not in tempPeptideMasses:
+                        tempPeptideMasses[peptide] = calcPeptideMass(peptide)
+                    peptideMass = tempPeptideMasses[peptide]
+                    if charge is not None:
+                        sii.calcMz = calcMzFromMass(peptideMass, charge)
+                    elif guessCharge:
+                        guessedCharge = round(peptideMass / (sii.obsMz - aux.atomicMassProton), 0)
+                        sii.calcMz = calcMzFromMass(peptideMass, guessedCharge)
+                        sii.charge = guessedCharge
+        del(tempPeptideMasses)
+
+
+class FeatureItem(ContainerItem):
+    """Representation of a peptide elution feature
+    ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
+    ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
+    ivar siIds: containerId values of matched Si entries
+    ivar siiIds: containerId values of matched Sii entries
+    ivar peptide: peptide sequence of best scoring Sii match
+    ivar sequence: plain amino acid sequence of best scoring Sii match, used to retrieve protein information
+    ivar score: score of best scoring Sii match
+    """
+    def __init__(self, identifier, specfile):
+        super(FeatureItem, self).__init__(identifier, specfile)
+        self.isMatched = None
+        self.isAnnotated = None
+        self.siIds = list()
+        self.siiIds = list()
+        self.peptide = None
+        self.sequence = None
+        self.score = None
+
+
+class FeatureContainer(ItemContainer):
+    """
+    ItemContainer for peptide elution features,
+    see also 'class::SiContainer' (Spectrum Item Container) which contains spectrum data.
+    see also 'class::SiiContainer' (Spectrum Identification Item Container) which contains sequence data.
+    """
+    def __init__(self):
+        super(FeatureContainer, self).__init__()
+
+
+###############################################
+### Import functions for various file types ###
+###############################################
+def pymzmlReadMzml(mzmlPath):
+    """Auxiliary function, specifies extra accesions to read from an mzml file, returns a pymzml run object and """
+    extraAccessions = [('MS:1000827', ['value']),
+                       ('MS:1000828', ['value']),
+                       ('MS:1000829', ['value']),
+                       ('MS:1000744', ['value']),
+                       ('MS:1000016', ['value']),
+                       ('MS:1000927', ['value'])
+                       ]
+    return pymzml.run.Reader(mzmlPath, extraAccessions=extraAccessions)
 
 
 def importSpectrumItems(_siContainer, specfilePath, specfile, msLevel=[1, 2], importIonList=False, mgfType=None):
@@ -359,68 +463,26 @@ def importMgfSpectrumItems(_siContainer, specfilePath, specfile, importIonList=F
                     _siContainer.ionLists[si.containerId]['i'] = numpy.array(iList, dtype='float64')
 
 
-class SpectrumIdentificationItem(ContainerItem):
-    """Representation of a MS2 sequence annotation (Peptide Spectrum Match)"""
-    def __init__(self, identifier, specfile):
-        super(SpectrumIdentificationItem, self).__init__(identifier, specfile)
-
-
-class SiiContainer(ItemContainer):
-    def __init__(self):
-        super(SiiContainer, self).__init__()
-
-    def addSiInfo(self, siContainer, specfiles=None, attributes=['obsMz', 'rt', 'charge']):
-        """ Copy attributes into sii from the corresponding SpectrumItem in siContainer,
-        if an attribute is not presend in the SpectrumItem the attribute value is set to None
-        Attribute examples: 'obsMz', 'rt', 'charge', 'TIC', 'IIT', 'ms1Id'
-        """
-        specfiles = self.specfiles if specfiles == None else cFU.toList(specfiles)
-
-        for specfile in specfiles:
-            if specfile not in self.specfiles:
-                print(specfile, 'not present in siiContainer.')
-            elif specfile not in siContainer.specfiles:
-                print(specfile, 'not present in siContainer.')
-            else:
-                for sii in self.container[specfile]:
-                    si = siContainer.index[sii.containerId]
-                    for attribute in attributes:
-                        setattr(sii, attribute, getattr(si, attribute, None))
-
-
-    def calcMz(self, specfiles=None, guessCharge=True):
-        # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
-        specfiles = self.specfiles if specfiles is None else cFU.toList(specfiles)
-        tempPeptideMasses = dict()
-        for specfile in specfiles:
-            if specfile not in self.specfiles:
-                print(specfile, 'not present in siiContainer.')
-            else:
-                for sii in self.getItems(specfiles=specfile):
-                    charge = sii.charge
-                    peptide = sii.peptide
-                    if peptide not in tempPeptideMasses:
-                        tempPeptideMasses[peptide] = calcPeptideMass(peptide)
-                    peptideMass = tempPeptideMasses[peptide]
-                    if charge is not None:
-                        sii.calcMz = calcMzFromMass(peptideMass, charge)
-                    elif guessCharge:
-                        guessedCharge = round(peptideMass / (sii.obsMz - cFU.atomicMassProton), 0)
-                        sii.calcMz = calcMzFromMass(peptideMass, guessedCharge)
-                        sii.charge = guessedCharge
-        del(tempPeptideMasses)
-
-
-def importPsmResults(_siiContainer, psmArrays, specfile, psmType='percolator', qValue=0.01):
+def importPsmResults(_siiContainer, fileLocation, specfile, psmType='percolator', psmEngine='comet', qValue=0.01):
+    """
+    Function to control the import of PSM results into a SiiContainer()
+    See also _importFromPercolatorArray()
+    """
     if specfile not in _siiContainer.container:
         _siiContainer.container[specfile] = list()
     if specfile not in _siiContainer.specfiles:
         _siiContainer.specfiles.append(specfile)
 
     if psmType == 'percolator':
-        _importFromPercolatorArray(_siiContainer, psmArrays, specfile, qValueCutOff=qValue)
+        _psmArrays = _importPercolatorResults(fileLocation, psmEngine=psmEngine)
+        _importFromPercolatorArrays(_siiContainer, _psmArrays, specfile, qValueCutOff=qValue)
 
-def _importFromPercolatorArray(_siiContainer, psmArrays, specfile, qValueCutOff=None):
+
+def _importFromPercolatorArrays(_siiContainer, psmArrays, specfile, qValueCutOff=None):
+    """
+    Write Spectrum Identification Items into the siiContainer
+    See also: _importPercolatorResults()
+    """
     sortMask = psmArrays['score'].argsort()[::-1]
     for key in psmArrays:
         psmArrays[key] = psmArrays[key][sortMask]
@@ -463,3 +525,239 @@ def _importFromPercolatorArray(_siiContainer, psmArrays, specfile, qValueCutOff=
         _siiContainer.container[specfile].append(sii)
 
 
+def _importPercolatorResults(fileLocation, psmEngine=None):
+    #HEADERLINE: xtandem seperates proteins with ';', msgf separates proteins by a tab
+    with open(fileLocation,'rb') as openFile:
+        tsvreader = csv.reader(openFile, delimiter="\t")
+        headerLine = tsvreader.next()
+        headerDict = dict([ [y,x] for (x,y) in enumerate( headerLine ) ])
+        scanEntryList = list()
+        for line in tsvreader:
+            entryDict = dict()
+            for headerName,headerPos in headerDict.items():
+                entryDict[headerName] = line[headerPos]
+            if psmEngine == 'msgf':
+                entryDict['proteinIds'] = list(line[headerDict['proteinIds']:])
+            elif psmEngine == 'xtandem':
+                entryDict['proteinIds'] = entryDict['proteinIds'].split(';')
+            scanEntryList.append(entryDict)
+
+    scanArrDict = dict()
+    for headerName in headerDict.keys():
+        scanArrDict[headerName] = list()
+
+    # Define list of headers #
+    for scanEntryDict in scanEntryList:
+        for headerName,entry in scanEntryDict.items():
+            if headerName in ['score','q-value','posterior_error_prob']:
+                scanArrDict[headerName].append( float(entry) )
+            else:
+                scanArrDict[headerName].append( entry )
+
+    if psmEngine in ['comet','msgf','xtandem']:
+        scanNrList = list()
+        for entry in scanArrDict['PSMId']:
+            if psmEngine in ['comet','msgf']:
+                scanNr = entry.split('_')[-3]
+            elif psmEngine in ['xtandem']:
+                scanNr = entry.split('_')[-2]
+            scanNrList.append( scanNr )
+        scanArrDict['scanNr'] = scanNrList
+    else:
+        print('No valid psm engine specified, can\'t import percolator results!')
+
+    for headerName in scanArrDict.keys():
+        scanArrDict[headerName] = numpy.array( scanArrDict[headerName] )
+    return scanArrDict
+
+
+def importPeptideFeatures(_featureContainer, filelocation, specfile):
+    """ Import peptide features from a featureXml file (eg. generated by OPENMS featureFinderCentroided)
+    :param _featureContainer: Spectra are added to to this FeatureContainer()
+    :param filelocation: file path of the file to import
+    :param specfile: name to represent this file in the FeatureContainer. Each filename
+    can only occure once, therefore importing the same filename again is prevented
+    """
+    if not os.path.isfile(filelocation):
+        print('File does not exits:', filelocation)
+    elif not filelocation.lower().endswith('.featurexml'):
+        print('File is not a featurexml file:', filelocation)
+    else:
+        if specfile not in _featureContainer.specfiles:
+            _featureContainer.specfiles.append(specfile)
+            _featureContainer.container[specfile] = list()
+            featureDict = _importFeatureXml(filelocation)
+
+            for featureId, featureEntryDict in featureDict.items():
+                rtArea = set()
+                for convexHullEntry in featureEntryDict['convexHullDict']['0']:
+                    rtArea.update([convexHullEntry[0]])
+
+                featureItem = FeatureItem(featureId, specfile)
+                featureItem.rt = featureEntryDict['rt']
+                featureItem.rtLow = min(rtArea)
+                featureItem.rtHigh = max(rtArea)
+                featureItem.charge = featureEntryDict['charge']
+                featureItem.mz = featureEntryDict['mz']
+                featureItem.mh = aux.returnMh(featureEntryDict['mz'], featureEntryDict['charge'])
+                featureItem.intensity = featureEntryDict['intensity']
+                featureItem.quality = featureEntryDict['overallquality']
+                featureItem.isMatched = False
+                featureItem.isAnnotated = False
+                featureItem.isValid = True
+
+                _featureContainer.index[featureItem.containerId] = featureItem
+                _featureContainer.container[specfile].append(featureItem)
+        else:
+            print(specfile, 'is already present in the SiContainer, import interrupted.')
+
+
+def _importFeatureXml(fileLocation):
+    """Reads a featureXml file and returns {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}"""
+    with open(fileLocation, 'r') as openFile:
+        readingFeature = False
+        readingHull = False
+        featureDict = dict()
+
+        for i,line in enumerate(openFile):
+            line = line.strip()
+            if readingFeature == True:
+                if line.find('<convexhull') != -1:
+                        readingHull = True
+                        hullNr = line.split('<convexhull nr=\"')[1].split('\">')[0]
+                        hullList = list()
+                elif readingHull == True:
+                    if line.find('<pt') != -1:
+                        x = float(line.split('x=\"')[1].split('\"')[0])
+                        y = float(line.split('y=\"')[1].split('\"')[0])
+                        # x = retentiontime, y = m/z
+                        #retentionTimeList.append(x)
+                        hullList.append([x,y])
+                    elif line.find('</convexhull>') != -1:
+                        featureDict[featureKey]['convexHullDict'][hullNr] = hullList
+                        readingHull = False
+
+                elif line.find('<position dim=\"0\">') != -1:
+                    featureDict[featureKey]['dim0'] = float(line.split('<position dim=\"0\">')[1].split('</position>')[0])
+                elif line.find('<position dim=\"1\">') != -1:
+                    featureDict[featureKey]['dim1'] = float(line.split('<position dim=\"1\">')[1].split('</position>')[0])
+                elif line.find('<intensity>') != -1:
+                    featureDict[featureKey]['intensity'] = float(line.split('<intensity>')[1].split('</intensity>')[0])
+                elif line.find('<overallquality>') != -1:
+                    featureDict[featureKey]['overallquality'] = float(line.split('<overallquality>')[1].split('</overallquality>')[0])
+                elif line.find('<charge>') != -1:
+                    featureDict[featureKey]['charge'] = int( line.split('<charge>')[1].split('</charge>')[0] )
+
+                elif line.find('<userParam') != -1:
+                    if line.find('name=\"label\"') != -1:
+                        featureDict[featureKey]['label'] = line.split('value=\"')[1].split('\"/>')[0]
+                    elif line.find('name=\"score_fit\"') != -1:
+                        featureDict[featureKey]['score_fit'] = float(line.split('value=\"')[1].split('\"/>')[0])
+                    elif line.find('name=\"score_correlation\"') != -1:
+                        featureDict[featureKey]['score_correlation'] = float(line.split('value=\"')[1].split('\"/>')[0])
+                    elif line.find('name=\"FWHM\"') != -1:
+                        featureDict[featureKey]['FWHM'] = float(line.split('value=\"')[1].split('\"/>')[0])
+                    elif line.find('name=\"spectrum_index\"') != -1:
+                        featureDict[featureKey]['spectrum_index'] = line.split('value=\"')[1].split('\"/>')[0]
+                    elif line.find('name=\"spectrum_native_id\"') != -1:
+                        featureDict[featureKey]['spectrum_native_id'] = line.split('value=\"')[1].split('\"/>')[0]
+
+                elif line.find('</feature>') != -1:
+                    #mzList = list()
+                    #for retentionTime,mz in featureDict[featureKey]['convexHullDict']['0']:
+                    #    mzList.append(mz)
+                    featureDict[featureKey]['rt'] = featureDict[featureKey]['dim0']#numpy.median(retentionTimeList)
+                    featureDict[featureKey]['mz'] = featureDict[featureKey]['dim1']#numpy.median(mzList)
+
+                    readingFeature == False
+
+            if line.find('<feature id') != -1:
+                readingFeature = True
+                featureKey = line.split('<feature id=\"')[1].split('\">')[0]
+                featureDict[featureKey] = dict()
+                featureDict[featureKey]['convexHullDict'] = dict()
+                #retentionTimeList = list()
+    return featureDict
+
+
+################################################
+### Functions to work with peptide sequences ###
+################################################
+def calcPeptideMass(peptide):
+    """Calculate the mass of a peptide, modifications have to be in unimod format [UNIMOD:x]
+    and 'x' has to be present in aux.unimodToMassDict
+
+    :type peptide: str
+    """
+    unimodMassDict = aux.unimodToMassDict
+
+    additionalModMass = float()
+    unmodPeptide = peptide
+    for unimodNumber, unimodMass in unimodMassDict.items():
+        unimodSymbol = '[UNIMOD:' + unimodNumber + ']'
+        numMod = peptide.count(unimodSymbol)
+        unmodPeptide = unmodPeptide.replace(unimodSymbol, '')
+        additionalModMass += unimodMass * numMod
+
+    if unmodPeptide.find('UNIMOD') != -1:
+        raise Exception()
+
+    unmodPeptideMass = pyteomics.mass.calculate_mass(unmodPeptide, charge=0)
+    modPeptideMass = unmodPeptideMass + additionalModMass
+    return modPeptideMass
+
+
+def calcMzFromMass(mass, charge):
+    """Calculate the mz value of a peptide from mass and charge.
+
+    :type mass: float
+    :type charge: int
+    """
+    mz = (mass + (aux.atomicMassProton * charge) ) / charge
+    return mz
+
+
+def calcMassFromMz(mz, charge):
+    """Calculate the mass of a peptide from mz and charge.
+
+    :type mz: float
+    :type charge: int
+    """
+    mass = (mz - aux.atomicMassProton) * charge
+    return mass
+
+
+def removeModifications(peptide):
+    """Removes all '[x]' tags from a peptide; x can be a string of any length
+
+    :type peptide: str
+    """
+    unmodPeptide = peptide
+    if unmodPeptide.find('.') != -1:
+        unmodPeptide = unmodPeptide.split('.')[1]
+    while unmodPeptide.find('[') != -1:
+        unmodPeptide = unmodPeptide.split('[', 1)[0] + unmodPeptide.split(']', 1)[1]
+    return unmodPeptide
+
+
+def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
+    """ returns a dictionary: key = modification, value = list of positions, positions start at var indexStart
+    #test:
+    peptide = 'GFHIHEFGDATN[UNIMOD:7]GC[UNIMOD:4]VSAGPHFN[UNIMOD:7]PFKK'
+    returnModPositions(peptide) == {'4': [14], '7': [12, 22]}
+    """
+
+    unidmodPositionDict = dict()
+    while peptide.find('[') != -1:
+        currModification = peptide.split('[')[1].split(']')[0]
+        currPosition = peptide.find('[') - 1
+        if currPosition == -1: # move n-terminal modifications to first position
+            currPosition = 0
+        currPosition += indexStart
+
+        peptide = peptide.replace('['+currModification+']', '', 1)
+
+        currModification = currModification.replace(removeModString, '')
+        unidmodPositionDict.setdefault(currModification,list())
+        unidmodPositionDict[currModification].append(currPosition)
+    return unidmodPositionDict
