@@ -1,0 +1,127 @@
+import os
+import copy
+import functools
+import operator
+
+# Define constants #
+atomicMassH      = 1.00782504
+atomicMassProton = 1.00727646677
+
+unimodToMassDict = dict()
+unimodToMassDict['36'] = 28.031300 # Dimethyl light label
+unimodToMassDict['199'] = 32.056407 # Dimethyl medium label
+unimodToMassDict['4'] = 57.021464 # Carbamidomethylation
+unimodToMassDict['374'] = -1.007825 # Half of a disulfide bridge
+unimodToMassDict['7'] = 0.984016 # Deamidated
+unimodToMassDict['188'] = 6.020129 # Label:13C(6)
+unimodToMassDict['35'] = 15.994915 # Oxidation
+unimodToMassDict['21'] = 79.966331 # Phospho
+unimodToMassDict['1'] = 42.010565 # Acetyl
+unimodToMassDict['27'] = -18.010565 # Glu->pyro-Glu
+unimodToMassDict['28'] = -17.026549 # Gln->pyro-Glu
+unimodToMassDict['121'] = 114.042927 # GG, ubiquitinlyation residue
+unimodToMassDict['BS2G'] = 114.03169 # BS2G
+unimodToMassDict['1020'] = 156.078644 # Xlink:DSS / BS3
+unimodToMassDict['5'] = 43.005814 # Carbamyl, pep-n / K / R
+unimodToMassDict['3'] = 226.077598 # Biotin K
+
+xTandemMassToUniModDict = copy.deepcopy(unimodToMassDict)
+xTandemMassToUniModDict[4] = 57.02147
+xTandemMassToUniModDict[374] = -1.00783
+xTandemMassToUniModDict[1] = 42.01057
+xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in xTandemMassToUniModDict.items()])
+
+
+def returnMh(mz, charge):
+    """Calculate the MH+ value from mz and charge.
+
+    :type mz: float
+    :type charge: int
+    """
+    mh = (mz * charge) - (atomicMassProton * (charge-1) )
+    return mh
+
+
+def returnMz(mh,charge):
+    """Calculate the mz value from MH+ and charge.
+
+    :type mz: float
+    :type charge: int
+    """
+    mz = ( mh + (atomicMassProton * (charge-1) ) ) / charge
+    return mz
+
+
+def searchFileLocation(targetFileName, targetFileExtension, rootDirectory):
+    """Search for file with specified file extension in all subfolders of specified rootDirectory, returns first matching instance.
+
+    :type targetFileName: str
+    :type rootDirectory: str
+    :type targetFileExtension: str
+    """
+    expectedFileName = targetFileName.split('.')[0] + '.' + targetFileExtension
+    targetFilePath = None
+
+    for dirpath, dirnames, filenames in os.walk( rootDirectory ):
+        for filename in filenames:
+            if filename == expectedFileName:
+                targetFilePath = os.path.join(dirpath, filename).replace('\\','/')
+                break
+        if targetFilePath is not None:
+            break
+    return targetFilePath
+
+
+def matchingFilePaths(targetFileName, rootDirectory, targetFileExtension=None, selector=None):
+    """Search for files in all subfolders of specified rootDirectory, return filepaths of all matching instances.
+    :param targetFileName: filename to search for, only the string before the last '.' is used for filename matching
+    :param rootDirectory: search directory, including all subdirectories
+    :param targetFileExtension: string after the last '.' in the filename, has to be identical if specified
+
+    :param selector: a function which is called with the value of targetFileName
+    and has to return True (include value) or False (discard value).
+    If no selector is specified, equality to targetFileName is used.
+    """
+    if targetFileName.find('.') != -1:
+        dotPosition = [x for x in findAllSubstrings(targetFileName, '.')][-1]
+        targetFileName = targetFileName[:dotPosition]
+    matchExtensions = False if targetFileExtension is None else True
+    targetFilePaths = list()
+
+    if selector is None:
+        selector = functools.partial(operator.eq, targetFileName)
+
+    for dirpath, dirnames, filenames in os.walk( rootDirectory ):
+        for filename in filenames:
+            if filename.find('.') != -1:
+                dotPosition = [x for x in findAllSubstrings(filename, '.')][-1]
+                filenameWithoutExtension = filename[:dotPosition]
+            else:
+                filenameWithoutExtension = filename
+
+            if selector(filenameWithoutExtension):
+                if matchExtensions:
+                    if not filename.endswith(''.join(('.', targetFileExtension))):
+                        continue
+                targetFilePaths.append(os.path.join(dirpath, filename).replace('\\','/'))
+    return targetFilePaths
+
+
+def findAllSubstrings(a_str, sub):
+    start = 0
+    while True:
+        start = a_str.find(sub, start)
+        if start == -1: return
+        yield start
+        start +=  1# use start += 1 to find overlapping matches, otherwise len(sub)
+
+
+def toList(potentialNoList, types=(str, int)):
+    """ Converts a string / int to a list
+
+    :type potentialString: (str, list)
+    """
+    if isinstance(potentialNoList, types):
+        return [potentialNoList]
+    else:
+        return potentialNoList
