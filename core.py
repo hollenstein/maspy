@@ -15,9 +15,19 @@ from lxml import etree as etree
 from matplotlib import pyplot as plt
 
 import pymzml
-import pyteomics
+import pyteomics.mass
 
 import pyms.auxiliary as aux
+
+
+def lazyAttribute(fn):
+    attributeName = '_lazy_' + fn.__name__
+    @property
+    def _lazyAttribute(self):
+        if not hasattr(self, attributeName):
+            setattr(self, attributeName, fn(self))
+        return getattr(self, attributeName)
+    return _lazyAttribute
 
 
 class ContainerItem(object):
@@ -52,7 +62,7 @@ class ItemContainer(object):
         return self.index[key]
 
     def getItems(self, specfiles=None, sort=None, reverse=False, filterAttribute='isValid', filterTargetValue=True, selector=None):
-        """
+        """ Return a filter and/or sorted set of items, by default only valid items are returned
         :param specfiles: filenames of spectrum files - return only items from those files. (str or [str, str...])
         :param sort: if sort is None items are returned in the import order, otherwise the items are sorted according to the
         item attribute specified by sort
@@ -289,6 +299,238 @@ class FeatureContainer(ItemContainer):
     """
     def __init__(self):
         super(FeatureContainer, self).__init__()
+
+
+class Peptide(object):
+    """Describes a peptide derived by one or more proteins
+    :ivar sequence: amino acid sequence of the peptide
+    :ivar missedCleavage: number of missed cleavages, dependens on enzyme specificity
+    :ivar proteinList: protein ids that generate this peptide under certain digest condition
+    :ivar startPosDict: {proteinId:startPosition, ...} start position of peptide in protein
+    :ivar endPosDict: {proteinId:startPosition, ...} end position of peptide in protein
+    :ivar mass: peptide mass in Daltons
+    :ivar length: number of amino acids
+    """
+    def __init__(self, sequence, mc=None):
+        self.sequence = sequence
+        self.missedCleavage = mc
+
+        self.proteinList = list()
+        self.startPosDict = dict()
+        self.endPosDict = dict()
+
+    @lazyAttribute
+    def mass(self):
+        return pyteomics.mass.calculate_mass(self.sequence, charge=0)
+
+    @lazyAttribute
+    def length(self):
+        return len(self.sequence)
+
+
+class PeptideContainer(object):
+    """Container object for Peptide() items
+    :ivar peptides: {peptide:Peptide(), peptide:Peptide(), ...}
+    """
+    # A container for Peptide objects
+    def __init__(self):
+        self.peptides = dict()
+
+    def __getitem__(self, peptide):
+        """Return entry from self.peptides using peptide as key"""
+        return self.peptides[peptide]
+
+
+class Protein(object):
+    """Describes a protein
+    ivar id: identifier of the protein eg. UniprotId
+    ivar name: name of the protein
+    ivar sequence: amino acid sequence of the protein
+    ivar mass: protein mass in Daltons
+    ivar length: number of amino acids
+    """
+    def __init__(self, sequence, identifier=str(), name=str()):
+        self.id = identifier
+        self.name = name
+        self.sequence = sequence
+
+    @lazyAttribute
+    def mass(self):
+        return pyteomics.mass.calculate_mass(self.sequence, charge=0)
+
+    @lazyAttribute
+    def length(self):
+        return len(self.sequence)
+
+
+class ProteinContainer(object):
+    """Container object for Protein() items, can be accessd via the protein id or the name
+    ivar proteinIds: {proteinId:Protein(), proteinId:Protein()}
+    ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}
+    """
+    # A container for Protein or ProteinEvidence objects
+    def __init__(self):
+        self.proteinIds = dict()
+        self.proteinNames = dict()
+
+    def __getitem__(self, key):
+        """uses key to return Protein() from the ProteinContainer()
+        :ivar key:  either a proteinId or a proteinName
+        """
+        if key in self.proteinIds:
+            return self.proteinIds[key]
+        elif key in self.proteinNames:
+            return self.proteinNames[key]
+        else:
+            raise KeyError(key)
+
+
+class PeptideEvidence(Peptide):
+    """ Summarizes all the SpectrumIdentificationItem() evidence for a certain peptide
+    ivar peptide: amino acid sequence of the peptide including modifications
+    ivar sequence: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
+    ivar bestId: containerId of best scoring Sii item
+    ivar siiIds: containerIds of all added Sii items
+    ivar score: best score of all added Sii items
+    ivar scores: scores of all added Sii items
+    see also 'class::Peptide'
+    """
+    def __init__(self, peptide, sequence=None):
+        sequence = removeModifications(peptide) if sequence is None else sequence
+        super(PeptideEvidence, self).__init__(sequence)
+        del(self.startPosDict)
+        del(self.endPosDict)
+        del(self.missedCleavage)
+
+        self.peptide = peptide
+        self.sequence = sequence
+        self.bestId = tuple()
+        self.siiIds = list()
+        self.score = float()
+        self.scores = list()
+
+    @lazyAttribute
+    def mass(self):
+        return calcPeptideMass(peptide)
+
+
+class PeptideEvidenceContainer(PeptideContainer):
+    """ Container for PeptideEvidence() items
+    :ivar peptides: {peptide:PeptideEvidence(), peptide:PeptideEvidence(), ...}
+    :ivar _siiContainer: SiiContainer() which is used to generate the PeptideEvidences
+    :ivar scoreKey: SpectrumIdentificationItem attribute which is used to find the best scoring item
+    :ivar largerBetter: True if a larger value of the scoreKey attribute means a better score
+    :ivar modified: True if modified peptides are treated as unique entries,
+    set False to use only the amino acid sequence of a peptide
+    see also 'class::PeptideContainer'
+    """
+    def __init__(self, _siiContainer, scoreKey='qValue', largerBetter=False, modified=False):
+        super(PeptideEvidenceContainer, self).__init__()
+        self.siiContainer = _siiContainer
+
+        self._scoreKey = scoreKey
+        self._largerBetter = largerBetter
+        self._modified = modified
+
+        self._generatePeptideEvidence()
+
+    def _generatePeptideEvidence(self):
+        if self._modified:
+            peptideKey = 'peptide'
+        else:
+            peptideKey = 'sequence'
+
+        for sii in self.siiContainer.getItems(sort=self._scoreKey, reverse=self._largerBetter):
+            peptide = getattr(sii, peptideKey)
+            siiScore = getattr(sii, self._scoreKey)
+            if peptide in self.peptides:
+                self.peptides[peptide].siiIds.append(sii.containerId)
+                self.peptides[peptide].scores.append(siiScore)
+            else:
+                peptideEvidence = PeptideEvidence(peptide, sequence=sii.sequence)
+                peptideEvidence.bestId = sii.containerId
+                peptideEvidence.siiIds.append(sii.containerId)
+                peptideEvidence.score = siiScore
+                peptideEvidence.scores.append(siiScore)
+                self.peptides[peptide] = peptideEvidence
+
+
+class ProteinEvidence(Protein):
+    """ Summarizes all the PeptideEvidence information for a certain protein
+    see also 'class::Protein'
+    :ivar id: amino acid sequence of the peptide including modifications
+    :ivar uniquePeptides: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
+    :ivar sharedPeptides: containerId of best scoring Sii item
+    :ivar uniquePsmCount: containerIds of all added Sii items
+    :ivar sharedPsmCount: best score of all added Sii items
+    :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data.
+    see also 'class::Protein'
+    """
+    def __init__(self, identifier, sequence=str(), name=None):
+        super(ProteinEvidence, self).__init__(sequence, identifier=identifier, name=name)
+        self.uniquePeptides = list()
+        self.sharedPeptides = list()
+        self.uniquePsmCount = int()
+        self.sharedPsmCount = int()
+        self.isValid = None
+
+    @lazyAttribute
+    def coverage(self):
+        """Calculate the number of identified amino acids by unique peptides"""
+        return None
+
+
+class ProteinEvidenceContainer(ProteinContainer):
+    """ Container for ProteinEvidence() items
+    :ivar proteinIds: {proteinId:ProteinEvidence(), proteinId:ProteinEvidence()}
+    :ivar proteinNames: {proteinName:ProteinEvidence(), proteinName:ProteinEvidence()}
+    :ivar peptideEvidences: PeptideEvidenceContainer() contains PeptideEvidence() items which are used to generate ProteinEvidence() items.
+    :ivar proteindb: ProteinContainer(), fasta representation of proteins
+    :ivar peptidedb: PeptideContainer(), fasta representation of peptides
+    see also 'class::ProteinContainer'
+    """
+    def __init__(self, _peptideEvidenceContainer, proteindb, peptidedb):
+        super(ProteinEvidenceContainer, self).__init__()
+        del(self.proteinIds)
+        del(self.proteinNames)
+        self.proteins = dict()
+        self.peptideEvidenceContainer = _peptideEvidenceContainer
+        self.peptidedb = peptidedb
+        self.proteindb = proteindb
+        self.validProteinList = list()
+
+        self._generateProteinEvidence()
+
+    def __getitem__(self, key):
+        """uses key to return Protein() from the self.proteins
+        :ivar key: proteinId
+        """
+        return self.proteins[key]
+
+    def _generateProteinEvidence(self):
+        for peptide, _peptideEvidence in self.peptideEvidenceContainer.peptides.items():
+            isUnique = self.peptidedb[_peptideEvidence.sequence].unique
+            proteins = set(self.peptidedb[_peptideEvidence.sequence].proteinList)
+            for protein in proteins:
+                if protein in self.proteins:
+                    _proteinEvidence = self.proteins[protein]
+                else:
+                    _proteinEvidence = ProteinEvidence(proteindb[protein].id, sequence=proteindb[protein].sequence, name=proteindb[protein].name)
+                    self.proteins[protein] = _proteinEvidence
+
+                if isUnique:
+                    _proteinEvidence.uniquePeptides.append(peptide)
+                    _proteinEvidence.uniquePsmCount += len(_peptideEvidence.siiIds)
+                else:
+                    _proteinEvidence.sharedPeptides.append(peptide)
+                    _proteinEvidence.sharedPsmCount += len(_peptideEvidence.siiIds)
+
+        for _proteinEvidence in self.proteins.values():
+            if len(_proteinEvidence.uniquePeptides) > 0:
+                _proteinEvidence.valid = True
+                self.validProteinList.append(_proteinEvidence.id)
+            else:
+                _proteinEvidence.valid = False
 
 
 ###############################################
@@ -678,6 +920,174 @@ def _importFeatureXml(fileLocation):
                 featureDict[featureKey]['convexHullDict'] = dict()
                 #retentionTimeList = list()
     return featureDict
+
+
+def _importFasta(fastaFileLocation, fastaType='sgd'):
+    """Import a fasta file, coulb be merged with or substituted by pyteomics.fasta.read()
+    :param fastaType: possible values 'sgd', 'contaminations', 'uniprot', 'kustnerPeptideLibrary'
+    depending on the fastaType a different regular expression pattern is used to read the header column
+    """
+    if fastaType == 'sgd':
+        geneAccessionPattern = ">(?P<sysName>[\S]+)\s(?P<stdName>[\S]+).+(?P<description>\".+\")\n(?P<sequence>[A-Z\n]+\*)"
+        outputGroups = ['sysName', 'stdName', 'description', 'sequence']
+    elif fastaType == 'contaminations':
+        geneAccessionPattern = ">(?P<sysName>[\S]+)\s(?P<description>.+)\n(?P<sequence>[A-Z\n]+\*)"
+        outputGroups = ['sysName', 'description', 'sequence']
+    elif fastaType == 'kustnerPeptideLibrary':
+        geneAccessionPattern = ">(?P<sysName>IPI:[^\|\s]+)(\n|(.+\n))(?P<sequence>[A-Z\n]+)"
+        #sysName = "match many [non white space characters, not pipe]
+        #description = "match many [non newline characters]" (?P<description>.+)\n
+        #sequence = "match many[Letters or newLine]
+        outputGroups = ['sysName', 'sequence']
+    elif fastaType == 'uniprot':
+        geneAccessionPattern = ">[\S]+\|(?P<sysName>[\S]+)\|(?P<stdName>[\S^\|]+)\s(?P<description>.+)\n(?P<sequence>[A-Z\n]+)"
+        outputGroups = ['sysName', 'stdName', 'description', 'sequence']
+
+    with open(fastaFileLocation, 'r') as openFastaFile:
+        readFastaFile = openFastaFile.read()
+        proteinList = list()
+
+        regexpPattern = re.compile(geneAccessionPattern, re.VERBOSE)
+        regexpResult = regexpPattern.finditer(str(readFastaFile))
+        for entry in regexpResult:
+            outputDict = dict()
+            outputDict['description'] = ''
+            for outputGroup in outputGroups:
+                outputDict[outputGroup] = str(entry.group(outputGroup))
+            outputDict['sequence'] = outputDict['sequence'].replace('\n', '').replace('*', '')
+            proteinList.append(outputDict)
+    return proteinList
+
+
+def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLength=5, maxLength=40):
+    """Yield peptides derived from an in silico digest of a protein
+    :param proteinSequence: amino acid sequence of the protein to be digested
+    :param missedCleavages: number of allowed missed digestion sites
+    :param removeNtermM: boolean, consider peptides with the n-terminal methionine of the protein removed
+    :param minLength: only yield peptides with length >= minLength
+    :param maxLength: only yield peptides with length <= maxLength
+    NOTE: at the moment it only works for trypsin (K/R) and c-terminal cleavage
+    """
+    # Return in silico digested peptides, peptide start position, peptide end position
+    # Peptide position start at 1 and end at len(proteinSequence)
+    passFilter = lambda seq: (len(seq) >= minLength and len(seq) <= maxLength)
+
+    cleavagePosList = list()
+    # Position +1 if cut c terminal of amino acid
+    cleavagePosList.extend([m.start()+1 for m in re.finditer('K', proteinSequence)])
+    cleavagePosList.extend([m.start()+1 for m in re.finditer('R', proteinSequence)])
+    cleavagePosList.sort()
+
+    # Add end of protein as cleavage site if protein doesn't end with specififed cleavage positions
+    if proteinSequence[-1] != 'K' and proteinSequence[-1] != 'R':
+        cleavagePosList.append(len(proteinSequence))
+    numCleavageSites = len(cleavagePosList)
+
+    if missedCleavages >= numCleavageSites:
+        missedCleavages = numCleavageSites -1
+
+    #Yield protein n-terminal peptides
+    if cleavagePosList[0] != 0:
+        for cleavagePos in range(0,missedCleavages+1):
+            startPos = 0
+            endPos = cleavagePosList[cleavagePos]
+            sequence = proteinSequence[startPos:endPos]
+            if passFilter(sequence):
+                info = dict()
+                info['startPos'] = startPos+1
+                info['endPos'] = endPos
+                info['missedCleavage'] = cleavagePos
+                yield sequence, info
+
+    #Yield protein n-terminal peptides after methionine removal
+    if removeNtermM and proteinSequence[0] == 'M':
+        for cleavagePos in range(0,missedCleavages+1):
+            startPos = 1
+            endPos = cleavagePosList[cleavagePos]
+            sequence = proteinSequence[startPos:endPos]
+            if passFilter(sequence):
+                info = dict()
+                info['startPos'] = startPos+1
+                info['endPos'] = endPos
+                info['missedCleavage'] = cleavagePos
+                yield sequence, info
+
+    #Yield all remaining peptides, including the c-terminal peptides
+    lastCleavagePos = 0
+    while lastCleavagePos < numCleavageSites:
+        for missedCleavage in range(0, missedCleavages+1):
+            nextCleavagePos = lastCleavagePos + missedCleavage + 1
+            if nextCleavagePos < numCleavageSites:
+                startPos = cleavagePosList[lastCleavagePos]
+                endPos = cleavagePosList[nextCleavagePos]
+                sequence = proteinSequence[startPos:endPos]
+                if passFilter(sequence):
+                    info = dict()
+                    info['startPos'] = startPos+1
+                    info['endPos'] = endPos
+                    info['missedCleavage'] = missedCleavage
+                    yield sequence, info
+        lastCleavagePos += 1
+
+
+def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
+                        removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
+                        ):
+    """Generate a ProteinContainer() and PeptideContainer() by digesting a fasta file in silico
+    :param filePath: file path of the fasta file
+    :param ignoreIsoleucine: boolean, treat I and L in peptide sequence as indistinguishable
+    :param missedCleavages: number of allowed missed digestion sites
+    :param removeNtermM: boolean, consider peptides with the n-terminal methionine of the protein removed
+    :param minLength: only yield peptides with length >= minLength
+    :param maxLength: only yield peptides with length <= maxLength
+    :param fastaType: see 'function::_importFasta'
+    """
+    fastaRead = _importFasta(filePath, fastaType=fastaType)
+    proteindb = ProteinContainer()
+    peptidedb = PeptideContainer()
+
+    for fastaEntry in fastaRead:
+        protein = Protein(fastaEntry['sequence'], identifier=fastaEntry['sysName'],
+                          name = fastaEntry['stdName']
+                          )
+        proteindb.proteinIds[fastaEntry['sysName']] = protein
+        proteindb.proteinNames[fastaEntry['stdName']] = protein
+
+        for unmodPeptide, info in digestInSilico(fastaEntry['sequence'], missedCleavage,
+                                                  removeNtermM=True, minLength=minLength,
+                                                  maxLength=maxLength
+                                                  ):
+            if ignoreIsoleucine:
+                unmodPeptideNoIsoleucine = unmodPeptide.replace('I', 'L')
+                if unmodPeptideNoIsoleucine in peptidedb.peptides:
+                    currPeptide = peptidedb[unmodPeptideNoIsoleucine]
+                else:
+                    currPeptide = Peptide(unmodPeptideNoIsoleucine, mc=info['missedCleavage'])
+                    peptidedb.peptides[unmodPeptideNoIsoleucine] = currPeptide
+
+                if unmodPeptide not in peptidedb.peptides:
+                    peptidedb.peptides[unmodPeptide] = currPeptide
+            else:
+                if unmodPeptide in peptidedb.peptides:
+                    currPeptide = peptidedb[unmodPeptide]
+                else:
+                    currPeptide = Peptide(unmodPeptide, mc=info['missedCleavage'])
+                    peptidedb.peptides[unmodPeptide] = currPeptide
+
+            currPeptide.proteinList.append(fastaEntry['sysName'])
+            currPeptide.startPosDict[fastaEntry['sysName']] = info['startPos']
+            currPeptide.endPosDict[fastaEntry['sysName']] = info['endPos']
+
+    for peptide in peptidedb.peptides.keys():
+        numProteinMatches = len(peptidedb[peptide].proteinList)
+        if numProteinMatches == 1:
+            peptidedb[peptide].unique = True
+        elif numProteinMatches > 1:
+            peptidedb[peptide].unique = False
+        else:
+            print('No protein matches in peptidedb for peptide sequence: ', peptide)
+
+    return proteindb, peptidedb
 
 
 ################################################
