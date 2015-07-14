@@ -43,6 +43,14 @@ class ContainerItem(object):
         self.specfile = specfile
         self.isValid = None
 
+    def copy(self):
+        """Generates a copy of itself by copying all key, value pairs of self.__dict__
+        copying doesn't generate a new instance for values like dict, objects,...
+        """
+        newItem = self.__class__(self.id, self.specfile)
+        newItem.__dict__ = item.__dict__.copy()
+        return newItem
+
 
 class ItemContainer(object):
     """
@@ -531,6 +539,55 @@ class ProteinEvidenceContainer(ProteinContainer):
                 self.validProteinList.append(_proteinEvidence.id)
             else:
                 _proteinEvidence.valid = False
+
+
+#####################################################
+### Auxiliary functions for ItemContainer classes ###
+#####################################################
+def addContainer(baseContainer, *newContainers):
+    """ Function to merge the content of multiple instances of ItemContainer or its subclasses,
+    can only merge containers of the same type
+    :param baseContainer: append newContainers to the baseContainer
+    if baseContainer is not an class instance but a cluss, an instance is generated
+    :param newContainer: one instance or a list of containers to be appended to the baseContainer
+    CAUTION: order of Sii items in SiiContainer().index[containerId] can be changed
+    """
+    if isinstance(baseContainer, type):
+        baseContainer = baseContainer()
+    containerClass = baseContainer.__class__
+
+    for newContainer in newContainers:
+        if not isinstance(newContainer, baseContainer.__class__):
+            print('Cannot combine different container classes, ',
+                  baseContainer.__class__.__name__, ' and ',
+                  newContainer.__class__.__name__
+                  )
+            continue
+
+        for specfile in newContainer.specfiles:
+            if specfile not in baseContainer.specfiles:
+                baseContainer.specfiles.append(specfile)
+                baseContainer.container[specfile] = list()
+
+                for item in newContainer.container[specfile]:
+                    newItem = item.copy()
+                    baseContainer.container[specfile].append(newItem)
+
+                    if baseContainer.__class__.__name__ == 'SiiContainer':
+                        if newItem.containerId not in baseContainer.index:
+                            baseContainer.index[newItem.containerId] = list()
+                        baseContainer.index[newItem.containerId].append(newItem)
+                    else:
+                        baseContainer.index[newItem.containerId] = newItem
+
+                    if baseContainer.__class__.__name__ == 'SiContainer':
+                        if len(newContainer.ionLists) > 0:
+                            baseContainer.ionLists[newItem.containerId] = dict()
+                            baseContainer.ionLists[newItem.containerId]['i'] = newContainer.ionLists[newItem.containerId]['i']
+                            baseContainer.ionLists[newItem.containerId]['mz'] = newContainer.ionLists[newItem.containerId]['mz']
+            else:
+                print(specfile, 'already present in baseContainer.')
+    return baseContainer
 
 
 ###############################################
