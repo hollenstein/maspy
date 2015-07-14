@@ -67,7 +67,10 @@ class ItemContainer(object):
         """
         Return an item from index, using the containerId
         """
-        return self.index[key]
+        if isinstance(key, tuple):
+            return self.index[key]
+        else:
+            return self.index[tuple(key)]
 
     def getItems(self, specfiles=None, sort=None, reverse=False, filterAttribute='isValid', filterTargetValue=True, selector=None):
         """ Return a filter and/or sorted set of items, by default only valid items are returned
@@ -254,6 +257,18 @@ class SiiContainer(ItemContainer):
                     for attribute in attributes:
                         setattr(sii, attribute, getattr(si, attribute, None))
 
+    def getValidItem(self, key):
+        """Returns one or a tuple of only valid items from index, usually the rank1 PSM
+        :param key: is the SpectrumIdentificationItem.containerId
+        """
+        if not isinstance(key, tuple):
+            key = tuple(key)
+        _items = list()
+        for _item in self.index[key]:
+            if _item.isValid:
+                _items.append(_item)
+        _items = _items[0] if len(_items) == 1 else tuple(_items)
+        return _items
 
     def calcMz(self, specfiles=None, guessCharge=True):
         # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
@@ -281,7 +296,7 @@ class SiiContainer(ItemContainer):
 class FeatureItem(ContainerItem):
     """Representation of a peptide elution feature
     ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
-    ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
+    ivar isAnnotated: None if unspecified, sishould be set to False on import, True if any Sii elements could be matched
     ivar siIds: containerId values of matched Si entries
     ivar siiIds: containerId values of matched Sii entries
     ivar peptide: peptide sequence of best scoring Sii match
@@ -588,6 +603,52 @@ def addContainer(baseContainer, *newContainers):
             else:
                 print(specfile, 'already present in baseContainer.')
     return baseContainer
+
+
+def importSpecfiles(specfiles, fileDirectory, loadIonList=False, siContainer=None):
+    """Auxiliary function to conveniently import a group of specfiles"""
+    if siContainer is None:
+        siContainer = SiContainer()
+    specfiles = aux.toList(specfiles)
+    for specfile in specfiles:
+        specfilePath = aux.searchFileLocation(specfile, 'SiContainer', fileDirectory)
+        if specfilePath:
+            fileFolder = os.path.dirname(specfilePath)
+            addContainer(siContainer, SiContainer.load(fileFolder, specfile, loadIonList=loadIonList))
+        else:
+            specfilePath = aux.searchFileLocation(specfile, 'mzML', fileDirectory)
+            if specfilePath is None:
+                print('File not found: ', specfile)
+            else:
+                importSpectrumItems(siContainer, specfilePath, specfile, importIonList=loadIonList)
+    return siContainer
+
+
+def generateSiContainerFiles(fileDirectory):
+    """ Generate SiContainer / ionList files for all mzML files in the fileDirectory or its subfolders
+    links to SiContainer(), removeSiContainerFiles()
+    """
+    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='mzML', selector=lambda x: True):
+        dotPosition = [x for x in aux.findAllSubstrings(filePath, '.')][-1]
+
+        fileFolder = os.path.dirname(filePath)
+        fileName = os.path.basename(filePath[:dotPosition])
+        targetFilePath = '.'.join((filePath[:dotPosition], 'SiContainer'))
+        if not os.path.isfile(targetFilePath):
+            siContainer = SiContainer()
+            importSpectrumItems(siContainer, filePath, fileName, importIonList=True)
+            print('Saving SiContainer / ionList :', fileName)
+            siContainer.save(fileFolder, fileName)
+
+
+def removeSiContainerFiles(fileDirectory):
+    """ Remove all SiContainer / ionList files in the fileDirectory or its subfolders
+    links to SiContainer(), generateSiContainerFiles()
+    """
+    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='SiContainer', selector=lambda x: True):
+        os.remove(filePath)
+    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='ionList', selector=lambda x: True):
+        os.remove(filePath)
 
 
 ###############################################
@@ -1228,3 +1289,169 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
         unidmodPositionDict.setdefault(currModification,list())
         unidmodPositionDict[currModification].append(currPosition)
     return unidmodPositionDict
+
+##########################################
+### Functions to work with FeatureItem ###
+##########################################
+def matchToFeatures(_featureContainer, _specContainer, specfiles=None, fMassKey='mz', sMassKey='obsMz', isotopeErrorList = [0, 1],
+                    precursorTolerance=5, toleranceUnit='ppm', rtExpansionUp=0.10, rtExpansionDown=0.05, matchCharge=True,
+                    scoreKey='pep', largerBetter=False):
+    """Function for FeatureItem annotation, matches SpectrumItem (=Si) or SpectrumIdentificationItem (=Sii) to FeatureItem()
+    :ivar _featureContainer: FeatureContainer()
+    :ivar _specContainer: SiContainer() or SiiContainer()
+    :ivar specfiles: list of specfiles to process, if None all specfiles are processed that are present in _featureContainer and _specContainer
+    :ivar fMassKey: mass attribute name of items in _featureContainer
+    :ivar sMassKey: mass attribute name of items in _specContainer (eg 'obsMz', 'calcMz')
+    :ivar isotopeErrorList: allowed isotope errors relative to the spectrum mass
+    eg. [0, 1] if no feature has been matched with isotope error 0, the spectrum mass is increased by 1*C13 and matched again
+    the different isotope error values are tested in the specified order therefore 0 should normally be the 1st value of the list
+    :ivar precursorTolerance: is used to calculate the mass window to match Si/Sii and FeatureItem()
+    :ivar toleranceUnit: defines how the precursorTolerance is applied to the mass value, 'ppm' * (1 +/- tolerance*1E-6) or 'da': +/- value
+    :ivar rtExpansionUp: relative upper expansion of FeatureItem() retention time areas
+    :ivar rtExpansionDown: relative lower expansion of FeatureItem() retention time areas
+    ad rtExpansion: lower or upper FeatureItem() retention time position is expanded with rtExpansion * rtArea
+    if one Si/Sii is matched to multiple FeatureItems, the rt expansion is removed and the matching repeated.
+    :ivar matchCharge: boolean, True if FeatureItem() and Si/Sii must have the same charge state to be matched
+    :ivar scoreKey: Sii attribute name of the PSM score
+    :ivar largerBetter: boolean, True if a larger PSM score is better
+    If _specContainer is a SiiContainer then matched features are annotated with Sii.peptide,
+    if multiple Sii are matched to the same FeatureItem() the one with the best score is used
+
+    see also 'class::FeatureItem', 'class::SpectrumItem', 'class::SpectrumIdentificationItem'
+    """
+    isotopeErrorList = aux.toList(isotopeErrorList)
+
+    if _specContainer.__class__.__name__ == 'SiiContainer':
+        listKeySpecIds = 'siiIds'
+    else:
+        listKeySpecIds = 'siIds'
+
+    if specfiles is not None:
+        specfiles = aux.toList(specfiles)
+    else:
+        specfiles = list(set(_featureContainer.specfiles).intersection(set(_specContainer.specfiles)))
+
+    for specfile in specfiles:
+        multiMatchCounter = int()
+        isotopeErrorMatchCounter = int()
+        specArrays = _specContainer.getArrays([sMassKey, 'rt', 'charge'], specfiles=specfile)
+        featureArrays = _featureContainer.getArrays(['rtHigh', 'rtLow', 'charge', fMassKey],
+                                                   specfiles=specfile, sort=fMassKey
+                                                   )
+        featureArrays['rtHighExpanded'] = featureArrays['rtHigh'] + (featureArrays['rtHigh'] - featureArrays['rtLow']) * rtExpansionUp
+        featureArrays['rtLowExpanded'] = featureArrays['rtLow'] - (featureArrays['rtHigh'] - featureArrays['rtLow']) * rtExpansionDown
+
+        specFeatureDict = dict() ## key = scanNr, value = set(featureKeys)
+        featureSpecDict = dict() ## key = featureKey, value = set(scanNrs)
+
+        for specPos, specId in enumerate(specArrays['containerId']):
+            specId = tuple(specId)
+            specMass = specArrays[sMassKey][specPos]
+            specRt = specArrays['rt'][specPos]
+            specZ = specArrays['charge'][specPos]
+            if specZ is None:
+                continue
+
+            matchComplete = False
+            isotopeErrorPos = 0
+
+            while not matchComplete:
+                isotopeError = isotopeErrorList[isotopeErrorPos]
+
+                # calculate mass limits for each isotope error
+                if toleranceUnit.lower() == 'ppm':
+                    specMassHigh = (specMass + isotopeError * 1.003355 / specZ) * (1 + precursorTolerance*1E-6)
+                    specMassLow = (specMass + isotopeError * 1.003355 / specZ) * (1 - precursorTolerance*1E-6)
+                elif toleranceUnit.lower() == 'da':
+                    specMassHigh = (specMass + isotopeError * 1.003355 / specZ) + precursorTolerance
+                    specMassLow  = (specMass + isotopeError * 1.003355 / specZ) - precursorTolerance
+
+                posL = bisect.bisect_left(featureArrays[fMassKey], specMassLow)
+                posR = bisect.bisect_right(featureArrays[fMassKey], specMassHigh)
+
+                if matchCharge:
+                    chargeMask = (featureArrays['charge'][posL:posR] == specZ)
+
+                fRtHighKey = 'rtHighExpanded'
+                fRtLowKey = 'rtLowExpanded'
+                for fRtHighKey, fRtLowKey in [('rtHighExpanded', 'rtLowExpanded'), ('rtHigh', 'rtLow')]:
+                    rtMask = ((featureArrays[fRtLowKey][posL:posR] <= specRt) &
+                              (featureArrays[fRtHighKey][posL:posR] >= specRt)
+                              )
+                    if matchCharge:
+                        matchedFeatureIds = featureArrays['containerId'][posL:posR][rtMask & chargeMask]
+                    else:
+                        matchedFeatureIds = featureArrays['containerId'][posL:posR][rtMask]
+
+                    if len(matchedFeatureIds) <= 1:
+                        break
+
+                # if exactly one feature has been matched,
+                if len(matchedFeatureIds) > 0:
+                    if len(matchedFeatureIds) == 1:
+                        matchComplete = True
+                        if isotopeErrorList[isotopeErrorPos] != 0:
+                            isotopeErrorMatchCounter += 1
+                    else:
+                        #Stop if Spectrum can be matched to multiple features
+                        multiMatchCounter += 1
+                        break
+
+                isotopeErrorPos += 1
+                if isotopeErrorPos >= len(isotopeErrorList):
+                    #Stop if all allowed isotope errors have been tested
+                    break
+
+            if matchComplete:
+                for featureId in matchedFeatureIds:
+                    featureId = tuple(featureId)
+                    #TODO: either append siiIds or siIds ...
+                    getattr(_featureContainer[featureId], listKeySpecIds).append(specId)
+                    _featureContainer[featureId].isMatched = True
+                    specFeatureDict[specId] = featureId
+                    featureSpecDict[featureId] = specId
+
+        stats = dict()
+        stats['totalFeatures'] = len(featureArrays['containerId'])
+        stats['matchedFeatures'] = len(featureSpecDict)
+        stats['relMatchedFeatures'] = round(1.*stats['matchedFeatures']/stats['totalFeatures'], 3)
+        stats['totalSpectra'] = len(specArrays['containerId'])
+        stats['matchedSpectra'] = len(specFeatureDict)
+        stats['relMatchedSpectra'] = round(1.*stats['matchedSpectra']/stats['totalSpectra'], 3)
+
+        print('------', specfile, '------')
+        print('Annotated features:\t\t\t', stats['matchedFeatures'], '/', stats['totalFeatures'], '=', stats['relMatchedFeatures'], '%')
+        print('Spectra matched to features:\t\t', stats['matchedSpectra'], '/', stats['totalSpectra'], '=', stats['relMatchedSpectra'], '%')
+        if multiMatchCounter != 0:
+                print('Discarded because of multiple matches:\t', multiMatchCounter)
+        if isotopeErrorMatchCounter != 0:
+                print('Isotope error matched spectra:\t\t', isotopeErrorMatchCounter)
+
+        if _specContainer.__class__.__name__ == 'SiiContainer':
+            for featureId in featureSpecDict.keys():
+                matches = list()
+                for specId in _featureContainer[featureId].siiIds:
+                    _sii = _specContainer.getValidItem(specId)
+                    score = getattr(_sii, scoreKey)
+                    peptide = _sii.peptide
+                    sequence = _sii.sequence
+                    matches.append([score, peptide, sequence])
+                matches.sort(reverse=largerBetter)
+
+                _featureContainer[featureId].isAnnotated = True
+                _featureContainer[featureId].score = matches[0][0]
+                _featureContainer[featureId].peptide = matches[0][1]
+                _featureContainer[featureId].sequence = matches[0][2]
+
+
+def removeFeatureAnnotation(_featureContainer):
+    """Remove all annotation information from FeatureItem() in _featureContainer"""
+    for items in _featureContainer.container.values():
+        for item in items:
+            item.isMatched = False
+            item.isAnnotated = False
+            item.siIds = list()
+            item.siiIds = list()
+            item.peptide = None
+            item.sequence = None
+            item.score = None
