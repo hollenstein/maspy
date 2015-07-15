@@ -31,11 +31,14 @@ def lazyAttribute(fn):
 
 
 class ContainerItem(object):
-    """
-    :ivar containerId: used to look up item in ItemContainer.index
+    """Mass spectrometry data elemtents, derived from specfiles.
+
+    :ivar containerId: used to look up item in :attr:`ItemContainer.index`
     :ivar id: identifier in original file
-    :ivar specfile: spectrum filename
-    :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data.
+    :ivar specfile: Keyword (filename) to represent the originating file
+    :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data
+
+    See also :class:`ItemContainer`
     """
     def __init__(self, identifier, specfile):
         self.containerId  = (specfile, identifier)
@@ -44,8 +47,9 @@ class ContainerItem(object):
         self.isValid = None
 
     def copy(self):
-        """Generates a copy of itself by copying all key, value pairs of self.__dict__
-        copying doesn't generate a new instance for values like dict, objects,...
+        """Returns a copy of itself.
+
+        Copies all key, value pairs of self.__dict__, doesn't generate a new instance for values like dict, objects,...
         """
         newItem = self.__class__(self.id, self.specfile)
         newItem.__dict__ = item.__dict__.copy()
@@ -53,10 +57,11 @@ class ContainerItem(object):
 
 
 class ItemContainer(object):
-    """
-    :ivar index: used to look up items with their containerId
-    :ivar container: {specfile:[ContainerItem(), ContainerItem(), ...]}
-    :ivar specfiles: list of filenames of spectrum files
+    """Storage container for :class:`ContainerItem`.
+
+    :ivar index: Use :attr:`ContainerItem.containerId` to look up :class:`ContainerItem` inside the ItemContainer
+    :ivar container: Access :class:`ContainerItem` storage list via a specfile keyword: {specfile:[ContainerItem(), ContainerItem(), ...]}
+    :ivar specfiles: list of keywords (filenames) representing files
     """
     def __init__(self):
         self.index = dict()
@@ -64,17 +69,14 @@ class ItemContainer(object):
         self.specfiles = list()
 
     def __getitem__(self, key):
-        """
-        Return an item from index, using the containerId
-        """
-        if isinstance(key, tuple):
-            return self.index[key]
-        else:
-            return self.index[tuple(key)]
+        """Return an item from index using the containerId."""
+        return self.index[key]
 
     def getItems(self, specfiles=None, sort=None, reverse=False, filterAttribute='isValid', filterTargetValue=True, selector=None):
-        """ Return a filter and/or sorted set of items, by default only valid items are returned
-        :param specfiles: filenames of spectrum files - return only items from those files. (str or [str, str...])
+        """Return a filter and/or sorted set of items. By default only valid items are returned.
+
+        :param specfiles: filenames of spectrum files - return only items from those files.
+        :type specfiles: str or [str, str, ...]
         :param sort: if sort is None items are returned in the import order, otherwise the items are sorted according to the
         item attribute specified by sort
         :param reverse: boolean to reverse sort order
@@ -117,12 +119,10 @@ class ItemContainer(object):
                 yield item
 
     def getArrays(self, attributes, specfiles=None, sort=None, reverse=False, filterAttribute='isValid', filterTargetValue=True, selector=None):
-        """
-        Return a condensed array of data selected from ContainerItems for faster data processing.
+        """Return a condensed array of data selected from ContainerItems for faster data processing.
 
         :param attributes: list of item attributes that should be written to the returned array.
-
-        for the other parameters see getValidItems.
+        for the other parameters see :class:`ItemContainer.getValidItems()`
 
         :returns: dict(key1 from keylist: numpy.array, key2 from keylist: numpy.array, ..., indexPos: numpy.array, id: numpy.array, specfile: numpy.array),
         i.e. returns the columns of the table specified by the list of keys, each numpy.array has the dimensions Nx1. If a value is not present, None, is substituted.
@@ -141,12 +141,17 @@ class ItemContainer(object):
                 arrays[key].append(getattr(item, key, None))
 
         for key in arrays.keys():
-            arrays[key] = numpy.array(arrays[key])
+            if key == 'containerId':
+                emptyArray = numpy.empty(len(arrays[key]), dtype='object')
+                emptyArray[:] = arrays[key]
+                arrays[key] = emptyArray
+            else:
+                arrays[key] = numpy.array(arrays[key])
 
         return arrays
 
     def save(self, fileFolder, fileName):
-        """Store a pickled version of the self, using the __class__.__name__ as file-appendix."""
+        """Store a pickled version of self using  __class__.__name__ as file-appendix."""
         fileName = '.'.join((fileName, self.__class__.__name__))
         filePath = os.path.join(fileFolder, fileName).replace('\\', '/')
         with open(filePath, 'w') as openFile:
@@ -154,7 +159,7 @@ class ItemContainer(object):
 
     @classmethod
     def load(cls, fileFolder, fileName):
-        """Load a pickled version of the self, using the __class__.__name__ as file-appendix."""
+        """Load a pickled version of self using the __class__.__name__ as file-appendix."""
         fileName = '.'.join((fileName, cls.__name__))
         filePath = os.path.join(fileFolder, fileName).replace('\\', '/')
         with open(filePath, 'r') as openFile:
@@ -162,7 +167,7 @@ class ItemContainer(object):
 
 
 class SpectrumItem(ContainerItem):
-    """Representation of a spectrum"""
+    """Representation of a spectrum."""
     def __init__(self, identifier, specfile):
         super(SpectrumItem, self).__init__(identifier, specfile)
         self.msLevel = None
@@ -172,7 +177,7 @@ class SiContainer(ItemContainer):
     """
     ItemContainer for mass spectrometry data (spectra) (for example MS1, MS2),
     SiContainer ... Spectrum Item Container.
-    see also 'class::SiiContainer' (Spectrum Identification Item Container) which contains sequence data.
+    see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
 
     :ivar ionLists: spectrum ion information, not loaded by default
     dict(containerId=dict(mz=nump.array([mass / charge, ...]), i=numpy.array([intensity, ...]))).
@@ -211,21 +216,21 @@ class SiContainer(ItemContainer):
     @classmethod
     def load(cls, fileFolder, fileName, loadIonList=True):
         """Load a pickled version of the self, using the __class__.__name__ as file-appendix."""
-        _siContainer = super(cls, cls).load(fileFolder, fileName)
+        siContainer = super(cls, cls).load(fileFolder, fileName)
 
         ionListFileName = '.'.join((fileName, 'ionList'))
         ionListFilePath = os.path.join(fileFolder, ionListFileName).replace('\\', '/')
         if loadIonList and os.path.isfile(ionListFilePath):
             importedArray = numpy.load(ionListFilePath)
             for key, mzList, iList in itertools.izip(importedArray[0], importedArray[1], importedArray[2]):
-                _siContainer.ionLists[key] = dict()
-                _siContainer.ionLists[key]['mz'] = mzList
-                _siContainer.ionLists[key]['i'] = iList
-        return _siContainer
+                siContainer.ionLists[key] = dict()
+                siContainer.ionLists[key]['mz'] = mzList
+                siContainer.ionLists[key]['i'] = iList
+        return siContainer
 
 
 class SpectrumIdentificationItem(ContainerItem):
-    """Representation of a msn sequence annotation (Peptide Spectrum Match)"""
+    """Representation of a peptide fragment spectrum annotation (Peptide Spectrum Match)."""
     def __init__(self, identifier, specfile):
         super(SpectrumIdentificationItem, self).__init__(identifier, specfile)
 
@@ -234,7 +239,7 @@ class SiiContainer(ItemContainer):
     """
     ItemContainer for msn spectrum identifications (Peptide Spectrum Matches),
     SiiContainer ... Spectrum Identification Item Container.
-    see also 'class::SiContainer' (Spectrum Item Container) which contains spectrum data.
+    see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
     """
     def __init__(self):
         super(SiiContainer, self).__init__()
@@ -258,17 +263,18 @@ class SiiContainer(ItemContainer):
                         setattr(sii, attribute, getattr(si, attribute, None))
 
     def getValidItem(self, key):
-        """Returns one or a tuple of only valid items from index, usually the rank1 PSM
-        :param key: is the SpectrumIdentificationItem.containerId
+        """Returns one or a tuple of only valid items from index, usually the rank1 PSM.
+
+        :param key: is the value of :attr:`SpectrumIdentificationItem.containerId` to retrieve
         """
         if not isinstance(key, tuple):
             key = tuple(key)
-        _items = list()
-        for _item in self.index[key]:
-            if _item.isValid:
-                _items.append(_item)
-        _items = _items[0] if len(_items) == 1 else tuple(_items)
-        return _items
+        items = list()
+        for item in self.index[key]:
+            if item.isValid:
+                items.append(item)
+        items = items[0] if len(items) == 1 else tuple(items)
+        return items
 
     def calcMz(self, specfiles=None, guessCharge=True):
         # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
@@ -294,9 +300,10 @@ class SiiContainer(ItemContainer):
 
 
 class FeatureItem(ContainerItem):
-    """Representation of a peptide elution feature
+    """Representation of a peptide elution feature.
+
     ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
-    ivar isAnnotated: None if unspecified, sishould be set to False on import, True if any Sii elements could be matched
+    ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
     ivar siIds: containerId values of matched Si entries
     ivar siiIds: containerId values of matched Sii entries
     ivar peptide: peptide sequence of best scoring Sii match
@@ -315,17 +322,18 @@ class FeatureItem(ContainerItem):
 
 
 class FeatureContainer(ItemContainer):
-    """
-    ItemContainer for peptide elution features,
-    see also 'class::SiContainer' (Spectrum Item Container) which contains spectrum data.
-    see also 'class::SiiContainer' (Spectrum Identification Item Container) which contains sequence data.
+    """ItemContainer for peptide elution features :class`FeatureItem`.
+
+    see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
+    see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
     """
     def __init__(self):
         super(FeatureContainer, self).__init__()
 
 
 class Peptide(object):
-    """Describes a peptide derived by one or more proteins
+    """Describes a peptide derived by one or more proteins.
+
     :ivar sequence: amino acid sequence of the peptide
     :ivar missedCleavage: number of missed cleavages, dependens on enzyme specificity
     :ivar proteinList: protein ids that generate this peptide under certain digest condition
@@ -352,20 +360,21 @@ class Peptide(object):
 
 
 class PeptideContainer(object):
-    """Container object for Peptide() items
-    :ivar peptides: {peptide:Peptide(), peptide:Peptide(), ...}
+    """Container object for peptides :class:`Peptide`.
+
+    :ivar peptides: {peptideSequence:Peptide(), peptideSequence:Peptide(), ...}
     """
-    # A container for Peptide objects
     def __init__(self):
         self.peptides = dict()
 
     def __getitem__(self, peptide):
-        """Return entry from self.peptides using peptide as key"""
+        """Return entry from self.peptides using peptide as key."""
         return self.peptides[peptide]
 
 
 class Protein(object):
-    """Describes a protein
+    """Describes a protein.
+
     ivar id: identifier of the protein eg. UniprotId
     ivar name: name of the protein
     ivar sequence: amino acid sequence of the protein
@@ -387,7 +396,8 @@ class Protein(object):
 
 
 class ProteinContainer(object):
-    """Container object for Protein() items, can be accessd via the protein id or the name
+    """Container object for proteins :class:`Protein`, protein entries can be accessd via id or name.
+
     ivar proteinIds: {proteinId:Protein(), proteinId:Protein()}
     ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}
     """
@@ -397,8 +407,9 @@ class ProteinContainer(object):
         self.proteinNames = dict()
 
     def __getitem__(self, key):
-        """uses key to return Protein() from the ProteinContainer()
-        :ivar key:  either a proteinId or a proteinName
+        """Uses key to return protein entries :class:`Protein`.
+
+        :ivar key: either a protein id or a protein name
         """
         if key in self.proteinIds:
             return self.proteinIds[key]
@@ -409,14 +420,16 @@ class ProteinContainer(object):
 
 
 class PeptideEvidence(Peptide):
-    """ Summarizes all the SpectrumIdentificationItem() evidence for a certain peptide
+    """Summarizes all the evidence (:class:`SpectrumIdentificationItem`) for a certain peptide.
+
     ivar peptide: amino acid sequence of the peptide including modifications
     ivar sequence: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
     ivar bestId: containerId of best scoring Sii item
     ivar siiIds: containerIds of all added Sii items
     ivar score: best score of all added Sii items
     ivar scores: scores of all added Sii items
-    see also 'class::Peptide'
+
+    see also :class:`Peptide`
     """
     def __init__(self, peptide, sequence=None):
         sequence = removeModifications(peptide) if sequence is None else sequence
@@ -438,18 +451,18 @@ class PeptideEvidence(Peptide):
 
 
 class PeptideEvidenceContainer(PeptideContainer):
-    """ Container for PeptideEvidence() items
+    """Container for peptide evidence class:`PeptideEvidence`
     :ivar peptides: {peptide:PeptideEvidence(), peptide:PeptideEvidence(), ...}
-    :ivar _siiContainer: SiiContainer() which is used to generate the PeptideEvidences
+    :ivar siiContainer: SiiContainer() which is used to generate the PeptideEvidence
     :ivar scoreKey: SpectrumIdentificationItem attribute which is used to find the best scoring item
     :ivar largerBetter: True if a larger value of the scoreKey attribute means a better score
     :ivar modified: True if modified peptides are treated as unique entries,
     set False to use only the amino acid sequence of a peptide
-    see also 'class::PeptideContainer'
+    see also :class:`PeptideContainer`
     """
-    def __init__(self, _siiContainer, scoreKey='qValue', largerBetter=False, modified=False):
+    def __init__(self, siiContainer, scoreKey='qValue', largerBetter=False, modified=False):
         super(PeptideEvidenceContainer, self).__init__()
-        self.siiContainer = _siiContainer
+        self.siiContainer = siiContainer
 
         self._scoreKey = scoreKey
         self._largerBetter = largerBetter
@@ -480,14 +493,14 @@ class PeptideEvidenceContainer(PeptideContainer):
 
 class ProteinEvidence(Protein):
     """ Summarizes all the PeptideEvidence information for a certain protein
-    see also 'class::Protein'
+    see also :class:`Protein`
     :ivar id: amino acid sequence of the peptide including modifications
     :ivar uniquePeptides: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
     :ivar sharedPeptides: containerId of best scoring Sii item
     :ivar uniquePsmCount: containerIds of all added Sii items
     :ivar sharedPsmCount: best score of all added Sii items
     :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data.
-    see also 'class::Protein'
+    see also :class:`Protein`
     """
     def __init__(self, identifier, sequence=str(), name=None):
         super(ProteinEvidence, self).__init__(sequence, identifier=identifier, name=name)
@@ -500,24 +513,24 @@ class ProteinEvidence(Protein):
     @lazyAttribute
     def coverage(self):
         """Calculate the number of identified amino acids by unique peptides"""
-        return None
+        raise NotImplementedError
 
 
 class ProteinEvidenceContainer(ProteinContainer):
-    """ Container for ProteinEvidence() items
+    """ Container for protein evidence :class:`ProteinEvidence`.
+
     :ivar proteinIds: {proteinId:ProteinEvidence(), proteinId:ProteinEvidence()}
     :ivar proteinNames: {proteinName:ProteinEvidence(), proteinName:ProteinEvidence()}
-    :ivar peptideEvidences: PeptideEvidenceContainer() contains PeptideEvidence() items which are used to generate ProteinEvidence() items.
-    :ivar proteindb: ProteinContainer(), fasta representation of proteins
-    :ivar peptidedb: PeptideContainer(), fasta representation of peptides
-    see also 'class::ProteinContainer'
+    :ivar peptideEvidenceContainer: class:`PeptideEvidenceContainer` used to generate protein evidence
+    :ivar proteindb: fasta representation of proteins :class:`ProteinContainer`
+    :ivar peptidedb: fasta representation of peptides :class:`PeptideContainer`
     """
-    def __init__(self, _peptideEvidenceContainer, proteindb, peptidedb):
+    def __init__(self, peptideEvidenceContainer, proteindb, peptidedb):
         super(ProteinEvidenceContainer, self).__init__()
         del(self.proteinIds)
         del(self.proteinNames)
         self.proteins = dict()
-        self.peptideEvidenceContainer = _peptideEvidenceContainer
+        self.peptideEvidenceContainer = peptideEvidenceContainer
         self.peptidedb = peptidedb
         self.proteindb = proteindb
         self.validProteinList = list()
@@ -525,7 +538,8 @@ class ProteinEvidenceContainer(ProteinContainer):
         self._generateProteinEvidence()
 
     def __getitem__(self, key):
-        """uses key to return Protein() from the self.proteins
+        """Uses key to return protein evidence entries :class:`ProteinEvidence`.
+
         :ivar key: proteinId
         """
         return self.proteins[key]
@@ -560,12 +574,12 @@ class ProteinEvidenceContainer(ProteinContainer):
 ### Auxiliary functions for ItemContainer classes ###
 #####################################################
 def addContainer(baseContainer, *newContainers):
-    """ Function to merge the content of multiple instances of ItemContainer or its subclasses,
-    can only merge containers of the same type
-    :param baseContainer: append newContainers to the baseContainer
-    if baseContainer is not an class instance but a cluss, an instance is generated
-    :param newContainer: one instance or a list of containers to be appended to the baseContainer
-    CAUTION: order of Sii items in SiiContainer().index[containerId] can be changed
+    """Merge the content of multiple instances of :class:`ItemContainer` or its subclasses, containers must be of same type.
+
+    :param baseContainer: append newContainers to the baseContainer, can be an class or an instance
+    :param newContainer: one or multiple containers to be appended to the baseContainer
+
+    Caution, order of :class:`SpectrumIdentificationItem` in :attr:`SiiContainer.index` can be changed by merging
     """
     if isinstance(baseContainer, type):
         baseContainer = baseContainer()
@@ -606,7 +620,14 @@ def addContainer(baseContainer, *newContainers):
 
 
 def importSpecfiles(specfiles, fileDirectory, loadIonList=False, siContainer=None):
-    """Auxiliary function to conveniently import a group of specfiles"""
+    """Auxiliary function to conveniently import a group of specfiles.
+
+    :ivar specfiles: Filenames which should be imported
+    :type specfiles: str() or [str(), str(), ...]
+    :ivar fileDirectory: Filenames are searched in this folder and its folder
+    :ivar bool loadIonList: True if ion arrays (mz and intensity) should be imported
+    :ivar siContainer: Add imported specfiles to siContainer, if None a new instance of :class:`SiContainer` is returned
+    """
     if siContainer is None:
         siContainer = SiContainer()
     specfiles = aux.toList(specfiles)
@@ -625,8 +646,9 @@ def importSpecfiles(specfiles, fileDirectory, loadIonList=False, siContainer=Non
 
 
 def generateSiContainerFiles(fileDirectory):
-    """ Generate SiContainer / ionList files for all mzML files in the fileDirectory or its subfolders
-    links to SiContainer(), removeSiContainerFiles()
+    """Generate SiContainer and ionList files for all mzML files in the fileDirectory and its subfolders.
+
+    see also :func:`removeSiContainerFiles` and :meth:`SiContainer.save`
     """
     for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='mzML', selector=lambda x: True):
         dotPosition = [x for x in aux.findAllSubstrings(filePath, '.')][-1]
@@ -642,8 +664,9 @@ def generateSiContainerFiles(fileDirectory):
 
 
 def removeSiContainerFiles(fileDirectory):
-    """ Remove all SiContainer / ionList files in the fileDirectory or its subfolders
-    links to SiContainer(), generateSiContainerFiles()
+    """Remove all SiContainer and ionList files in the fileDirectory and its subfolders.
+
+    see also :func:`generateSiContainerFiles` and :meth:`SiContainer.save`
     """
     for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='SiContainer', selector=lambda x: True):
         os.remove(filePath)
@@ -655,7 +678,10 @@ def removeSiContainerFiles(fileDirectory):
 ### Import functions for various file types ###
 ###############################################
 def pymzmlReadMzml(mzmlPath):
-    """Auxiliary function, specifies extra accesions to read from an mzml file, returns a pymzml run object and """
+    """Auxiliary function to specify extra accesions when reading an mzml file with :func:`pymzml.run.Reader`.
+
+    :ivar mzmlPath: File path
+    """
     extraAccessions = [('MS:1000827', ['value']),
                        ('MS:1000828', ['value']),
                        ('MS:1000829', ['value']),
@@ -666,14 +692,14 @@ def pymzmlReadMzml(mzmlPath):
     return pymzml.run.Reader(mzmlPath, extraAccessions=extraAccessions)
 
 
-def importSpectrumItems(_siContainer, specfilePath, specfile, msLevel=[1, 2], importIonList=False, mgfType=None):
-    """ Import spectra from mzml or mgf files
-    :param _siContainer: Spectra are added to to this instance of SiContainer()
-    :param specfilePath: spectrum filename (.mzml or .mgf)
-    :param specfile: name to represent this file in the SiContainer. Each filename
+def importSpectrumItems(siContainer, specfilePath, specfile, msLevel=[1, 2], importIonList=False, mgfType=None):
+    """ Import spectra from mzml or mgf files.
+
+    :param siContainer: Spectra are added to to this instance of :class:`SiContainer`
+    :param specfilePath: Actual file path (file type has to be .mzml or .mgf)
+    :param specfile: Keyword (filename) to represent file in the :class:`SiContainer`. Each filename
     can only occure once, therefore importing the same filename again is prevented
-    :param msLevel: msLevels to load
-    :param importIonList: bool whether the ion spectra should be loaded
+    :param importIonList: bool if ion arrays (mz and intensity) should be imported
     :param mgfType: if the file is of type '.mgf', and the mgf was generated by pParse set to mgfType="pParse" because of header information ambiguity.
     """
     if not os.path.isfile(specfilePath):
@@ -681,27 +707,25 @@ def importSpectrumItems(_siContainer, specfilePath, specfile, msLevel=[1, 2], im
     elif not specfilePath.lower().endswith('.mzml') and not specfilePath.lower().endswith('.mgf'):
         print('File is not an "mzml" or "mgf" file:', specfilePath)
     else:
-        if specfile not in _siContainer.specfiles:
-            _siContainer.specfiles.append(specfile)
-            _siContainer.container[specfile] = list()
+        if specfile not in siContainer.specfiles:
+            siContainer.specfiles.append(specfile)
+            siContainer.container[specfile] = list()
             if specfilePath.lower().endswith('.mzml'):
                 msrun = pymzmlReadMzml(specfilePath)
-                importMzmlSpectrumItems(_siContainer, msrun, specfile, msLevel=[1, 2], importIonList=importIonList)
+                importMzmlSpectrumItems(siContainer, msrun, specfile, importIonList=importIonList)
             elif specfilePath.lower().endswith('.mgf'):
-                importMgfSpectrumItems(_siContainer, specfilePath, specfile, importIonList=importIonList, mgfType=mgfType)
+                importMgfSpectrumItems(siContainer, specfilePath, specfile, importIonList=importIonList, mgfType=mgfType)
         else:
             print(specfile, 'is already present in the SiContainer, import interrupted.')
 
 
-def importMzmlSpectrumItems(_siContainer, msrun, specfile, msLevel=[1, 2], importIonList=False):
-    """load mzml spectrum items.
+def importMzmlSpectrumItems(siContainer, msrun, specfile, importIonList=False):
+    """Import spectrum information from mzML files. Mostly used as a private function by :func:`importSpectrumItems`.
 
-    Mostly used as a private function by importSpectrumItems.
-
-    :param msrun: pymzml.msrun class instance of mzml file containing parameters to load using pymzml.
-    :param specfile: filename (keyword-name not path) of spectrum file
-
-    see also importSpectrumItems.
+    :param siContainer: Spectra are added to this instance of :class:`SiContainer`
+    :param msrun: :object:`pymzml.run.Reader` iterator for mzml spectra of the module :mod:´pymzml`
+    :param specfile: Keyword (filename) to represent file in the :class:`SiContainer`
+    :param importIonList: bool if ion arrays (mz and intensity) should be imported
     """
     def _generateSpectrumItem(spectrum):
         si = SpectrumItem(str(spectrum['id']), specfile)
@@ -730,13 +754,13 @@ def importMzmlSpectrumItems(_siContainer, msrun, specfile, msLevel=[1, 2], impor
     for spectrum in msrun:
         if spectrum['ms level'] >= 1:
             si = _generateSpectrumItem(spectrum)
-            _siContainer.container[specfile].append(si)
-            _siContainer.index[si.containerId] = si
+            siContainer.container[specfile].append(si)
+            siContainer.index[si.containerId] = si
 
             if importIonList:
-                _siContainer.ionLists[si.containerId] = dict()
-                _siContainer.ionLists[si.containerId]['mz'] = numpy.array(spectrum.mz, dtype='float64')
-                _siContainer.ionLists[si.containerId]['i'] = numpy.array(spectrum.i, dtype='float64')
+                siContainer.ionLists[si.containerId] = dict()
+                siContainer.ionLists[si.containerId]['mz'] = numpy.array(spectrum.mz, dtype='float64')
+                siContainer.ionLists[si.containerId]['i'] = numpy.array(spectrum.i, dtype='float64')
 
             if si.msLevel == 1:
                 # Add currMsnIndexList to last ms1 entry and reset currMsnContainerIdList
@@ -751,14 +775,16 @@ def importMzmlSpectrumItems(_siContainer, msrun, specfile, msLevel=[1, 2], impor
     setattr(lastMs1Item, 'msnIdList', currMsnContainerIdList)
 
 
-def importMgfSpectrumItems(_siContainer, specfilePath, specfile, importIonList=False, mgfType=None):
-    """Load mgf file spectrum items.
+def importMgfSpectrumItems(siContainer, specfilePath, specfile, importIonList=False, mgfType=None):
+    """Import spectrum information from mgf files.
 
-    Mostly used as a private function by importSpectrumItems.
+    Mostly used as a private function by :func:`importSpectrumItems`.
 
-    :param specfilePath: actual path to file.
-    :param specfile: filename (keyword-name not path) of spectrum file
-    see also importSpectrumItems.
+    :param siContainer: Spectra are added to this instance of :func:`SiContainer`
+    :param specfilePath: Actual path to file
+    :param specfile: Keyword (filename) to represent file in the :class:`SiContainer`
+    :param importIonList: bool if ion arrays (mz and intensity) should be imported
+    :param mgfType: If mgf was generated by pParse set to "Parse" because of header information ambiguity
     """
     def _generateSpectrumItem(mgfEntry):
         mgfEntry = mgfEntry.replace('END IONS','').strip()
@@ -813,35 +839,47 @@ def importMgfSpectrumItems(_siContainer, specfilePath, specfile, importIonList=F
         for mgfEntry in mgfSplit:
             if mgfEntry != '' and mgfEntry.find('END IONS') != -1:
                 si, ionList = _generateSpectrumItem(mgfEntry)
-                _siContainer.container[specfile].append(si)
-                _siContainer.index[si.containerId] = si
+                siContainer.container[specfile].append(si)
+                siContainer.index[si.containerId] = si
 
                 if importIonList:
                     mzList, iList = _splitMgfIonList(ionList)
-                    _siContainer.ionLists[si.containerId] = dict()
-                    _siContainer.ionLists[si.containerId]['mz'] = numpy.array(mzList, dtype='float64')
-                    _siContainer.ionLists[si.containerId]['i'] = numpy.array(iList, dtype='float64')
+                    siContainer.ionLists[si.containerId] = dict()
+                    siContainer.ionLists[si.containerId]['mz'] = numpy.array(mzList, dtype='float64')
+                    siContainer.ionLists[si.containerId]['i'] = numpy.array(iList, dtype='float64')
 
 
-def importPsmResults(_siiContainer, fileLocation, specfile, psmType='percolator', psmEngine='comet', qValue=0.01):
+def importPsmResults(siiContainer, fileLocation, specfile, psmType='percolator', psmEngine='comet', qValue=0.01):
+    """Function to control the import of PSM results into :class:`SiiContainer`.
+
+    :ivar siiContainer: Add PSMs to this instance
+    :ivar fileLocation: Actual path to file
+    :ivar specfile: Keyword (filename) to represent file in the :class:`SiiContainer`.
+    :ivar psmType: can be used to specify post processing tools like percolator, used to choose import function
+    :ivar psmEngine: specify peptide spectrum matching engine, used to choose import function
+    :ivar qValue: define a qValue cut off for valid items, could be changed to (:var:`scoreCutOff` and :var:`scoreKey`)
+
+    See also :func:`_importPercolatorResults` and :func:`_importFromPercolatorArray`
     """
-    Function to control the import of PSM results into a SiiContainer()
-    See also _importFromPercolatorArray()
-    """
-    if specfile not in _siiContainer.container:
-        _siiContainer.container[specfile] = list()
-    if specfile not in _siiContainer.specfiles:
-        _siiContainer.specfiles.append(specfile)
+    if specfile not in siiContainer.container:
+        siiContainer.container[specfile] = list()
+    if specfile not in siiContainer.specfiles:
+        siiContainer.specfiles.append(specfile)
 
     if psmType == 'percolator':
         _psmArrays = _importPercolatorResults(fileLocation, psmEngine=psmEngine)
-        _importFromPercolatorArrays(_siiContainer, _psmArrays, specfile, qValueCutOff=qValue)
+        _importFromPercolatorArrays(siiContainer, _psmArrays, specfile, qValueCutOff=qValue)
 
 
-def _importFromPercolatorArrays(_siiContainer, psmArrays, specfile, qValueCutOff=None):
-    """
-    Write Spectrum Identification Items into the siiContainer
-    See also: _importPercolatorResults()
+def _importFromPercolatorArrays(siiContainer, psmArrays, specfile, qValueCutOff=None):
+    """Writes :class:`SpectruIdentificationItem` into :class:`SiContainer`.
+
+    :ivar siiContainer: Add PSMs to this instance
+    :ivar psmArrays: contains PSM information, generated by :func:`_importFromPercolatorArray`
+    :ivar specfile: Keyword (filename) to represent file in the :class:`SiContainer`
+    :ivar qValueCutOff: define a qValue cut off for valid items
+
+    See also :func:`importPsmResults`
     """
     sortMask = psmArrays['score'].argsort()[::-1]
     for key in psmArrays:
@@ -867,12 +905,12 @@ def _importFromPercolatorArrays(_siiContainer, psmArrays, specfile, qValueCutOff
         sii.pep = pep
         sii.isValid = False
 
-        if sii.containerId in _siiContainer.index:
-            siiList = _siiContainer.index[sii.containerId]
+        if sii.containerId in siiContainer.index:
+            siiList = siiContainer.index[sii.containerId]
             sii.rank = len(siiList) + 1
         else:
             sii.rank = 1
-            _siiContainer.index[sii.containerId] = list()
+            siiContainer.index[sii.containerId] = list()
 
         if sii.rank == 1:
             if qValueCutOff is not None:
@@ -881,11 +919,20 @@ def _importFromPercolatorArrays(_siiContainer, psmArrays, specfile, qValueCutOff
             else:
                 sii.isValid = True
 
-        _siiContainer.index[sii.containerId].append(sii)
-        _siiContainer.container[specfile].append(sii)
+        siiContainer.index[sii.containerId].append(sii)
+        siiContainer.container[specfile].append(sii)
 
 
 def _importPercolatorResults(fileLocation, psmEngine=None):
+    """Reads percolator PSM results from txt file.
+
+    :ivar fileLocation: File path
+    :ivar psmEngine: Specifies the used peptide spectrum matching engine ('comet', 'msgf', 'xtandem')
+
+    :return: {attribute:numpy.array(), attribute:numpy.array()}
+
+    See also :func:`importPsmResults` and :func:`_importFromPercolatorArray`
+    """
     #HEADERLINE: xtandem seperates proteins with ';', msgf separates proteins by a tab
     with open(fileLocation,'rb') as openFile:
         tsvreader = csv.reader(openFile, delimiter="\t")
@@ -931,21 +978,22 @@ def _importPercolatorResults(fileLocation, psmEngine=None):
     return scanArrDict
 
 
-def importPeptideFeatures(_featureContainer, filelocation, specfile):
-    """ Import peptide features from a featureXml file (eg. generated by OPENMS featureFinderCentroided)
-    :param _featureContainer: Spectra are added to to this FeatureContainer()
-    :param filelocation: file path of the file to import
-    :param specfile: name to represent this file in the FeatureContainer. Each filename
-    can only occure once, therefore importing the same filename again is prevented
+def importPeptideFeatures(featureContainer, filelocation, specfile):
+    """ Import peptide features from a featureXml file (eg. generated by OPENMS featureFinderCentroided).
+
+    :param featureContainer: Spectra are added to to this instance of :class:`FeatureContainer`
+    :param filelocation: Actual file path
+    :param specfile: Keyword (filename) to represent file in the :class:`FeatureContainer`. Each filename
+    can only occure once, therefore importing the same filename again is prevented.
     """
     if not os.path.isfile(filelocation):
         print('File does not exits:', filelocation)
     elif not filelocation.lower().endswith('.featurexml'):
         print('File is not a featurexml file:', filelocation)
     else:
-        if specfile not in _featureContainer.specfiles:
-            _featureContainer.specfiles.append(specfile)
-            _featureContainer.container[specfile] = list()
+        if specfile not in featureContainer.specfiles:
+            featureContainer.specfiles.append(specfile)
+            featureContainer.container[specfile] = list()
             featureDict = _importFeatureXml(filelocation)
 
             for featureId, featureEntryDict in featureDict.items():
@@ -966,14 +1014,19 @@ def importPeptideFeatures(_featureContainer, filelocation, specfile):
                 featureItem.isAnnotated = False
                 featureItem.isValid = True
 
-                _featureContainer.index[featureItem.containerId] = featureItem
-                _featureContainer.container[specfile].append(featureItem)
+                featureContainer.index[featureItem.containerId] = featureItem
+                featureContainer.container[specfile].append(featureItem)
         else:
             print(specfile, 'is already present in the SiContainer, import interrupted.')
 
 
 def _importFeatureXml(fileLocation):
-    """Reads a featureXml file and returns {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}"""
+    """Reads a featureXml file.
+
+    :return: {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}
+
+    See also :func:`importPeptideFeatures`
+    """
     with open(fileLocation, 'r') as openFile:
         readingFeature = False
         readingHull = False
@@ -1039,11 +1092,76 @@ def _importFeatureXml(fileLocation):
                 #retentionTimeList = list()
     return featureDict
 
+def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
+                        removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
+                        ):
+    """Generates a :class:`ProteinContainer` and :class:`PeptideContainer` by in silico digestion of proteins from a fasta file.
+
+    :param filePath: File path
+    :param ignoreIsoleucine: If True, treat I and L in peptide sequence as indistinguishable
+    :param missedCleavages: number of allowed missed digestion sites
+    :param removeNtermM: If True, consider peptides with the n-terminal methionine of the protein removed
+    :param minLength: only yield peptides with length >= minLength
+    :param maxLength: only yield peptides with length <= maxLength
+    :param fastaType: see :func:`_importFasta´
+
+    See also :func:`digestInSilico`
+    """
+    fastaRead = _importFasta(filePath, fastaType=fastaType)
+    proteindb = ProteinContainer()
+    peptidedb = PeptideContainer()
+
+    for fastaEntry in fastaRead:
+        protein = Protein(fastaEntry['sequence'], identifier=fastaEntry['sysName'],
+                          name = fastaEntry['stdName']
+                          )
+        proteindb.proteinIds[fastaEntry['sysName']] = protein
+        proteindb.proteinNames[fastaEntry['stdName']] = protein
+
+        for unmodPeptide, info in digestInSilico(fastaEntry['sequence'], missedCleavage,
+                                                  removeNtermM=True, minLength=minLength,
+                                                  maxLength=maxLength
+                                                  ):
+            if ignoreIsoleucine:
+                unmodPeptideNoIsoleucine = unmodPeptide.replace('I', 'L')
+                if unmodPeptideNoIsoleucine in peptidedb.peptides:
+                    currPeptide = peptidedb[unmodPeptideNoIsoleucine]
+                else:
+                    currPeptide = Peptide(unmodPeptideNoIsoleucine, mc=info['missedCleavage'])
+                    peptidedb.peptides[unmodPeptideNoIsoleucine] = currPeptide
+
+                if unmodPeptide not in peptidedb.peptides:
+                    peptidedb.peptides[unmodPeptide] = currPeptide
+            else:
+                if unmodPeptide in peptidedb.peptides:
+                    currPeptide = peptidedb[unmodPeptide]
+                else:
+                    currPeptide = Peptide(unmodPeptide, mc=info['missedCleavage'])
+                    peptidedb.peptides[unmodPeptide] = currPeptide
+
+            currPeptide.proteinList.append(fastaEntry['sysName'])
+            currPeptide.startPosDict[fastaEntry['sysName']] = info['startPos']
+            currPeptide.endPosDict[fastaEntry['sysName']] = info['endPos']
+
+    for peptide in peptidedb.peptides.keys():
+        numProteinMatches = len(peptidedb[peptide].proteinList)
+        if numProteinMatches == 1:
+            peptidedb[peptide].unique = True
+        elif numProteinMatches > 1:
+            peptidedb[peptide].unique = False
+        else:
+            print('No protein matches in peptidedb for peptide sequence: ', peptide)
+
+    return proteindb, peptidedb
+
 
 def _importFasta(fastaFileLocation, fastaType='sgd'):
-    """Import a fasta file, coulb be merged with or substituted by pyteomics.fasta.read()
-    :param fastaType: possible values 'sgd', 'contaminations', 'uniprot', 'kustnerPeptideLibrary'
-    depending on the fastaType a different regular expression pattern is used to read the header column
+    """Imports fasta files. (Could be merged with or substituted by :class:`pyteomics.fasta.read`)
+
+    :param fastaType: Used to choose which regular expression pattern should be used to read the fasta header line
+    :type fastaType: 'sgd' or 'contaminations' or 'uniprot' or 'kustnerPeptideLibrary'
+
+    See also :func:`returnDigestedFasta` and :func:`digestInSilico`
     """
     if fastaType == 'sgd':
         geneAccessionPattern = ">(?P<sysName>[\S]+)\s(?P<stdName>[\S]+).+(?P<description>\".+\")\n(?P<sequence>[A-Z\n]+\*)"
@@ -1078,12 +1196,14 @@ def _importFasta(fastaFileLocation, fastaType='sgd'):
 
 
 def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLength=5, maxLength=40):
-    """Yield peptides derived from an in silico digest of a protein
+    """Yields peptides derived from an in silico digest of a protein.
+
     :param proteinSequence: amino acid sequence of the protein to be digested
-    :param missedCleavages: number of allowed missed digestion sites
-    :param removeNtermM: boolean, consider peptides with the n-terminal methionine of the protein removed
+    :param missedCleavages: number of allowed missed cleavage sites
+    :param removeNtermM: If True, consider peptides with the n-terminal methionine of the protein removed
     :param minLength: only yield peptides with length >= minLength
     :param maxLength: only yield peptides with length <= maxLength
+
     NOTE: at the moment it only works for trypsin (K/R) and c-terminal cleavage
     """
     # Return in silico digested peptides, peptide start position, peptide end position
@@ -1148,74 +1268,14 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
         lastCleavagePos += 1
 
 
-def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
-                        removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
-                        ):
-    """Generate a ProteinContainer() and PeptideContainer() by digesting a fasta file in silico
-    :param filePath: file path of the fasta file
-    :param ignoreIsoleucine: boolean, treat I and L in peptide sequence as indistinguishable
-    :param missedCleavages: number of allowed missed digestion sites
-    :param removeNtermM: boolean, consider peptides with the n-terminal methionine of the protein removed
-    :param minLength: only yield peptides with length >= minLength
-    :param maxLength: only yield peptides with length <= maxLength
-    :param fastaType: see 'function::_importFasta'
-    """
-    fastaRead = _importFasta(filePath, fastaType=fastaType)
-    proteindb = ProteinContainer()
-    peptidedb = PeptideContainer()
-
-    for fastaEntry in fastaRead:
-        protein = Protein(fastaEntry['sequence'], identifier=fastaEntry['sysName'],
-                          name = fastaEntry['stdName']
-                          )
-        proteindb.proteinIds[fastaEntry['sysName']] = protein
-        proteindb.proteinNames[fastaEntry['stdName']] = protein
-
-        for unmodPeptide, info in digestInSilico(fastaEntry['sequence'], missedCleavage,
-                                                  removeNtermM=True, minLength=minLength,
-                                                  maxLength=maxLength
-                                                  ):
-            if ignoreIsoleucine:
-                unmodPeptideNoIsoleucine = unmodPeptide.replace('I', 'L')
-                if unmodPeptideNoIsoleucine in peptidedb.peptides:
-                    currPeptide = peptidedb[unmodPeptideNoIsoleucine]
-                else:
-                    currPeptide = Peptide(unmodPeptideNoIsoleucine, mc=info['missedCleavage'])
-                    peptidedb.peptides[unmodPeptideNoIsoleucine] = currPeptide
-
-                if unmodPeptide not in peptidedb.peptides:
-                    peptidedb.peptides[unmodPeptide] = currPeptide
-            else:
-                if unmodPeptide in peptidedb.peptides:
-                    currPeptide = peptidedb[unmodPeptide]
-                else:
-                    currPeptide = Peptide(unmodPeptide, mc=info['missedCleavage'])
-                    peptidedb.peptides[unmodPeptide] = currPeptide
-
-            currPeptide.proteinList.append(fastaEntry['sysName'])
-            currPeptide.startPosDict[fastaEntry['sysName']] = info['startPos']
-            currPeptide.endPosDict[fastaEntry['sysName']] = info['endPos']
-
-    for peptide in peptidedb.peptides.keys():
-        numProteinMatches = len(peptidedb[peptide].proteinList)
-        if numProteinMatches == 1:
-            peptidedb[peptide].unique = True
-        elif numProteinMatches > 1:
-            peptidedb[peptide].unique = False
-        else:
-            print('No protein matches in peptidedb for peptide sequence: ', peptide)
-
-    return proteindb, peptidedb
-
-
 ################################################
 ### Functions to work with peptide sequences ###
 ################################################
 def calcPeptideMass(peptide):
-    """Calculate the mass of a peptide, modifications have to be in unimod format [UNIMOD:x]
-    and 'x' has to be present in aux.unimodToMassDict
+    """Calculate the mass of a peptide. (Should be changed to allow for modifications not present in unimod.org)
 
-    :type peptide: str
+    :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationName]"
+    and 'modificationName' has to be present in aux.unimodToMassDict
     """
     unimodMassDict = aux.unimodToMassDict
 
@@ -1227,7 +1287,7 @@ def calcPeptideMass(peptide):
         unmodPeptide = unmodPeptide.replace(unimodSymbol, '')
         additionalModMass += unimodMass * numMod
 
-    if unmodPeptide.find('UNIMOD') != -1:
+    if unmodPeptide.find('[') != -1:
         raise Exception()
 
     unmodPeptideMass = pyteomics.mass.calculate_mass(unmodPeptide, charge=0)
@@ -1236,7 +1296,7 @@ def calcPeptideMass(peptide):
 
 
 def calcMzFromMass(mass, charge):
-    """Calculate the mz value of a peptide from mass and charge.
+    """Calculate the mz value of a peptide from its mass and charge.
 
     :type mass: float
     :type charge: int
@@ -1246,7 +1306,7 @@ def calcMzFromMass(mass, charge):
 
 
 def calcMassFromMz(mz, charge):
-    """Calculate the mass of a peptide from mz and charge.
+    """Calculate the mass of a peptide from its mz and charge.
 
     :type mz: float
     :type charge: int
@@ -1256,7 +1316,9 @@ def calcMassFromMz(mz, charge):
 
 
 def removeModifications(peptide):
-    """Removes all '[x]' tags from a peptide; x can be a string of any length
+    """Removes all modifications from a peptide string
+
+    :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationName]"
 
     :type peptide: str
     """
@@ -1269,12 +1331,18 @@ def removeModifications(peptide):
 
 
 def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
-    """ returns a dictionary: key = modification, value = list of positions, positions start at var indexStart
-    #test:
+    """Determines the amino acid positions of all present modifications.
+
+    :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationName]"
+    :ivar indexStart: returned amino acids positions of the peptide start with this number (1st amino acid position = indexStart)
+    :ivar removeModString: string to remove from the returned modification name
+
+    :return: {modificationName:[position1, position2, ...], ...}
+
+    TEST:
     peptide = 'GFHIHEFGDATN[UNIMOD:7]GC[UNIMOD:4]VSAGPHFN[UNIMOD:7]PFKK'
     returnModPositions(peptide) == {'4': [14], '7': [12, 22]}
     """
-
     unidmodPositionDict = dict()
     while peptide.find('[') != -1:
         currModification = peptide.split('[')[1].split(']')[0]
@@ -1290,38 +1358,42 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
         unidmodPositionDict[currModification].append(currPosition)
     return unidmodPositionDict
 
+
 ##########################################
 ### Functions to work with FeatureItem ###
 ##########################################
-def matchToFeatures(_featureContainer, _specContainer, specfiles=None, fMassKey='mz', sMassKey='obsMz', isotopeErrorList = [0, 1],
+def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='mz', sMassKey='obsMz', isotopeErrorList=(0, 1),
                     precursorTolerance=5, toleranceUnit='ppm', rtExpansionUp=0.10, rtExpansionDown=0.05, matchCharge=True,
                     scoreKey='pep', largerBetter=False):
-    """Function for FeatureItem annotation, matches SpectrumItem (=Si) or SpectrumIdentificationItem (=Sii) to FeatureItem()
-    :ivar _featureContainer: FeatureContainer()
-    :ivar _specContainer: SiContainer() or SiiContainer()
-    :ivar specfiles: list of specfiles to process, if None all specfiles are processed that are present in _featureContainer and _specContainer
-    :ivar fMassKey: mass attribute name of items in _featureContainer
-    :ivar sMassKey: mass attribute name of items in _specContainer (eg 'obsMz', 'calcMz')
+    """Annotate :class:`FeatureItem` in :class:`FeatureContainer` by matching :class:`SpectrumItem` (Si) or :class:`SpectrumIdentificationItem` (Sii).
+
+    :ivar featureContainer: :class:`FeatureItem` of this instance of :class:`FeatureContainer` are annotated
+    :type specContainer: :class:`SiContainer` or :class:`SiiContainer`
+    :ivar specfiles: Annotate only items of :attr:`FeatureContainer.container[specfile]`,
+    if None all specfiles present in featureContainer and specContainer are processed
+    :type specfiles: str, list or None
+    :ivar fMassKey: mass attribute key in :attr:`FeatureItem.__dict__`
+    :ivar sMassKey: mass attribute key in :attr:`SpectrumItem.__dict__` or :attr:`SpectrumIdentificationItem.__dict__` (eg 'obsMz', 'calcMz')
     :ivar isotopeErrorList: allowed isotope errors relative to the spectrum mass
     eg. [0, 1] if no feature has been matched with isotope error 0, the spectrum mass is increased by 1*C13 and matched again
-    the different isotope error values are tested in the specified order therefore 0 should normally be the 1st value of the list
-    :ivar precursorTolerance: is used to calculate the mass window to match Si/Sii and FeatureItem()
+    the different isotope error values are tested in the specified order therefore 0 should normally be the 1st value of the tuple
+    :type isotopeErrorList: list or tuple of int
+    :ivar precursorTolerance: is used to calculate the mass window to match Si or Sii to :class:`FeatureItem`
     :ivar toleranceUnit: defines how the precursorTolerance is applied to the mass value, 'ppm' * (1 +/- tolerance*1E-6) or 'da': +/- value
-    :ivar rtExpansionUp: relative upper expansion of FeatureItem() retention time areas
-    :ivar rtExpansionDown: relative lower expansion of FeatureItem() retention time areas
-    ad rtExpansion: lower or upper FeatureItem() retention time position is expanded with rtExpansion * rtArea
-    if one Si/Sii is matched to multiple FeatureItems, the rt expansion is removed and the matching repeated.
-    :ivar matchCharge: boolean, True if FeatureItem() and Si/Sii must have the same charge state to be matched
+    :ivar rtExpansionUp: relative upper expansion of :class:`FeatureItem` retention time areas
+    :ivar rtExpansionDown: relative lower expansion of :class:`FeatureItem` retention time areas
+    Ad rtExpansion; lower or upper :class:`FeatureItem` retention time position is expanded with rtExpansion * rtArea
+    if Si or Sii is matched to multiple :class:`FeatureItem`, the rt expansion is removed and the matching repeated.
+    :ivar matchCharge: boolean, True if :class:`FeatureItem` and Si/Sii must have the same charge state to be matched
     :ivar scoreKey: Sii attribute name of the PSM score
     :ivar largerBetter: boolean, True if a larger PSM score is better
-    If _specContainer is a SiiContainer then matched features are annotated with Sii.peptide,
-    if multiple Sii are matched to the same FeatureItem() the one with the best score is used
 
-    see also 'class::FeatureItem', 'class::SpectrumItem', 'class::SpectrumIdentificationItem'
+    If specContainer is :class:`SiiContainer` then matched features are annotated with :attr:`SpectrumIdentificationItem.peptide`,
+    if multiple Sii are matched to the same :class:`FeatureItem` the one with the best score is used
     """
     isotopeErrorList = aux.toList(isotopeErrorList)
 
-    if _specContainer.__class__.__name__ == 'SiiContainer':
+    if specContainer.__class__.__name__ == 'SiiContainer':
         listKeySpecIds = 'siiIds'
     else:
         listKeySpecIds = 'siIds'
@@ -1329,13 +1401,13 @@ def matchToFeatures(_featureContainer, _specContainer, specfiles=None, fMassKey=
     if specfiles is not None:
         specfiles = aux.toList(specfiles)
     else:
-        specfiles = list(set(_featureContainer.specfiles).intersection(set(_specContainer.specfiles)))
+        specfiles = list(set(featureContainer.specfiles).intersection(set(specContainer.specfiles)))
 
     for specfile in specfiles:
         multiMatchCounter = int()
         isotopeErrorMatchCounter = int()
-        specArrays = _specContainer.getArrays([sMassKey, 'rt', 'charge'], specfiles=specfile)
-        featureArrays = _featureContainer.getArrays(['rtHigh', 'rtLow', 'charge', fMassKey],
+        specArrays = specContainer.getArrays([sMassKey, 'rt', 'charge'], specfiles=specfile)
+        featureArrays = featureContainer.getArrays(['rtHigh', 'rtLow', 'charge', fMassKey],
                                                    specfiles=specfile, sort=fMassKey
                                                    )
         featureArrays['rtHighExpanded'] = featureArrays['rtHigh'] + (featureArrays['rtHigh'] - featureArrays['rtLow']) * rtExpansionUp
@@ -1345,7 +1417,7 @@ def matchToFeatures(_featureContainer, _specContainer, specfiles=None, fMassKey=
         featureSpecDict = dict() ## key = featureKey, value = set(scanNrs)
 
         for specPos, specId in enumerate(specArrays['containerId']):
-            specId = tuple(specId)
+            #TODO REMOVE specId = tuple(specId)
             specMass = specArrays[sMassKey][specPos]
             specRt = specArrays['rt'][specPos]
             specZ = specArrays['charge'][specPos]
@@ -1404,10 +1476,9 @@ def matchToFeatures(_featureContainer, _specContainer, specfiles=None, fMassKey=
 
             if matchComplete:
                 for featureId in matchedFeatureIds:
-                    featureId = tuple(featureId)
-                    #TODO: either append siiIds or siIds ...
-                    getattr(_featureContainer[featureId], listKeySpecIds).append(specId)
-                    _featureContainer[featureId].isMatched = True
+                    #TODO: REMOVE featureId = tuple(featureId)
+                    getattr(featureContainer[featureId], listKeySpecIds).append(specId)
+                    featureContainer[featureId].isMatched = True
                     specFeatureDict[specId] = featureId
                     featureSpecDict[featureId] = specId
 
@@ -1427,26 +1498,26 @@ def matchToFeatures(_featureContainer, _specContainer, specfiles=None, fMassKey=
         if isotopeErrorMatchCounter != 0:
                 print('Isotope error matched spectra:\t\t', isotopeErrorMatchCounter)
 
-        if _specContainer.__class__.__name__ == 'SiiContainer':
+        if specContainer.__class__.__name__ == 'SiiContainer':
             for featureId in featureSpecDict.keys():
                 matches = list()
-                for specId in _featureContainer[featureId].siiIds:
-                    _sii = _specContainer.getValidItem(specId)
+                for specId in featureContainer[featureId].siiIds:
+                    _sii = specContainer.getValidItem(specId)
                     score = getattr(_sii, scoreKey)
                     peptide = _sii.peptide
                     sequence = _sii.sequence
                     matches.append([score, peptide, sequence])
                 matches.sort(reverse=largerBetter)
 
-                _featureContainer[featureId].isAnnotated = True
-                _featureContainer[featureId].score = matches[0][0]
-                _featureContainer[featureId].peptide = matches[0][1]
-                _featureContainer[featureId].sequence = matches[0][2]
+                featureContainer[featureId].isAnnotated = True
+                featureContainer[featureId].score = matches[0][0]
+                featureContainer[featureId].peptide = matches[0][1]
+                featureContainer[featureId].sequence = matches[0][2]
 
 
-def removeFeatureAnnotation(_featureContainer):
-    """Remove all annotation information from FeatureItem() in _featureContainer"""
-    for items in _featureContainer.container.values():
+def removeFeatureAnnotation(featureContainer):
+    """Remove all annotation information from :class:`FeatureItem` in :class:`featureContainer`."""
+    for items in featureContainer.container.values():
         for item in items:
             item.isMatched = False
             item.isAnnotated = False
