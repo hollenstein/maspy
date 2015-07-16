@@ -2,6 +2,13 @@ import os
 import copy
 import functools
 import operator
+import random
+
+from scipy.interpolate import LSQUnivariateSpline
+
+from pyms.mit_stats import runningMode as runningMode
+from pyms.mit_stats import runningMean as runningMean
+from pyms.mit_stats import runningMedian as runningMedian
 
 # Define constants #
 atomicMassH      = 1.00782504
@@ -30,6 +37,116 @@ xTandemMassToUniModDict[4] = 57.02147
 xTandemMassToUniModDict[374] = -1.00783
 xTandemMassToUniModDict[1] = 42.01057
 xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in xTandemMassToUniModDict.items()])
+
+
+class DataFit(object):
+    def __init__(self, dependentVarInput, independentVarInput):
+        self.dependentVarInput = dependentVarInput
+        self.independentVarInput = independentVarInput
+
+        self.splines = None
+        self.splineCycles = 10
+        self.splineMinKnotPoins = 10
+        self.splineOrder = 2
+        self.splineInitialKnots = 200
+        self.splineSubsetPercentage = 0.4
+        self.splineTerminalExpansion = 0.1
+
+        self.dependentVar = list()
+        self.independentVar = list()
+
+    def processInput(self, dataAveraging=False, windowSize=None):
+        self.dependentVar = numpy.array(self.dependentVarInput, dtype='float64')
+        self.independentVar = numpy.array(self.independentVarInput, dtype='float64')
+
+        sortMask = self.independentVar.argsort()
+        self.dependentVar = self.dependentVar[sortMask]
+        self.independentVar = self.independentVar[sortMask]
+
+        if dataAveraging:
+            if dataAveraging == 'median':
+                averagedData = averagingData(self.dependentVar, windowSize=windowSize, averagingType=dataAveraging)
+            elif dataAveraging =='mean':
+                averagedData = averagingData(self.dependentVar, windowSize=windowSize, averagingType=dataAveraging)
+            averagedData = numpy.array(averagedData, dtype='float64')
+
+            missingNumHigh = (self.independentVar.size - averagedData.size) / 2
+            missingNumLow = (self.independentVar.size - averagedData.size) - missingNumHigh
+
+            self.dependentVar = averagedData
+            self.independentVar = self.independentVar[missingNumLow:-missingNumHigh]
+
+    def generateSplines(self):
+        self.splines = returnSplineList(self.dependentVar, self.independentVar, subsetPercentage=self.splineSubsetPercentage,
+                                        cycles=self.splineCycles, minKnotPoints=self.splineMinKnotPoins, initialKnots=self.splineInitialKnots,
+                                        splineOrder=self.splineOrder, terminalExpansion=self.splineTerminalExpansion
+                                        )
+
+    def __getitem__(self, value):
+        returnValue = numpy.mean([numpy.nan_to_num(currSpline(value)) for currSpline in self.splines])
+        return returnValue
+
+    def corrArray(self, inputArray):
+        outputArray = numpy.vstack([numpy.nan_to_num(currSpline(inputArray)) for currSpline in self.splines]).mean(axis=0)
+        return outputArray
+
+
+def averagingData(array, windowSize=None, averagingType='median'):
+    if averagingType == 'median':
+        if windowSize is None:
+            windowSize = int(float(len(array)) / (50)) if int(float(len(array) / (50))) > 100 else 100
+        averagedData = runningMedian(array, windowSize)
+    elif averagingType == 'mean':
+        if windowSize is None:
+            windowSize = int(float(len(array)) / (50)) if int(float(len(array) / (50))) > 100 else 100
+        averagedData = runningMean(array, None, windowSize)
+    return averagedData
+
+
+def returnSplineList(dependentVar, independentVar, subsetPercentage=0.4, cycles=10,
+                     minKnotPoints=10, initialKnots=200, splineOrder=2, terminalExpansion=0.1
+                     ):
+    """Expects sorted arrays.
+
+    :ivar terminalExpansion: expand subsets on both sides
+    """
+    expansions = ddict(list)
+    expansionArea = (independentVar[-1] - independentVar[0]) * terminalExpansion
+    for i in range(100):
+        expansions['indUp'].append(independentVar[-1] + expansionArea/100*i)
+        expansions['indDown'].append(independentVar[0] - expansionArea/100*(100-i+1))
+        expansions['depUp'].append(dependentVar[-1])
+        expansions['depDown'].append(dependentVar[0])
+
+    dependentVar = numpy.array(expansions['depDown'] + list(dependentVar) + expansions['depUp'], dtype='float64')
+    independentVar = numpy.array(expansions['indDown'] + list(independentVar) + expansions['indUp'], dtype='float64')
+
+    splineList = list()
+    for cycle in range(cycles):
+        subset = sorted(random.sample(xrange(len(dependentVar)), int(len(dependentVar)*subsetPercentage )) )
+        terminalExpansion
+
+        dependentSubset = dependentVar[subset]
+        independentSubset = independentVar[subset]
+
+        minIndVar = independentSubset[minKnotPoints]
+        maxIndVar = independentSubset[-minKnotPoints]
+
+        knots = [float(i) * (maxIndVar-minIndVar) / initialKnots + minIndVar for i in range(1, initialKnots)]
+        ## remove knots with less then minKnotPoints data points  ##
+        lastKnot = knots[0]
+        newKnotList = [lastKnot]
+        for knotPos in range(1,len(knots)):
+            nextKnot = knots[knotPos]
+            numHits = len(independentSubset[(independentSubset >= lastKnot) & (independentSubset <= nextKnot)] )
+            if numHits >= minKnotPoints:
+                newKnotList.append( nextKnot )
+                lastKnot = nextKnot
+        knots = newKnotList
+
+        spline = LSQUnivariateSpline(independentSubset, dependentSubset, knots, k=splineOrder)
+        splineList.append(spline)
+    return splineList
 
 
 def returnMh(mz, charge):
