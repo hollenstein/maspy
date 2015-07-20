@@ -122,7 +122,7 @@ class ItemContainer(object):
         """Return a condensed array of data selected from ContainerItems for faster data processing.
 
         :param attributes: list of item attributes that should be written to the returned array.
-        for the other parameters see :class:`ItemContainer.getValidItems()`
+        for the other parameters see :func:`ItemContainer.getItems`
 
         :returns: dict(key1 from keylist: numpy.array, key2 from keylist: numpy.array, ..., indexPos: numpy.array, id: numpy.array, specfile: numpy.array),
         i.e. returns the columns of the table specified by the list of keys, each numpy.array has the dimensions Nx1. If a value is not present, None, is substituted.
@@ -150,19 +150,40 @@ class ItemContainer(object):
 
         return arrays
 
-    def save(self, fileFolder, fileName):
-        """Store a pickled version of self using  __class__.__name__ as file-appendix."""
-        fileName = '.'.join((fileName, self.__class__.__name__))
-        filePath = os.path.join(fileFolder, fileName).replace('\\', '/')
-        with open(filePath, 'w') as openFile:
+    def save(self, filefolder, filename):
+        """Store a pickled version of self using  __class__.__name__.lower() as file-appendix.
+
+        :ivar filefolder: folder where the container should be saved
+        :ivar filename: filename to store the container, should not contain any appendix like .txt
+        """
+        del(self.index)
+        self._save(filefolder, filename)
+
+    def _save(self, filefolder, filename):
+        filename = '.'.join((filename, self.__class__.__name__.lower()))
+        filepath = os.path.join(filefolder, filename).replace('\\', '/')
+        with open(filepath, 'w') as openFile:
             pickle.dump(self, openFile)
 
     @classmethod
-    def load(cls, fileFolder, fileName):
-        """Load a pickled version of self using the __class__.__name__ as file-appendix."""
-        fileName = '.'.join((fileName, cls.__name__))
-        filePath = os.path.join(fileFolder, fileName).replace('\\', '/')
-        with open(filePath, 'r') as openFile:
+    def load(cls, filefolder, filename):
+        """Load a pickled version of self using __class__.__name__.lower() as file-appendix.
+
+        :ivar filefolder: folder where the container has been saved
+        :ivar filename: filename of the stores container, without file appendix
+        """
+        classInstance = cls._load(filefolder, filename)
+        classInstance.index = dict()
+        for items in classInstance.container.values():
+            for item in items:
+                classInstance.index[item.containerId] = item
+        return classInstance
+
+    @classmethod
+    def _load(cls, filefolder, filename):
+        filename = '.'.join((filename, cls.__name__.lower()))
+        filepath = os.path.join(filefolder, filename).replace('\\', '/')
+        with open(filepath, 'r') as openFile:
             return pickle.load(openFile)
 
 
@@ -186,15 +207,15 @@ class SiContainer(ItemContainer):
         super(SiContainer, self).__init__()
         self.ionLists = dict()
 
-    def save(self, fileFolder, fileName, saveIonList=True):
+    def save(self, filefolder, filename, saveIonList=True):
         """Store a pickled version of the self, using the __class__.__name__ as file-appendix.
 
         Stores the ionList in a separate file with appendix '.ionList'.
         """
         ionLists = self.ionLists
-        self.ionLists = dict()
+        del(self.ionLists)
         try:
-            super(self.__class__, self).save(fileFolder, fileName)
+            super(self.__class__, self).save(filefolder, filename)
         finally:
             self.ionLists = ionLists
 
@@ -208,18 +229,19 @@ class SiContainer(ItemContainer):
                 iList.append(value['i'])
             ionArray = numpy.array([keyList, numpy.array(mzList), numpy.array(iList)])
 
-            ionListFileName = '.'.join((fileName, 'ionList'))
-            ionListFilePath = os.path.join(fileFolder, ionListFileName).replace('\\', '/')
+            ionListFileName = '.'.join((filename, 'ionlist'))
+            ionListFilePath = os.path.join(filefolder, ionListFileName).replace('\\', '/')
             with open(ionListFilePath, 'wb') as openFile:
                 numpy.save(openFile, ionArray)
 
     @classmethod
-    def load(cls, fileFolder, fileName, importIonList=True):
+    def load(cls, filefolder, filename, importIonList=True):
         """Load a pickled version of the self, using the __class__.__name__ as file-appendix."""
-        siContainer = super(cls, cls).load(fileFolder, fileName)
+        siContainer = super(cls, cls).load(filefolder, filename)
+        siContainer.ionLists = dict()
 
-        ionListFileName = '.'.join((fileName, 'ionList'))
-        ionListFilePath = os.path.join(fileFolder, ionListFileName).replace('\\', '/')
+        ionListFileName = '.'.join((filename, 'ionlist'))
+        ionListFilePath = os.path.join(filefolder, ionListFileName).replace('\\', '/')
         if importIonList and os.path.isfile(ionListFilePath):
             importedArray = numpy.load(ionListFilePath)
             for key, mzList, iList in itertools.izip(importedArray[0], importedArray[1], importedArray[2]):
@@ -298,17 +320,33 @@ class SiiContainer(ItemContainer):
                         sii.charge = guessedCharge
         del(tempPeptideMasses)
 
+    @classmethod
+    def load(cls, filefolder, filename):
+        """Load a pickled version of self using __class__.__name__.lower() as file-appendix.
+
+        :ivar filefolder: folder where the container has been saved
+        :ivar filename: filename of the stores container, without file appendix
+        """
+        classInstance = cls._load(filefolder, filename)
+        classInstance.index = dict()
+        for items in classInstance.container.values():
+            for item in items:
+                if item.containerId not in classInstance.index:
+                    classInstance.index[item.containerId] = list()
+                classInstance.index[item.containerId].append(item)
+        return classInstance
+
 
 class FeatureItem(ContainerItem):
     """Representation of a peptide elution feature.
 
-    ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
-    ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
-    ivar siIds: containerId values of matched Si entries
-    ivar siiIds: containerId values of matched Sii entries
-    ivar peptide: peptide sequence of best scoring Sii match
-    ivar sequence: plain amino acid sequence of best scoring Sii match, used to retrieve protein information
-    ivar score: score of best scoring Sii match
+    :ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
+    :ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
+    :ivar siIds: containerId values of matched Si entries
+    :ivar siiIds: containerId values of matched Sii entries
+    :ivar peptide: peptide sequence of best scoring Sii match
+    :ivar sequence: plain amino acid sequence of best scoring Sii match, used to retrieve protein information
+    :ivar score: score of best scoring Sii match
     """
     def __init__(self, identifier, specfile):
         super(FeatureItem, self).__init__(identifier, specfile)
@@ -375,11 +413,11 @@ class PeptideContainer(object):
 class Protein(object):
     """Describes a protein.
 
-    ivar id: identifier of the protein eg. UniprotId
-    ivar name: name of the protein
-    ivar sequence: amino acid sequence of the protein
-    ivar mass: protein mass in Daltons
-    ivar length: number of amino acids
+    :ivar id: identifier of the protein eg. UniprotId
+    :ivar name: name of the protein
+    :ivar sequence: amino acid sequence of the protein
+    :ivar mass: protein mass in Daltons
+    :ivar length: number of amino acids
     """
     def __init__(self, sequence, identifier=str(), name=str()):
         self.id = identifier
@@ -398,8 +436,8 @@ class Protein(object):
 class ProteinContainer(object):
     """Container object for proteins :class:`Protein`, protein entries can be accessd via id or name.
 
-    ivar proteinIds: {proteinId:Protein(), proteinId:Protein()}
-    ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}
+    :ivar proteinIds: {proteinId:Protein(), proteinId:Protein()}
+    :ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}
     """
     # A container for Protein or ProteinEvidence objects
     def __init__(self):
@@ -422,12 +460,12 @@ class ProteinContainer(object):
 class PeptideEvidence(Peptide):
     """Summarizes all the evidence (:class:`SpectrumIdentificationItem`) for a certain peptide.
 
-    ivar peptide: amino acid sequence of the peptide including modifications
-    ivar sequence: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
-    ivar bestId: containerId of best scoring Sii item
-    ivar siiIds: containerIds of all added Sii items
-    ivar score: best score of all added Sii items
-    ivar scores: scores of all added Sii items
+    :ivar peptide: amino acid sequence of the peptide including modifications
+    :ivar sequence: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
+    :ivar bestId: containerId of best scoring Sii item
+    :ivar siiIds: containerIds of all added Sii items
+    :ivar score: best score of all added Sii items
+    :ivar scores: scores of all added Sii items
 
     see also :class:`Peptide`
     """
@@ -1116,6 +1154,7 @@ def _importFeatureXml(fileLocation):
                 #retentionTimeList = list()
     return featureDict
 
+
 def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
                         removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
                         ):
@@ -1136,11 +1175,12 @@ def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
     peptidedb = PeptideContainer()
 
     for fastaEntry in fastaRead:
+        standardName = fastaEntry['stdName'] if 'stdName' in fastaEntry else fastaEntry['sysName']
         protein = Protein(fastaEntry['sequence'], identifier=fastaEntry['sysName'],
-                          name = fastaEntry['stdName']
+                          name = standardName
                           )
         proteindb.proteinIds[fastaEntry['sysName']] = protein
-        proteindb.proteinNames[fastaEntry['stdName']] = protein
+        proteindb.proteinNames[standardName] = protein
 
         for unmodPeptide, info in digestInSilico(fastaEntry['sequence'], missedCleavage,
                                                   removeNtermM=True, minLength=minLength,
@@ -1234,7 +1274,7 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
     """
     # Return in silico digested peptides, peptide start position, peptide end position
     # Peptide position start at 1 and end at len(proteinSequence)
-    passFilter = lambda seq: (len(seq) >= minLength and len(seq) <= maxLength)
+    passFilter = lambda startPos, endPos: (endPos - startPos >= minLength and endPos - startPos <= maxLength)
 
     cleavagePosList = list()
     # Position +1 if cut c terminal of amino acid
@@ -1255,8 +1295,8 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
         for cleavagePos in range(0,missedCleavages+1):
             startPos = 0
             endPos = cleavagePosList[cleavagePos]
-            sequence = proteinSequence[startPos:endPos]
-            if passFilter(sequence):
+            if passFilter(startPos, endPos):
+                sequence = proteinSequence[startPos:endPos]
                 info = dict()
                 info['startPos'] = startPos+1
                 info['endPos'] = endPos
@@ -1268,8 +1308,8 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
         for cleavagePos in range(0,missedCleavages+1):
             startPos = 1
             endPos = cleavagePosList[cleavagePos]
-            sequence = proteinSequence[startPos:endPos]
-            if passFilter(sequence):
+            if passFilter(startPos, endPos):
+                sequence = proteinSequence[startPos:endPos]
                 info = dict()
                 info['startPos'] = startPos+1
                 info['endPos'] = endPos
@@ -1284,8 +1324,8 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
             if nextCleavagePos < numCleavageSites:
                 startPos = cleavagePosList[lastCleavagePos]
                 endPos = cleavagePosList[nextCleavagePos]
-                sequence = proteinSequence[startPos:endPos]
-                if passFilter(sequence):
+                if passFilter(startPos, endPos):
+                    sequence = proteinSequence[startPos:endPos]
                     info = dict()
                     info['startPos'] = startPos+1
                     info['endPos'] = endPos
@@ -1389,7 +1429,7 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
 ## Functions dealing with isotopic labels ##
 ############################################
 class LabelDescriptor(object):
-    """Describes a MS1 label setup for quantification.
+    """Describes a MS1 stable isotope label setup for quantification.
 
     :ivar labels: Contains a dictionary with all possible label states, keys (=labelStates) are increasing integers starting from 0
     """
