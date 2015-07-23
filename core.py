@@ -141,7 +141,7 @@ class ItemContainer(object):
                 arrays[key].append(getattr(item, key, None))
 
         for key in arrays.keys():
-            if key == 'containerId':
+            if isinstance(arrays[key][0], tuple):
                 emptyArray = numpy.empty(len(arrays[key]), dtype='object')
                 emptyArray[:] = arrays[key]
                 arrays[key] = emptyArray
@@ -208,9 +208,9 @@ class SiContainer(ItemContainer):
         self.ionLists = dict()
 
     def save(self, filefolder, filename, saveIonList=True):
-        """Store a pickled version of the self, using the __class__.__name__ as file-appendix.
+        """Store a pickled version of the self, using '.SiContainer' as file-appendix.
 
-        Stores the ionList in a separate file with appendix '.ionList'.
+        Stores the ionList in a separate file with appendix '.ionlist'.
         """
         ionLists = self.ionLists
         del(self.ionLists)
@@ -313,10 +313,10 @@ class SiiContainer(ItemContainer):
                         tempPeptideMasses[peptide] = calcPeptideMass(peptide)
                     peptideMass = tempPeptideMasses[peptide]
                     if charge is not None:
-                        sii.calcMz = calcMzFromMass(peptideMass, charge)
+                        sii.calcMz = aux.calcMzFromMass(peptideMass, charge)
                     elif guessCharge:
                         guessedCharge = round(peptideMass / (sii.obsMz - aux.atomicMassProton), 0)
-                        sii.calcMz = calcMzFromMass(peptideMass, guessedCharge)
+                        sii.calcMz = aux.calcMzFromMass(peptideMass, guessedCharge)
                         sii.charge = guessedCharge
         del(tempPeptideMasses)
 
@@ -417,11 +417,11 @@ class FeatureGroupContainer(ItemContainer):
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
     see also :class:`FeatureContainer` (Feature Container) which contains peptide features.
     """
-    def __init__(self, specfiles, labelDescriptor=LabelDescriptor()):
+    def __init__(self, specfiles, labelDescriptor=None):
         super(FeatureGroupContainer, self).__init__()
         self.specfiles = specfiles
         self.container = list()
-        self.labelDescriptor = labelDescriptor
+        self.labelDescriptor = LabelDescriptor() if labelDescriptor is None else labelDescriptor
 
         self.specfilePositions = dict()
         for position, specfile in enumerate(self.specfiles):
@@ -887,8 +887,8 @@ def importSpecfiles(specfiles, fileDirectory, importIonList=False, siContainer=N
     return siContainer
 
 
-def generateSiContainerFiles(fileDirectory):
-    """Generate SiContainer and ionList files for all mzML files in the fileDirectory and its subfolders.
+def generateSiContainerFiles(fileDirectory, report=True):
+    """Generate .sicontainer and .ionlist files for all mzML files in the fileDirectory and its subfolders.
 
     see also :func:`removeSiContainerFiles` and :meth:`SiContainer.save`
     """
@@ -897,23 +897,31 @@ def generateSiContainerFiles(fileDirectory):
 
         fileFolder = os.path.dirname(filePath)
         fileName = os.path.basename(filePath[:dotPosition])
-        targetFilePath = '.'.join((filePath[:dotPosition], 'SiContainer'))
+        targetFilePath = '.'.join((filePath[:dotPosition], 'sicontainer'))
         if not os.path.isfile(targetFilePath):
             siContainer = SiContainer()
             importSpectrumItems(siContainer, filePath, fileName, importIonList=True)
-            print('Saving SiContainer / ionList :', fileName)
+            if report:
+                print('Saving SiContainer() / ionList :', fileName)
             siContainer.save(fileFolder, fileName)
 
 
-def removeSiContainerFiles(fileDirectory):
-    """Remove all SiContainer and ionList files in the fileDirectory and its subfolders.
+def removeSiContainerFiles(fileDirectory, report=True):
+    """Remove all .sicontainer and .ionlist files in the fileDirectory and its subfolders.
+
+    :ivar fileDirectory: target directory
+    :ivar report: boolean, if True print path of removed files
 
     see also :func:`generateSiContainerFiles` and :meth:`SiContainer.save`
     """
-    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='SiContainer', selector=lambda x: True):
+    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='sicontainer', selector=lambda x: True):
         os.remove(filePath)
-    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='ionList', selector=lambda x: True):
+        if report:
+            print('removed:\n', filePath)
+    for filePath in aux.matchingFilePaths('', fileDirectory, targetFileExtension='ionlist', selector=lambda x: True):
         os.remove(filePath)
+        if report:
+            print('removed:\n', filePath)
 
 
 ###############################################
@@ -1251,7 +1259,7 @@ def importPeptideFeatures(featureContainer, filelocation, specfile):
                 featureItem.rtHigh = max(rtArea)
                 featureItem.charge = featureEntryDict['charge']
                 featureItem.mz = featureEntryDict['mz']
-                featureItem.mh = aux.returnMh(featureEntryDict['mz'], featureEntryDict['charge'])
+                featureItem.mh = aux.calcMhFromMz(featureEntryDict['mz'], featureEntryDict['charge'])
                 featureItem.intensity = featureEntryDict['intensity']
                 featureItem.quality = featureEntryDict['overallquality']
                 featureItem.isMatched = False
@@ -1543,26 +1551,6 @@ def calcPeptideMass(peptide):
     return modPeptideMass
 
 
-def calcMzFromMass(mass, charge):
-    """Calculate the mz value of a peptide from its mass and charge.
-
-    :type mass: float
-    :type charge: int
-    """
-    mz = (mass + (aux.atomicMassProton * charge) ) / charge
-    return mz
-
-
-def calcMassFromMz(mz, charge):
-    """Calculate the mass of a peptide from its mz and charge.
-
-    :type mz: float
-    :type charge: int
-    """
-    mass = (mz - aux.atomicMassProton) * charge
-    return mass
-
-
 def removeModifications(peptide):
     """Removes all modifications from a peptide string
 
@@ -1586,10 +1574,6 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
     :ivar removeModString: string to remove from the returned modification name
 
     :return: {modificationName:[position1, position2, ...], ...}
-
-    TEST:
-    peptide = 'GFHIHEFGDATN[UNIMOD:7]GC[UNIMOD:4]VSAGPHFN[UNIMOD:7]PFKK'
-    returnModPositions(peptide) == {'4': [14], '7': [12, 22]}
     """
     unidmodPositionDict = dict()
     while peptide.find('[') != -1:
@@ -1601,7 +1585,8 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
 
         peptide = peptide.replace('['+currModification+']', '', 1)
 
-        currModification = currModification.replace(removeModString, '')
+        if isinstance(removeModString, str):
+            currModification = currModification.replace(removeModString, '')
         unidmodPositionDict.setdefault(currModification,list())
         unidmodPositionDict[currModification].append(currPosition)
     return unidmodPositionDict
@@ -1614,9 +1599,11 @@ class LabelDescriptor(object):
     """Describes a MS1 stable isotope label setup for quantification.
 
     :ivar labels: Contains a dictionary with all possible label states, keys (=labelStates) are increasing integers starting from 0
+    :ivar excludingModifictions: bool, set to True if any label has specified excludingModifications
     """
     def __init__(self):
         self.labels = dict()
+        self.excludingModifictions = False
         self._labelCounter = 0
 
     def addLabel(self, aminoAcidLabels, excludingModifications=None):
@@ -1631,6 +1618,9 @@ class LabelDescriptor(object):
         eg. {'1':'188'} For each modification '1' that is present at an amino acid or terminus of a peptide
         the number of expected labels at this position is reduced by one
         """
+        if excludingModifications is not None:
+            self.excludingModifictions = True
+
         self.labels[self._labelCounter] = dict()
         self.labels[self._labelCounter]['aminoAcidLabels'] = aminoAcidLabels
         self.labels[self._labelCounter]['excludingModifications'] = excludingModifications
@@ -1653,7 +1643,7 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
     labelState = returnLabelState(peptide, labelDescriptor) if labelState is None else labelState
     sequence = removeModifications(peptide) if sequence is None else sequence
 
-    if labelState == -1:
+    if labelState < 0:
         # special case for mixed label... #
         return dict()
 
@@ -1698,35 +1688,54 @@ def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacid
     :ivar labelSymbols: modifications that show a label, calculated by :func:`modSymbolsFromLabelInfo`
     :ivar labelAminoacids: amino acids that can bear a label, calculated by :func:`modAminoacidsFromLabelInfo`
 
-    :return: integer that shows the label state, -1 = an invalid label state
-    (= mixed labels or incompletely labeled or peptide doesn't have the possiblity to bear a label)
+    :return: integer that shows the label state
+    >=0: predicted label state of the peptide
+     -1: peptide sequence can't bear any labelState modifications
+     -2: peptide modifications don't fit to any predicted labelState
+     -3: peptide modifications fit to a predicted labelState, but not all predicted labelStates are distinguishable
     """
     labelSymbols = modSymbolsFromLabelInfo(labelDescriptor) if labelSymbols is None else labelSymbols
     labelAminoacids = modAminoacidsFromLabelInfo(labelDescriptor) if labelAminoacids is None else labelAminoacids
 
     sequence = removeModifications(peptide)
     modPositions = returnModPositions(peptide, indexStart=0)
-    labelState = -1
 
-    if 'nTerm' not in labelAminoacids and 'cTerm' not in labelAminoacids:
-        if all([(True if sequence.find(labelAminoacid) == -1 else False) for labelAminoacid in labelAminoacids]):
-            #Return labelState = -1 if sequence has possibility to be labeled
-            return labelState
+    labelState = None
 
-    peptideLabelPositions = dict()
-    for labelSymbol in labelSymbols:
-        if labelSymbol in modPositions.keys():
-            for sequencePosition in modPositions[labelSymbol]:
-                peptideLabelPositions.setdefault(sequencePosition, list())
-                peptideLabelPositions[sequencePosition].append(labelSymbol)
-    for sequencePosition in peptideLabelPositions.keys():
-        peptideLabelPositions[sequencePosition] = sorted(peptideLabelPositions[sequencePosition])
+    # No amino acids in sequence which can bear a label modification (ignores presence of excluding modifications)
+    if all([(True if sequence.find(labelAminoacid) == -1 else False) for labelAminoacid in labelAminoacids]):
+        # No terminal label modifications specified by labelDescriptor
+        if 'nTerm' not in labelAminoacids and 'cTerm' not in labelAminoacids:
+            labelState = -1
 
+    # Check if the peptide mofidifcations fit to any predicted label state
+    if labelState is None:
+        peptideLabelPositions = dict()
+        for labelSymbol in labelSymbols:
+            if labelSymbol in modPositions.keys():
+                for sequencePosition in modPositions[labelSymbol]:
+                    peptideLabelPositions.setdefault(sequencePosition, list())
+                    peptideLabelPositions[sequencePosition].append(labelSymbol)
+        for sequencePosition in peptideLabelPositions.keys():
+            peptideLabelPositions[sequencePosition] = sorted(peptideLabelPositions[sequencePosition])
 
-    for possibleLabelState, labelStateInfo in labelDescriptor.labels.items():
-        expectedLabelMods = expectedLabelPosition(peptide, labelStateInfo, sequence=sequence, modPositions=modPositions)
-        if peptideLabelPositions == expectedLabelMods:
-            labelState = possibleLabelState
+        predictedLabelStates = dict()
+        for predictedLabelState, labelStateInfo in labelDescriptor.labels.items():
+            expectedLabelMods = expectedLabelPosition(peptide, labelStateInfo, sequence=sequence, modPositions=modPositions)
+            predictedLabelStates[predictedLabelState] = expectedLabelMods
+            if peptideLabelPositions == expectedLabelMods:
+                # If another expectedLabel state has already been matched, there is an ambiguity between label states...
+                labelState = predictedLabelState
+
+    if labelState is None:
+        # Peptide mofidifcations don't fit to any predicted label state
+        labelState = -2
+    elif labelState != -1:
+        # Check if all predicted label states are distinguishable
+        for labelState1, labelState2 in set(itertools.combinations(range(len(predictedLabelStates)), 2)):
+            if predictedLabelStates[labelState1] == predictedLabelStates[labelState2]:
+                labelState = -3
+                break
 
     return labelState
 
@@ -2182,7 +2191,7 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
                         groupItem.intensityMatrix[charge][specfilePos][labelState] = featureContainer[idMatch].intensity
 
                 #If the labelState is not -1, define the next labelState and expected labelMassDiff
-                if labelState == -1:
+                if labelState < 0:
                     matching = False
                 else:
                     matching = 'labels'

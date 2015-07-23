@@ -2,6 +2,7 @@ import os
 import copy
 from collections import defaultdict as ddict
 import functools
+import math
 import numpy
 import operator
 import random
@@ -39,6 +40,15 @@ xTandemMassToUniModDict[4] = 57.02147
 xTandemMassToUniModDict[374] = -1.00783
 xTandemMassToUniModDict[1] = 42.01057
 xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in xTandemMassToUniModDict.items()])
+
+
+class Factorial():
+    def __getitem__(self, n):
+        try:
+            return getattr(self, str(n))
+        except AttributeError:
+            setattr(self, str(n), math.factorial(int(n)))
+            return getattr(self, str(n))
 
 
 class DataFit(object):
@@ -151,7 +161,7 @@ def returnSplineList(dependentVar, independentVar, subsetPercentage=0.4, cycles=
     return splineList
 
 
-def returnMh(mz, charge):
+def calcMhFromMz(mz, charge):
     """Calculate the MH+ value from mz and charge.
 
     :type mz: float
@@ -161,7 +171,7 @@ def returnMh(mz, charge):
     return mh
 
 
-def returnMz(mh,charge):
+def calcMzFromMh(mh,charge):
     """Calculate the mz value from MH+ and charge.
 
     :type mz: float
@@ -169,6 +179,26 @@ def returnMz(mh,charge):
     """
     mz = ( mh + (atomicMassProton * (charge-1) ) ) / charge
     return mz
+
+
+def calcMzFromMass(mass, charge):
+    """Calculate the mz value of a peptide from its mass and charge.
+
+    :type mass: float
+    :type charge: int
+    """
+    mz = (mass + (atomicMassProton * charge) ) / charge
+    return mz
+
+
+def calcMassFromMz(mz, charge):
+    """Calculate the mass of a peptide from its mz and charge.
+
+    :type mz: float
+    :type charge: int
+    """
+    mass = (mz - atomicMassProton) * charge
+    return mass
 
 
 def searchFileLocation(targetFileName, targetFileExtension, rootDirectory):
@@ -244,3 +274,4 @@ def toList(potentialNoList, types=(str, int)):
         return [potentialNoList]
     else:
         return potentialNoList
+
