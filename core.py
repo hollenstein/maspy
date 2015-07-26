@@ -551,60 +551,92 @@ class FeatureGroupContainer(ItemContainer):
         return classInstance
 
 
-class Peptide(object):
-    """Describes a peptide derived by one or more proteins.
+class PeptideSequence(object):
+    """Describes a peptide derived by one or more proteins, cant contain any modified amino acids.
+    see also :class:`PeptideEvidence`
 
     :ivar sequence: amino acid sequence of the peptide
     :ivar missedCleavage: number of missed cleavages, dependens on enzyme specificity
     :ivar proteinList: protein ids that generate this peptide under certain digest condition
-    :ivar startPosDict: {proteinId:startPosition, ...} start position of peptide in protein
-    :ivar endPosDict: {proteinId:startPosition, ...} end position of peptide in protein
+    :ivar proteinPositions: {proteinId:(startPosition, endPositions) ...} startposition and endposition of peptide in protein
+    eg. 'AADITSLYK' IN 'TAKAADITSLYKEETR':(4,12)
     :ivar mass: peptide mass in Daltons
     :ivar length: number of amino acids
     """
     def __init__(self, sequence, mc=None):
         self.sequence = sequence
+
         self.missedCleavage = mc
-
-        self.proteinList = list()
-        self.startPosDict = dict()
-        self.endPosDict = dict()
-
-    @lazyAttribute
-    def mass(self):
-        return pyteomics.mass.calculate_mass(self.sequence, charge=0)
+        self.isUnique = None
+        self.proteins = set()
+        self.proteinPositions = dict()
 
     @lazyAttribute
     def length(self):
         return len(self.sequence)
+    @lazyAttribute
+    def mass(self):
+        return pyteomics.mass.calculate_mass(self.sequence, charge=0)
 
 
-class PeptideContainer(object):
-    """Container object for peptides :class:`Peptide`.
+class PeptideEvidence(PeptideSequence):
+    """Summarizes all the evidence (:class:`SpectrumIdentificationItem`) for a certain peptide.
+    for other parameters see :class:`PeptideSequence`
 
-    :ivar peptides: {peptideSequence:Peptide(), peptideSequence:Peptide(), ...}
+    :ivar peptide: amino acid sequence of the peptide including modifications (written in brackets 'AADIT[modification]SLYK')
+    :ivar sequence: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
+    :ivar bestId: containerId of best scoring Sii item
+    :ivar siiIds: containerIds of all added Sii items
+    :ivar score: best score of all added Sii items
+    :ivar scores: scores of all added Sii items
     """
-    def __init__(self):
-        self.peptides = dict()
+    def __init__(self, peptide, sequence=None):
+        sequence = removeModifications(peptide) if sequence is None else sequence
+        super(PeptideEvidence, self).__init__(sequence)
 
-    def __getitem__(self, peptide):
-        """Return entry from self.peptides using peptide as key."""
-        return self.peptides[peptide]
+        self.peptide = peptide
+        self.sequence = sequence
+        self.bestId = tuple()
+        self.score = float()
+        self.siiIds = list()
+        self.scores = list()
+
+    @lazyAttribute
+    def mass(self):
+        return calcPeptideMass(peptide)
+
+    @classmethod
+    def fromPeptideSequence(cls, peptide, peptideSequence):
+        newInstance = cls(peptide, peptideSequence.sequence)
+        newInstance.isUnique = peptideSequence.isUnique
+        newInstance.missedCleavage = peptideSequence.missedCleavage
+        newInstance.proteins = peptideSequence.proteins
+        newInstance.proteinPositions = peptideSequence.proteinPositions
+        return newInstance
 
 
-class Protein(object):
+class ProteinSequence(object):
     """Describes a protein.
 
     :ivar id: identifier of the protein eg. UniprotId
     :ivar name: name of the protein
     :ivar sequence: amino acid sequence of the protein
+    :ivar isUnique: boolean, True if at least one unique peptide can be assigned to the protein
+    :ivar uniquePeptides: a set of peptides which can be unambiguously assigned to this protein
+    :ivar sharedPeptides: a set of peptides which are shared between different proteins
     :ivar mass: protein mass in Daltons
     :ivar length: number of amino acids
+    :ivar coverageUnique: the number of amino acids in the protein sequence that are coverd by unique peptides
+    :ivar coverageShared: the number of amino acids in the protein sequence that are coverd by unique or shared peptides
     """
-    def __init__(self, sequence, identifier=str(), name=str()):
+    def __init__(self, identifier, sequence, name=str()):
         self.id = identifier
         self.name = name
         self.sequence = sequence
+
+        self.isUnique = None
+        self.uniquePeptides = set()
+        self.sharedPeptides = set()
 
     @lazyAttribute
     def mass(self):
@@ -615,15 +647,32 @@ class Protein(object):
         return len(self.sequence)
 
 
-class ProteinContainer(object):
-    """Container object for proteins :class:`Protein`, protein entries can be accessd via id or name.
+class ProteinEvidence(ProteinSequence):
+    """ Summarizes all the PeptideEvidence information for a certain protein
+    for other paremeters see :class:`ProteinSequence`
 
-    :ivar proteinIds: {proteinId:Protein(), proteinId:Protein()}
-    :ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}
+    :ivar uniquePsmCount: the sum of PSMs of all unique peptides
+    :ivar sharedPsmCount: the sum of PSMs of all shared peptides
+    :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data.
+    """
+    def __init__(self, identifier, sequence, name=None):
+        super(ProteinEvidence, self).__init__(identifier, sequence, name)
+        self.uniquePsmCount = int()
+        self.sharedPsmCount = int()
+        self.isValid = None
+
+
+class ProteinDatabase(object):
+    """Describes proteins and peptides derived by an in silico digest.
+
+    :ivar peptides: {sequence:PeptideSequence(), ...} contains elements of :class:`PeptideSequence` derived by an in silico digest of the proteins
+    :ivar proteins: {proteinId:Protein(), proteinId:Protein()}, used to access :class:`ProteinSequence` elements by their id
+    :ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}, alternative way to access :class:`ProteinSequence` elements by their names
     """
     # A container for Protein or ProteinEvidence objects
     def __init__(self):
-        self.proteinIds = dict()
+        self.peptides = dict()
+        self.proteins = dict()
         self.proteinNames = dict()
 
     def __getitem__(self, key):
@@ -631,185 +680,47 @@ class ProteinContainer(object):
 
         :ivar key: either a protein id or a protein name
         """
-        if key in self.proteinIds:
-            return self.proteinIds[key]
+        if key in self.proteins:
+            return self.proteins[key]
         elif key in self.proteinNames:
             return self.proteinNames[key]
         else:
             raise KeyError(key)
 
+    def calculateCoverage(self):
+        """Calcualte the sequence coverage masks for all ProteinEvidence() elements.
 
-class PeptideEvidence(Peptide):
-    """Summarizes all the evidence (:class:`SpectrumIdentificationItem`) for a certain peptide.
-
-    :ivar peptide: amino acid sequence of the peptide including modifications
-    :ivar sequence: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
-    :ivar bestId: containerId of best scoring Sii item
-    :ivar siiIds: containerIds of all added Sii items
-    :ivar score: best score of all added Sii items
-    :ivar scores: scores of all added Sii items
-
-    see also :class:`Peptide`
-    """
-    def __init__(self, peptide, sequence=None):
-        sequence = removeModifications(peptide) if sequence is None else sequence
-        super(PeptideEvidence, self).__init__(sequence)
-        del(self.startPosDict)
-        del(self.endPosDict)
-        del(self.missedCleavage)
-
-        self.peptide = peptide
-        self.sequence = sequence
-        self.bestId = tuple()
-        self.siiIds = list()
-        self.score = float()
-        self.scores = list()
-
-    @lazyAttribute
-    def mass(self):
-        return calcPeptideMass(peptide)
-
-
-class PeptideEvidenceContainer(PeptideContainer):
-    """Container for peptide evidence class:`PeptideEvidence`
-    :ivar peptides: {peptide:PeptideEvidence(), peptide:PeptideEvidence(), ...}
-    :ivar siiContainer: SiiContainer() which is used to generate the PeptideEvidence
-    :ivar scoreKey: SpectrumIdentificationItem attribute which is used to find the best scoring item
-    :ivar largerBetter: True if a larger value of the scoreKey attribute means a better score
-    :ivar modified: True if modified peptides are treated as unique entries,
-    set False to use only the amino acid sequence of a peptide
-    see also :class:`PeptideContainer`
-    """
-    def __init__(self, siiContainer, scoreKey='qValue', largerBetter=False, modified=False):
-        super(PeptideEvidenceContainer, self).__init__()
-        self.siiContainer = siiContainer
-
-        self._scoreKey = scoreKey
-        self._largerBetter = largerBetter
-        self._modified = modified
-
-        self._generatePeptideEvidence()
-
-    def _generatePeptideEvidence(self):
-        if self._modified:
-            peptideKey = 'peptide'
-        else:
-            peptideKey = 'sequence'
-
-        for sii in self.siiContainer.getItems(sort=self._scoreKey, reverse=self._largerBetter):
-            peptide = getattr(sii, peptideKey)
-            siiScore = getattr(sii, self._scoreKey)
-            if peptide in self.peptides:
-                self.peptides[peptide].siiIds.append(sii.containerId)
-                self.peptides[peptide].scores.append(siiScore)
-            else:
-                peptideEvidence = PeptideEvidence(peptide, sequence=sii.sequence)
-                peptideEvidence.bestId = sii.containerId
-                peptideEvidence.siiIds.append(sii.containerId)
-                peptideEvidence.score = siiScore
-                peptideEvidence.scores.append(siiScore)
-                self.peptides[peptide] = peptideEvidence
-
-
-class ProteinEvidence(Protein):
-    """ Summarizes all the PeptideEvidence information for a certain protein
-    see also :class:`Protein`
-    :ivar id: amino acid sequence of the peptide including modifications
-    :ivar uniquePeptides: amino acid sequence of the peptide, corresponds to peptideRef of mzidentml files
-    :ivar sharedPeptides: containerId of best scoring Sii item
-    :ivar uniquePsmCount: containerIds of all added Sii items
-    :ivar sharedPsmCount: best score of all added Sii items
-    :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data.
-    see also :class:`Protein`
-    """
-    def __init__(self, identifier, sequence=str(), name=None):
-        super(ProteinEvidence, self).__init__(sequence, identifier=identifier, name=name)
-        self.uniquePeptides = list()
-        self.sharedPeptides = list()
-        self.uniquePsmCount = int()
-        self.sharedPsmCount = int()
-        self.isValid = None
-
-
-class ProteinEvidenceContainer(ProteinContainer):
-    """ Container for protein evidence :class:`ProteinEvidence`.
-
-    :ivar proteinIds: {proteinId:ProteinEvidence(), proteinId:ProteinEvidence()}
-    :ivar proteinNames: {proteinName:ProteinEvidence(), proteinName:ProteinEvidence()}
-    :ivar peptideEvidenceContainer: class:`PeptideEvidenceContainer` used to generate protein evidence
-    :ivar proteindb: fasta representation of proteins :class:`ProteinContainer`
-    :ivar peptidedb: fasta representation of peptides :class:`PeptideContainer`
-    """
-    def __init__(self, peptideEvidenceContainer, proteindb, peptidedb):
-        super(ProteinEvidenceContainer, self).__init__()
-        del(self.proteinIds)
-        del(self.proteinNames)
-        self.proteins = dict()
-        self.peptideEvidenceContainer = peptideEvidenceContainer
-        self.peptidedb = peptidedb
-        self.proteindb = proteindb
-        self.validProteinList = list()
-
-        self._generateProteinEvidence()
-
-    def __getitem__(self, key):
-        """Uses key to return protein evidence entries :class:`ProteinEvidence`.
-
-        :ivar key: proteinId
+        For detailed description see :func:`_calculateCoverageMasks`
         """
-        return self.proteins[key]
+        _calculateCoverageMasks(self.proteins, self.peptides)
 
-    def _generateProteinEvidence(self):
-        for peptide, peptideEvidence in self.peptideEvidenceContainer.peptides.items():
-            isUnique = self.peptidedb[peptideEvidence.sequence].unique
-            proteins = set(self.peptidedb[peptideEvidence.sequence].proteinList)
-            for protein in proteins:
-                if protein in self.proteins:
-                    proteinEvidence = self.proteins[protein]
-                else:
-                    proteinEvidence = ProteinEvidence(self.proteindb[protein].id,
-                                                       sequence=self.proteindb[protein].sequence,
-                                                       name=self.proteindb[protein].name
-                                                       )
-                    self.proteins[protein] = proteinEvidence
 
-                if isUnique:
-                    proteinEvidence.uniquePeptides.append(peptide)
-                    proteinEvidence.uniquePsmCount += len(peptideEvidence.siiIds)
-                else:
-                    proteinEvidence.sharedPeptides.append(peptide)
-                    proteinEvidence.sharedPsmCount += len(peptideEvidence.siiIds)
+class EvidenceContainer(object):
+    """Container to collect peptide evidence from :class:`SiiContainer` and summarize to protein evidence.
 
-        for proteinEvidence in self.proteins.values():
-            if len(proteinEvidence.uniquePeptides) > 0:
-                proteinEvidence.valid = True
-                self.validProteinList.append(proteinEvidence.id)
-            else:
-                proteinEvidence.valid = False
+    :ivar db: :class:`ProteinDatabase`, representation of an in silico digest of a fasta file.
+    :ivar proteinEvidence: {proteinId: :class:`ProteinEvidence`, ...}
+    :ivar peptideEvidence: {peptide: :class:`PeptideEvidence`, ...}
 
-    def calculateCoverage(self, shared=False):
-        """Calcualte the sequence coverage for all ProteinEvidence() elements.
+    :ivar uniqueProteins: list of protein ids which have at least one unique peptideEvidence entry.
+    :ivar scoreKey: score attribtue name of :class:`SiiItem`
+    :ivar largerBetter: boolean, True if a larger score is better
+    """
+    def __init__(self, proteinDatabase):
+        self.db = proteinDatabase
+        self.proteinEvidence = dict()
+        self.peptideEvidence = dict()
 
-        By default only unique peptides are used. Peptides are matched to proteins
-        according to positions derived by the digestion of the FASTA file. Alternatively
-        one could match peptides to proteins just by sequence, this is not done here.
+        self.uniqueProteins = list()
+        self.scoreKey = None
+        self.largerBetter = None
 
-        :ivar shared: boolean, if True also consider shared peptides, default is False
+    def calculateCoverage(self):
+        """Calcualte the sequence coverage masks for all ProteinEvidence() elements.
+
+        For detailed description see :func:`_calculateCoverageMasks`
         """
-        for proteinEvidence in self.proteins.values():
-            coverageMask = numpy.zeros(proteinEvidence.length, dtype='bool')
-
-            peptides = set()
-            peptides.update(proteinEvidence.uniquePeptides)
-            if shared:
-                peptides.update(proteinEvidence.sharedPeptides)
-            for peptide in peptides:
-                sequence = self.peptideEvidenceContainer.peptides[peptide].sequence
-                startPos = self.peptidedb[sequence].startPosDict[proteinEvidence.id]
-                endPos = self.peptidedb[sequence].endPosDict[proteinEvidence.id]
-                coverageMask[startPos-1:endPos] = True
-            setattr(proteinEvidence, 'coverage', 1.*coverageMask.sum()/proteinEvidence.length)
-
+        _calculateCoverageMasks(self.proteinEvidence, self.peptideEvidence)
 
 
 #####################################################
@@ -1345,9 +1256,9 @@ def _importFeatureXml(fileLocation):
     return featureDict
 
 
-def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
-                        removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
-                        ):
+def importProteinDatabase(filePath, proteindb=None, minLength=5, maxLength=40, missedCleavage=2,
+                          removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
+                          ):
     """Generates a :class:`ProteinContainer` and :class:`PeptideContainer` by in silico digestion of proteins from a fasta file.
 
     :param filePath: File path
@@ -1361,16 +1272,14 @@ def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
     See also :func:`digestInSilico`
     """
     fastaRead = _importFasta(filePath, fastaType=fastaType)
-    proteindb = ProteinContainer()
-    peptidedb = PeptideContainer()
+    proteindb = ProteinDatabase() if proteindb is None else proteindb
 
     for fastaEntry in fastaRead:
-        standardName = fastaEntry['stdName'] if 'stdName' in fastaEntry else fastaEntry['sysName']
-        protein = Protein(fastaEntry['sequence'], identifier=fastaEntry['sysName'],
-                          name = standardName
-                          )
-        proteindb.proteinIds[fastaEntry['sysName']] = protein
-        proteindb.proteinNames[standardName] = protein
+        proteinName = fastaEntry['stdName'] if 'stdName' in fastaEntry else fastaEntry['sysName']
+        if fastaEntry['sysName'] not in proteindb.proteins:
+            protein = ProteinSequence(fastaEntry['sysName'], fastaEntry['sequence'], proteinName)
+            proteindb.proteins[fastaEntry['sysName']] = protein
+            proteindb.proteinNames[proteinName] = protein
 
         for unmodPeptide, info in digestInSilico(fastaEntry['sequence'], missedCleavage,
                                                   removeNtermM=True, minLength=minLength,
@@ -1378,35 +1287,46 @@ def returnDigestedFasta(filePath, minLength=5, maxLength=40, missedCleavage=2,
                                                   ):
             if ignoreIsoleucine:
                 unmodPeptideNoIsoleucine = unmodPeptide.replace('I', 'L')
-                if unmodPeptideNoIsoleucine in peptidedb.peptides:
-                    currPeptide = peptidedb[unmodPeptideNoIsoleucine]
+                if unmodPeptideNoIsoleucine in proteindb.peptides:
+                    currPeptide = proteindb.peptides[unmodPeptideNoIsoleucine]
                 else:
-                    currPeptide = Peptide(unmodPeptideNoIsoleucine, mc=info['missedCleavage'])
-                    peptidedb.peptides[unmodPeptideNoIsoleucine] = currPeptide
+                    currPeptide = PeptideSequence(unmodPeptideNoIsoleucine, mc=info['missedCleavage'])
+                    proteindb.peptides[unmodPeptideNoIsoleucine] = currPeptide
 
-                if unmodPeptide not in peptidedb.peptides:
-                    peptidedb.peptides[unmodPeptide] = currPeptide
+                if unmodPeptide not in proteindb.peptides:
+                    proteindb.peptides[unmodPeptide] = currPeptide
             else:
-                if unmodPeptide in peptidedb.peptides:
-                    currPeptide = peptidedb[unmodPeptide]
+                if unmodPeptide in proteindb.peptides:
+                    currPeptide = proteindb.peptides[unmodPeptide]
                 else:
-                    currPeptide = Peptide(unmodPeptide, mc=info['missedCleavage'])
-                    peptidedb.peptides[unmodPeptide] = currPeptide
+                    currPeptide = PeptideSequence(unmodPeptide, mc=info['missedCleavage'])
+                    proteindb.peptides[unmodPeptide] = currPeptide
 
-            currPeptide.proteinList.append(fastaEntry['sysName'])
-            currPeptide.startPosDict[fastaEntry['sysName']] = info['startPos']
-            currPeptide.endPosDict[fastaEntry['sysName']] = info['endPos']
+            if fastaEntry['sysName'] not in currPeptide.proteins:
+                currPeptide.proteins.add(fastaEntry['sysName'])
+                currPeptide.proteinPositions[fastaEntry['sysName']] = (info['startPos'], info['endPos'])
 
-    for peptide in peptidedb.peptides.keys():
-        numProteinMatches = len(peptidedb[peptide].proteinList)
+    for peptide, peptideEntry in proteindb.peptides.items():
+        numProteinMatches = len(peptideEntry.proteins)
         if numProteinMatches == 1:
-            peptidedb[peptide].unique = True
+            peptideEntry.isUnique = True
         elif numProteinMatches > 1:
-            peptidedb[peptide].unique = False
+            peptideEntry.isUnique = False
         else:
-            print('No protein matches in peptidedb for peptide sequence: ', peptide)
+            print('No protein matches in proteindb for peptide sequence: ', peptide)
 
-    return proteindb, peptidedb
+        for proteinId in peptideEntry.proteins:
+            if peptideEntry.isUnique:
+                proteindb.proteins[proteinId].uniquePeptides.add(peptide)
+            else:
+                proteindb.proteins[proteinId].sharedPeptides.add(peptide)
+
+    for proteinEntry in proteindb.proteins.values():
+        if len(proteinEntry.uniquePeptides) > 0:
+            proteinEntry.isUnique = True
+        else:
+            proteinEntry.isUnique = False
+    return proteindb
 
 
 def _importFasta(fastaFileLocation, fastaType='sgd'):
@@ -1524,6 +1444,91 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
         lastCleavagePos += 1
 
 
+def _calculateCoverageMasks(proteindb, peptidedb):
+    """Calcualte the sequence coverage masks for all proteindb elements.
+    Private method used by :class:`ProteinDatabase` and :class:`EvidenceContainer`
+
+    A coverage mask is a numpy boolean array with the length of the protein sequence.
+    Each protein position that has been covered in at least one peptide is set to True.
+    Coverage masks are calculated for unique and for shared peptides. Peptides are
+    matched to proteins according to positions derived by the digestion of the FASTA file.
+
+    Alternatively peptides could also be matched to proteins just by sequence as it is
+    done in :func:`pyteomics.parser.coverage`, but this is not the case here.
+
+    :ivar :attr:`PeptideSequence.coverageMaskUnique`: coverage mask of unique peptides
+    :ivar :attr:`PeptideSequence.coverageMaskShared`: coverage mask of shared peptides
+    """
+    for proteinId, proteinEntry in proteindb.items():
+        coverageMaskUnique = numpy.zeros(proteinEntry.length, dtype='bool')
+        for peptide in proteinEntry.uniquePeptides:
+            startPos, endPos = peptidedb[peptide].proteinPositions[proteinId]
+            coverageMaskUnique[startPos-1:endPos] = True
+        coverageMaskShared = numpy.zeros(proteinEntry.length, dtype='bool')
+        for peptide in proteinEntry.sharedPeptides:
+            startPos, endPos = peptidedb[peptide].proteinPositions[proteinId]
+            coverageMaskShared[startPos-1:endPos] = True
+        setattr(proteinEntry, 'coverageMaskUnique', coverageMaskUnique)
+        setattr(proteinEntry, 'coverageMaskShared', coverageMaskShared)
+
+
+def generateEvidence(evContainer, siiContainer, scoreKey, largerBetter, peptideKey='peptide'):
+    """Summarize all experimental evidence from :class:`SiiContainer` and generate an :class:`EvidenceContainer`.
+
+    :ivar evContainer: :class:`EvidenceContainer` to store the evidence information
+    :ivar siiContainer: :class`SiiContainer` instance that contains the experimental evidence
+    :ivar peptideKey: 'sequence' -> ignore modification, uses sequence as unique key in
+    peptide evidence; 'peptide' -> consider modified peptides as unique entries
+    :ivar scoreKey: score attribtue name of :class:`SiiItem`
+    :ivar largerBetter: boolean, True if a larger score is better
+    """
+    evContainer.scoreKey = scoreKey
+    evContainer.largerBetter = largerBetter
+    evContainer.peptideKey = peptideKey
+
+    #Summarize psm informatino into unique peptides
+    for sii in siiContainer.getItems(sort=scoreKey, reverse=largerBetter):
+        peptide = getattr(sii, peptideKey)
+        siiScore = getattr(sii, scoreKey)
+        if peptide in evContainer.peptideEvidence:
+            evContainer.peptideEvidence[peptide].siiIds.append(sii.containerId)
+            evContainer.peptideEvidence[peptide].scores.append(siiScore)
+        else:
+            pepEv = PeptideEvidence.fromPeptideSequence(peptide, evContainer.db.peptides[sii.sequence])
+            pepEv.bestId = sii.containerId
+            pepEv.siiIds.append(sii.containerId)
+            pepEv.score = siiScore
+            pepEv.scores.append(siiScore)
+            evContainer.peptideEvidence[peptide] = pepEv
+
+    #Assemble peptide evidence into protein evidence
+    for peptide, pepEv in evContainer.peptideEvidence.items():
+        for protein in pepEv.proteins:
+            if protein in evContainer.proteinEvidence:
+                proteinEv = evContainer.proteinEvidence[protein]
+            else:
+                proteinEv = ProteinEvidence(protein, evContainer.db.proteins[protein].sequence,
+                                            evContainer.db.proteins[protein].name
+                                            )
+                evContainer.proteinEvidence[protein] = proteinEv
+
+            if pepEv.isUnique:
+                proteinEv.uniquePeptides.add(peptide)
+                proteinEv.uniquePsmCount += len(pepEv.siiIds)
+            else:
+                proteinEv.sharedPeptides.add(peptide)
+                proteinEv.sharedPsmCount += len(pepEv.siiIds)
+
+    #Define proteins which have unique evidence
+    evContainer.uniqueProteins = list()
+    for proteinEv in evContainer.proteinEvidence.values():
+        if len(proteinEv.uniquePeptides) > 0:
+            proteinEv.isUnique = True
+            evContainer.uniqueProteins.append(proteinEv.id)
+        else:
+            proteinEv.isUnique = False
+
+
 ################################################
 ### Functions to work with peptide sequences ###
 ################################################
@@ -1555,15 +1560,11 @@ def removeModifications(peptide):
     """Removes all modifications from a peptide string
 
     :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationName]"
-
     :type peptide: str
     """
-    unmodPeptide = peptide
-    if unmodPeptide.find('.') != -1:
-        unmodPeptide = unmodPeptide.split('.')[1]
-    while unmodPeptide.find('[') != -1:
-        unmodPeptide = unmodPeptide.split('[', 1)[0] + unmodPeptide.split(']', 1)[1]
-    return unmodPeptide
+    while peptide.find('[') != -1:
+        peptide = peptide.split('[', 1)[0] + peptide.split(']', 1)[1]
+    return peptide
 
 
 def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
