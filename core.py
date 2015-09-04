@@ -195,9 +195,10 @@ class SpectrumItem(ContainerItem):
 
 
 class SiContainer(ItemContainer):
-    """
-    ItemContainer for mass spectrometry data (spectra) (for example MS1, MS2),
-    SiContainer ... Spectrum Item Container.
+    """ItemContainer for mass spectrometry data (eg Ms1 and Ms2 spectra),
+    SiContainer = Spectrum Item Container.
+
+    for parameter and method description see :class:`ItemContainer`
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
 
     :ivar ionLists: spectrum ion information, not loaded by default
@@ -255,12 +256,14 @@ class SpectrumIdentificationItem(ContainerItem):
     """Representation of a peptide fragment spectrum annotation (Peptide Spectrum Match)."""
     def __init__(self, identifier, specfile):
         super(SpectrumIdentificationItem, self).__init__(identifier, specfile)
+        self.diPeptide = None
 
 
 class SiiContainer(ItemContainer):
-    """
-    ItemContainer for msn spectrum identifications (Peptide Spectrum Matches),
-    SiiContainer ... Spectrum Identification Item Container.
+    """ItemContainer for msn spectrum identifications (Peptide Spectrum Matches),
+    SiiContainer = Spectrum Identification Item Container.
+
+    for parameter and method description see :class:`ItemContainer`
     see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
     """
     def __init__(self):
@@ -269,7 +272,7 @@ class SiiContainer(ItemContainer):
     def addSiInfo(self, siContainer, specfiles=None, attributes=['obsMz', 'rt', 'charge']):
         """ Copy attributes into sii from the corresponding SpectrumItem in siContainer,
         if an attribute is not presend in the SpectrumItem the attribute value is set to None
-        Attribute examples: 'obsMz', 'rt', 'charge', 'TIC', 'IIT', 'ms1Id'
+        Attribute examples: 'obsMz', 'rt', 'charge', 'tic', 'iit', 'ms1Id'
         """
         specfiles = self.specfiles if specfiles == None else aux.toList(specfiles)
 
@@ -310,7 +313,10 @@ class SiiContainer(ItemContainer):
                     charge = sii.charge
                     peptide = sii.peptide
                     if peptide not in tempPeptideMasses:
-                        tempPeptideMasses[peptide] = calcPeptideMass(peptide)
+                        if sii.diPeptide:
+                            tempPeptideMasses[peptide] = calcPeptideMass(sii.peptide1) + calcPeptideMass(sii.peptide2)
+                        else:
+                            tempPeptideMasses[peptide] = calcPeptideMass(peptide)
                     peptideMass = tempPeptideMasses[peptide]
                     if charge is not None:
                         sii.calcMz = aux.calcMzFromMass(peptideMass, charge)
@@ -362,6 +368,7 @@ class FeatureItem(ContainerItem):
 class FeatureContainer(ItemContainer):
     """ItemContainer for peptide elution features :class`FeatureItem`.
 
+    for parameter and method description see :class:`ItemContainer`
     see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
     """
@@ -413,6 +420,7 @@ class FeatureGroupContainer(ItemContainer):
     :ivar specfilePositions: {specfile:arrayPosition, ...}
     arrayPosition respresents the array position of a specfile in :attr:`FeatureGroupItem.matchMatrix`
 
+    for further parameter and method description see :class:`ItemContainer`
     see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
     see also :class:`FeatureContainer` (Feature Container) which contains peptide features.
@@ -552,7 +560,7 @@ class FeatureGroupContainer(ItemContainer):
 
 
 class PeptideSequence(object):
-    """Describes a peptide derived by one or more proteins, cant contain any modified amino acids.
+    """Describes a peptide as derived by digestion of one or multiple proteins, can't contain any modified amino acids.
     see also :class:`PeptideEvidence`
 
     :ivar sequence: amino acid sequence of the peptide
@@ -785,7 +793,7 @@ def importSpecfiles(specfiles, fileDirectory, importIonList=False, siContainer=N
         siContainer = SiContainer()
     specfiles = aux.toList(specfiles)
     for specfile in specfiles:
-        specfilePath = aux.searchFileLocation(specfile, 'SiContainer', fileDirectory)
+        specfilePath = aux.searchFileLocation(specfile, 'sicontainer', fileDirectory)
         if specfilePath:
             fileFolder = os.path.dirname(specfilePath)
             addContainer(siContainer, SiContainer.load(fileFolder, specfile, importIonList=importIonList))
@@ -848,7 +856,8 @@ def pymzmlReadMzml(mzmlPath):
                        ('MS:1000829', ['value']),
                        ('MS:1000744', ['value']),
                        ('MS:1000016', ['value']),
-                       ('MS:1000927', ['value'])
+                       ('MS:1000927', ['value']),
+                       ('MS:1000512', ['value'])
                        ]
     return pymzml.run.Reader(mzmlPath, extraAccessions=extraAccessions)
 
@@ -901,7 +910,8 @@ def importMzmlSpectrumItems(siContainer, msrun, specfile, importIonList=False):
                                                   ('lowWindowOffset', 'MS:1000828', 2),
                                                   ('highWindowOffset', 'MS:1000829', 2),
                                                   ('obsMz', 'MS:1000744', 2),
-                                                  ('charge', 'MS:1000041', 2)
+                                                  ('charge', 'MS:1000041', 2),
+                                                  ('filterString', 'MS:1000512', None)
                                                   ]:
             if msLevel is None or si.msLevel == msLevel:
                 if accession in spectrum:
@@ -1098,9 +1108,9 @@ def _importPercolatorResults(fileLocation, psmEngine=None):
     """
     #HEADERLINE: xtandem seperates proteins with ';', msgf separates proteins by a tab
     with open(fileLocation,'rb') as openFile:
-        tsvreader = csv.reader(openFile, delimiter="\t")
+        tsvreader = csv.reader(openFile, delimiter='\t')
         headerLine = tsvreader.next()
-        headerDict = dict([ [y,x] for (x,y) in enumerate( headerLine ) ])
+        headerDict = dict([[y,x] for (x,y) in enumerate(headerLine)])
         scanEntryList = list()
         for line in tsvreader:
             entryDict = dict()
@@ -1166,6 +1176,7 @@ def importPeptideFeatures(featureContainer, filelocation, specfile):
 
                 featureItem = FeatureItem(featureId, specfile)
                 featureItem.rt = featureEntryDict['rt']
+                featureItem.rtArea = max(rtArea) - min(rtArea)
                 featureItem.rtLow = min(rtArea)
                 featureItem.rtHigh = max(rtArea)
                 featureItem.charge = featureEntryDict['charge']
@@ -1349,6 +1360,9 @@ def _importFasta(fastaFileLocation, fastaType='sgd'):
         #description = "match many [non newline characters]" (?P<description>.+)\n
         #sequence = "match many[Letters or newLine]
         outputGroups = ['sysName', 'sequence']
+    elif fastaType == 'ipi':
+        geneAccessionPattern = ">(?P<sysName>[\S]+)(.+\n)(?P<sequence>[A-Z\n]+)"
+        outputGroups = ['sysName', 'sequence']
     elif fastaType == 'uniprot':
         geneAccessionPattern = ">[\S]+\|(?P<sysName>[\S]+)\|(?P<stdName>[\S^\|]+)\s(?P<description>.+)\n(?P<sequence>[A-Z\n]+)"
         outputGroups = ['sysName', 'stdName', 'description', 'sequence']
@@ -1481,6 +1495,8 @@ def generateEvidence(evContainer, siiContainer, scoreKey, largerBetter, peptideK
     peptide evidence; 'peptide' -> consider modified peptides as unique entries
     :ivar scoreKey: score attribtue name of :class:`SiiItem`
     :ivar largerBetter: boolean, True if a larger score is better
+
+    NOTE: Peptides which sequence is not present in evContainer.db.peptides are ignored and generate an error message.
     """
     evContainer.scoreKey = scoreKey
     evContainer.largerBetter = largerBetter
@@ -1494,12 +1510,16 @@ def generateEvidence(evContainer, siiContainer, scoreKey, largerBetter, peptideK
             evContainer.peptideEvidence[peptide].siiIds.append(sii.containerId)
             evContainer.peptideEvidence[peptide].scores.append(siiScore)
         else:
-            pepEv = PeptideEvidence.fromPeptideSequence(peptide, evContainer.db.peptides[sii.sequence])
-            pepEv.bestId = sii.containerId
-            pepEv.siiIds.append(sii.containerId)
-            pepEv.score = siiScore
-            pepEv.scores.append(siiScore)
-            evContainer.peptideEvidence[peptide] = pepEv
+            try:
+                pepEv = PeptideEvidence.fromPeptideSequence(peptide, evContainer.db.peptides[sii.sequence])
+                pepEv.bestId = sii.containerId
+                pepEv.siiIds.append(sii.containerId)
+                pepEv.score = siiScore
+                pepEv.scores.append(siiScore)
+                evContainer.peptideEvidence[peptide] = pepEv
+            except KeyError:
+                print('Sequence not found in evContainer.db.peptides: ', sii.sequence, sii.containerId)
+                pass
 
     #Assemble peptide evidence into protein evidence
     for peptide, pepEv in evContainer.peptideEvidence.items():
@@ -1543,12 +1563,18 @@ def calcPeptideMass(peptide):
     additionalModMass = float()
     unmodPeptide = peptide
     for unimodNumber, unimodMass in unimodMassDict.items():
-        unimodSymbol = '[UNIMOD:' + unimodNumber + ']'
+        try:
+            int(unimodNumber)
+        except ValueError:
+            unimodSymbol = '[' + unimodNumber + ']'
+        else:
+            unimodSymbol = '[UNIMOD:' + unimodNumber + ']'
         numMod = peptide.count(unimodSymbol)
         unmodPeptide = unmodPeptide.replace(unimodSymbol, '')
         additionalModMass += unimodMass * numMod
 
     if unmodPeptide.find('[') != -1:
+        print(unmodPeptide)
         raise Exception()
 
     unmodPeptideMass = pyteomics.mass.calculate_mass(unmodPeptide, charge=0)
@@ -2004,7 +2030,8 @@ def rtCalibration(featureContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots
             print('Specified reference specfile not present, using reference: ', specfiles[0])
 
     for featureItem in featureContainer.getItems(specfiles=specfiles, filterAttribute=None):
-        setattr(featureItem, 'obsRt', featureItem.rt)
+        if not hasattr(featureItem, 'obsRt'):
+            setattr(featureItem, 'obsRt', featureItem.rt)
 
     referenceArrays = None
     for specfile in specfiles:
@@ -2109,9 +2136,11 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
     :type specfiles: str, list or None
     :ivar featureFilterAttribute: Attribute for :param:`FeatureContainer.getItems(filterAttribute=featureFilterAttribute)`,
     used to filter :class:`FeatureItem` elements that should be used as seeds for feature grouping ('isValid', 'isMatched', 'isAnnotated')
+    'isValid' all valid features are used for grouping, 'isMatched' all features with matched MSn items are used for grouping or
+    'isAnnotated' to use only features with an peptide id for grouping.
     :ivar massTolerance: is used to calculate the mass window to match :class:`FeatureItem`
     :ivar toleranceUnit: defines how the massTolerance is applied to the mass value, 'ppm' * (1 +/- tolerance*1E-6) or 'da': +/- value
-    :ivar rtTolerance: is used to calculate the retention time window to match :class:`FeatureItem`
+    :ivar rtTolerance: is used to calculate the retention time window to match :class:`FeatureItem` (is used as + / - rt tolerance)
     :ivar massKey: mass attribute key in :attr:`FeatureItem.__dict__`
     :ivar rtKey: retention time attribute key in :attr:`FeatureItem.__dict__`
     :ivar largerBetter: boolean, True if a larger PSM score is better,
@@ -2141,9 +2170,8 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
             targetChargeStates = [feature.charge]
 
         groupItem = FeatureGroupItem()
-
         matching = 'featureSeed'
-        labelMassDiff = 0
+        labelMassDiff = float()
 
         while matching is not False:
             if toleranceUnit.lower() == 'ppm':
@@ -2178,8 +2206,11 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
                         scorePepList.append((featureContainer[containerId].score, featureContainer[containerId].peptide))
                 scorePepList.sort(reverse=largerBetter)
 
-                peptide = scorePepList[0][1]
-                labelState = returnLabelState(peptide, labelDescriptor, labelSymbols=None)
+                try:
+                    peptide = scorePepList[0][1]
+                    labelState = returnLabelState(peptide, labelDescriptor, labelSymbols=None)
+                except IndexError:
+                    labelState = -1
 
                 for charge, idMatches in chargeIdMatches.items():
                     if charge not in groupItem.matchMatrix:
@@ -2243,11 +2274,15 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
         groupItem.siiIds = siiIds
         if len(groupItem.siIds) > 0:
             groupItem.isMatched = True
+        else:
+            groupItem.isMatched = False
         if len(scorePepList) > 0:
             groupItem.score = scorePepList[0][0]
             groupItem.peptide = scorePepList[0][1]
             groupItem.sequence = scorePepList[0][2]
             groupItem.isAnnotated = True
+        else:
+            groupItem.isMatched = False
         groupItem.isValid = True
         groupContainer.container.append(groupItem)
         matchedFeatures.update(groupItem.featureIds)
