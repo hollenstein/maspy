@@ -16,6 +16,7 @@ from matplotlib import pyplot as plt
 
 import pymzml
 import pyteomics.mass
+import pyteomics.fasta
 
 import pyms.auxiliary as aux
 
@@ -1267,35 +1268,63 @@ def _importFeatureXml(fileLocation):
     return featureDict
 
 
-def importProteinDatabase(filePath, proteindb=None, minLength=5, maxLength=40, missedCleavage=2,
-                          removeNtermM=True, ignoreIsoleucine=False, fastaType='sgd'
+def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]', contaminationTag='[cont]', headerParser=None, forceId=False,
+                          cleavageRule='[KR]', minLength=5, maxLength=40, missedCleavage=2, ignoreIsoleucine=False, removeNtermM=True,
                           ):
     """Generates a :class:`ProteinContainer` and :class:`PeptideContainer` by in silico digestion of proteins from a fasta file.
 
     :param filePath: File path
+    :param proteindb: optional an existing :class:`ProteinDatabase` can be specified, otherwise a new instance is generated and returned
     :param ignoreIsoleucine: If True, treat I and L in peptide sequence as indistinguishable
-    :param missedCleavages: number of allowed missed digestion sites
-    :param removeNtermM: If True, consider peptides with the n-terminal methionine of the protein removed
+    :param decoyTag: If a fasta file contains decoy protein entries, they should be specified with a sequence tag
+    :param contaminationTag: If a fasta file contains contamination protein entries, they should be specified with a sequence tag
+    :param headerParser: optional a headerParser can be specified TODO: describe how a parser looks like
+    :param forceId: If set True if no id can be extracted from the fasta header, the whole header sequence is used as a protein id
+    :param cleavageRule: TODO add description
     :param minLength: only yield peptides with length >= minLength
     :param maxLength: only yield peptides with length <= maxLength
-    :param fastaType: see :func:`_importFasta`
+    :param ignoreIsoleucine: If True treat I and L in peptide sequence as indistinguishable
+    :param missedCleavages: number of allowed missed digestion sites
+    :param removeNtermM: If True, consider peptides with the n-terminal methionine of the protein removed
 
     See also :func:`digestInSilico`
     """
-    fastaRead = _importFasta(filePath, fastaType=fastaType)
     proteindb = ProteinDatabase() if proteindb is None else proteindb
+    fastaRead = _readFastaFile(filePath)
 
-    for fastaEntry in fastaRead:
-        proteinName = fastaEntry['stdName'] if 'stdName' in fastaEntry else fastaEntry['sysName']
-        if fastaEntry['sysName'] not in proteindb.proteins:
-            protein = ProteinSequence(fastaEntry['sysName'], fastaEntry['sequence'], proteinName)
-            proteindb.proteins[fastaEntry['sysName']] = protein
-            proteindb.proteinNames[proteinName] = protein
+    for header, sequence, comments in fastaRead:
+        proteinTags = list()
+        if header.startswith(decoyTag):
+            isDecoy = True
+            header = header.replace(decoyTag, '')
+            proteinTags.append(decoyTag)
+        else:
+            isDecoy = False
+        if header.startswith(contaminationTag):
+            isCont = True
+            header = header.replace(contaminationTag, '')
+            proteinTags.append(contaminationTag)
+        else:
+            isCont = False
 
-        for unmodPeptide, info in digestInSilico(fastaEntry['sequence'], missedCleavage,
-                                                  removeNtermM=True, minLength=minLength,
-                                                  maxLength=maxLength
-                                                  ):
+        headerInfo = _extractFastaHeader(header, headerParser, forceId)
+        proteinId = ''.join(itertools.chain(proteinTags, [headerInfo['id']]))
+        if 'name' in headerInfo:
+            proteinName = ''.join(itertools.chain(proteinTags, [headerInfo['name']]))
+        else:
+            proteinName = proteinId
+
+        if proteinId not in proteindb.proteins:
+            protein = ProteinSequence(proteinId, sequence)
+            protein.name = proteinName
+            protein.fastaHeader = header
+            protein.fastaInfo = headerInfo
+            proteindb.proteins[protein.id] = protein
+            proteindb.proteinNames[protein.name] = protein
+
+        for unmodPeptide, info in digestInSilico(sequence, cleavageRule, missedCleavage,
+                                                 removeNtermM, minLength, maxLength
+                                                 ):
             if ignoreIsoleucine:
                 unmodPeptideNoIsoleucine = unmodPeptide.replace('I', 'L')
                 if unmodPeptideNoIsoleucine in proteindb.peptides:
@@ -1313,9 +1342,9 @@ def importProteinDatabase(filePath, proteindb=None, minLength=5, maxLength=40, m
                     currPeptide = PeptideSequence(unmodPeptide, mc=info['missedCleavage'])
                     proteindb.peptides[unmodPeptide] = currPeptide
 
-            if fastaEntry['sysName'] not in currPeptide.proteins:
-                currPeptide.proteins.add(fastaEntry['sysName'])
-                currPeptide.proteinPositions[fastaEntry['sysName']] = (info['startPos'], info['endPos'])
+            if proteinId not in currPeptide.proteins:
+                currPeptide.proteins.add(proteinId)
+                currPeptide.proteinPositions[proteinId] = (info['startPos'], info['endPos'])
 
     for peptide, peptideEntry in proteindb.peptides.items():
         numProteinMatches = len(peptideEntry.proteins)
@@ -1340,84 +1369,94 @@ def importProteinDatabase(filePath, proteindb=None, minLength=5, maxLength=40, m
     return proteindb
 
 
-def _importFasta(fastaFileLocation, fastaType='sgd'):
-    """Imports fasta files. (Could be merged with or substituted by :class:`pyteomics.fasta.read`)
+def _readFastaFile(fastaFileLocation):
+    """Reads a fasta file and seperates entries into 'header' and 'sequence'.)
 
-    :param fastaType: Used to choose which regular expression pattern should be used to read the fasta header line
-    :type fastaType: 'sgd' or 'contaminations' or 'uniprot' or 'kustnerPeptideLibrary'
+    :param fastaFileLocation: File path of the fasta file
+    :returns : A list of protein entry touples: [(fasta header, sequence, comments), ...]
+    Comments are optional entries of fasta files between the fasta header and the sequence,
+    starting with either ";" or ">".
 
     See also :func:`returnDigestedFasta` and :func:`digestInSilico`
     """
-    if fastaType == 'sgd':
-        geneAccessionPattern = ">(?P<sysName>[\S]+)\s(?P<stdName>[\S]+).+(?P<description>\".+\")\n(?P<sequence>[A-Z\n]+\*)"
-        outputGroups = ['sysName', 'stdName', 'description', 'sequence']
-    elif fastaType == 'contaminations':
-        geneAccessionPattern = ">(?P<sysName>[\S]+)\s(?P<description>.+)\n(?P<sequence>[A-Z\n]+\*)"
-        outputGroups = ['sysName', 'description', 'sequence']
-    elif fastaType == 'kustnerPeptideLibrary':
-        geneAccessionPattern = ">(?P<sysName>IPI:[^\|\s]+)(\n|(.+\n))(?P<sequence>[A-Z\n]+)"
-        #sysName = "match many [non white space characters, not pipe]
-        #description = "match many [non newline characters]" (?P<description>.+)\n
-        #sequence = "match many[Letters or newLine]
-        outputGroups = ['sysName', 'sequence']
-    elif fastaType == 'ipi':
-        geneAccessionPattern = ">(?P<sysName>[\S]+)(.+\n)(?P<sequence>[A-Z\n]+)"
-        outputGroups = ['sysName', 'sequence']
-    elif fastaType == 'uniprot':
-        geneAccessionPattern = ">[\S]+\|(?P<sysName>[\S]+)\|(?P<stdName>[\S^\|]+)\s(?P<description>.+)\n(?P<sequence>[A-Z\n]+)"
-        outputGroups = ['sysName', 'stdName', 'description', 'sequence']
+    #fastaPattern = '>(?P<header>.+\n)(?P<sequence>[A-Z\*\n]+)' #[\*\n)
 
-    with open(fastaFileLocation, 'r') as openFastaFile:
-        readFastaFile = openFastaFile.read()
-        proteinList = list()
+    fastaPattern = '(?P<header>([>;].+\n)+)(?P<sequence>[A-Z\*\n]+)' #[\*\n)
+    with open(fastaFileLocation, 'r') as openfile:
+        readfile = openfile.read()
+        entries = list()
 
-        regexpPattern = re.compile(geneAccessionPattern, re.VERBOSE)
-        regexpResult = regexpPattern.finditer(str(readFastaFile))
-        for entry in regexpResult:
-            outputDict = dict()
-            outputDict['description'] = ''
-            for outputGroup in outputGroups:
-                outputDict[outputGroup] = str(entry.group(outputGroup))
-            outputDict['sequence'] = outputDict['sequence'].replace('\n', '').replace('*', '')
-            proteinList.append(outputDict)
-    return proteinList
+        rePattern = re.compile(fastaPattern, re.VERBOSE)
+        reResult = rePattern.finditer(str(readfile))
+
+        comments = str()
+        isHeader = True
+        for entry in reResult:
+            if isHeader:
+                header = entry.group('header').replace('>', '').strip()
+                if entry.group('sequence').strip():
+                    sequence = entry.group('sequence').replace('\n', '').replace('\r', '').strip('*')
+                    entries.append([header, sequence, comments])
+                else:
+                    isHeader = False
+            else:
+                comments += entry.group('header')
+                if entry.group('sequence').strip():
+                    sequence = entry.group('sequence').replace('\n', '').replace('\r', '').strip('*')
+                    entries.append((header, sequence, comments))
+                    isHeader = True
+                    comments = str()
+    return entries
 
 
-def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLength=5, maxLength=40):
+def _extractFastaHeader(fastaHeader, parser=None, forceId=False):
+    """
+    :param parser: is a function that takes a fastaHeader string and returns a dictionary, containing at least the key 'id'
+    if None is specified uses the parser function from pyteomics :func:`pyteomics.fasta.parse()`
+    """
+    if parser is None:
+        try:
+            headerInfo = pyteomics.fasta.parse(fastaHeader)
+        except pyteomics.auxiliary.PyteomicsError as pyteomicsError:
+            #If exceptError is set True, it forces to return the whole header as id
+            if forceId:
+                headerInfo = {'id':fastaHeader}
+            else:
+                raise pyteomicsError
+    else:
+        headerInfo = parser(fastaHeader)
+    return headerInfo
+
+
+def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, removeNtermM=True, minLength=5, maxLength=40):
     """Yields peptides derived from an in silico digest of a protein.
 
-    (Could be merged with or substituted by :class:`pyteomics.fasta.read`)
-
     :param proteinSequence: amino acid sequence of the protein to be digested
+    :param cleavageRule: TODO add description
     :param missedCleavages: number of allowed missed cleavage sites
     :param removeNtermM: If True, consider peptides with the n-terminal methionine of the protein removed
     :param minLength: only yield peptides with length >= minLength
     :param maxLength: only yield peptides with length <= maxLength
 
-    NOTE: at the moment it only works for trypsin (K/R) and c-terminal cleavage
+    Note: An example for specifying N-terminal cleavage at Lysine sites: \\w(?=[K])
     """
     # Return in silico digested peptides, peptide start position, peptide end position
     # Peptide position start at 1 and end at len(proteinSequence)
     passFilter = lambda startPos, endPos: (endPos - startPos >= minLength and endPos - startPos <= maxLength)
 
-    cleavagePosList = list()
-    # Position +1 if cut c terminal of amino acid
-    cleavagePosList.extend([m.start()+1 for m in re.finditer('K', proteinSequence)])
-    cleavagePosList.extend([m.start()+1 for m in re.finditer('R', proteinSequence)])
-    cleavagePosList.sort()
-
+    cleavagePosList = set(itertools.chain(map(lambda x: x.end(), re.finditer(cleavageRule, proteinSequence))))
+    cleavagePosList.add(len(proteinSequence))
+    cleavagePosList = sorted(list(cleavagePosList))
     # Add end of protein as cleavage site if protein doesn't end with specififed cleavage positions
-    if proteinSequence[-1] != 'K' and proteinSequence[-1] != 'R':
-        cleavagePosList.append(len(proteinSequence))
     numCleavageSites = len(cleavagePosList)
 
     if missedCleavages >= numCleavageSites:
         missedCleavages = numCleavageSites -1
 
-    #Yield protein n-terminal peptides
-    if cleavagePosList[0] != 0:
+    #Yield protein n-terminal peptides after methionine removal
+    if removeNtermM and proteinSequence[0] == 'M':
         for cleavagePos in range(0,missedCleavages+1):
-            startPos = 0
+            startPos = 1
             endPos = cleavagePosList[cleavagePos]
             if passFilter(startPos, endPos):
                 sequence = proteinSequence[startPos:endPos]
@@ -1427,10 +1466,10 @@ def digestInSilico(proteinSequence, missedCleavages, removeNtermM=True, minLengt
                 info['missedCleavage'] = cleavagePos
                 yield sequence, info
 
-    #Yield protein n-terminal peptides after methionine removal
-    if removeNtermM and proteinSequence[0] == 'M':
+    #Yield protein n-terminal peptides
+    if cleavagePosList[0] != 0:
         for cleavagePos in range(0,missedCleavages+1):
-            startPos = 1
+            startPos = 0
             endPos = cleavagePosList[cleavagePos]
             if passFilter(startPos, endPos):
                 sequence = proteinSequence[startPos:endPos]

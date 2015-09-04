@@ -1,11 +1,12 @@
-import os
-import copy
 from collections import defaultdict as ddict
+import copy
 import functools
 import math
 import numpy
 import operator
+import os
 import random
+import re
 
 from scipy.interpolate import LSQUnivariateSpline
 
@@ -85,6 +86,11 @@ expasy_rules = {'arg-c': 'R',
                 'trypsin': '([KR](?=[^P]))|((?<=W)K(?=P))|((?<=M)R(?=P))',
                 'trypsin simple': '[KR]'
                 }
+
+def fastaParseSgd(header):
+    ID, name, description = re.match('([\S]+)\s([\S]+).+(\".+\")', header).groups()
+    info = {'id':ID, 'name':name, 'description':description}
+    return info
 
 class Factorial():
     def __getitem__(self, n):
