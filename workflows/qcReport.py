@@ -5,7 +5,7 @@ from collections import defaultdict as ddict
 from matplotlib import pyplot as plt
 
 try:
-    import seaborn
+    import seaborn as sns
 except:
     pass
 
@@ -17,13 +17,13 @@ globalStart = timeit.time.time()
 
 specfiles = list()
 specfiles.append('JD_06232014_sample1_A')
-specfiles.append('JD_06232014_sample2_B')
-specfiles.append('JD_06232014_sample3_C')
+specfiles.append('JD_06232014_sample2_A')
+specfiles.append('JD_06232014_sample3_A')
 
-specFileDir = 'D:/massData/specFiles/pymzml'
+specfileFolder = 'D:/massData/specfiles/pyms_testing'
 
 # Import spectrum files
-siContainer = pyms.importSpecfiles(specfiles, specFileDir)
+siContainer = pyms.importSpecfiles(specfiles, specfileFolder)
 
 # Generate QC data for plotting
 targetSpecfiles = specfiles #[specfiles[0], specfiles[1], specfiles[2]]
@@ -53,6 +53,8 @@ for specfileCounter, specfile in enumerate(targetSpecfiles):
     qcReport[specfile]['iitListMs1'] = arrays['iit'][ms1Mask]
     qcReport[specfile]['iitListMs2'] = arrays['iit'][ms2Mask]
 
+    qcReport[specfile]['rticListMs1'] = arrays['tic'][ms1Mask] * arrays['iit'][ms1Mask] / 1000
+    qcReport[specfile]['rticListMs2'] = arrays['tic'][ms2Mask] * arrays['iit'][ms2Mask] / 1000
 
 # Generate plot
 plotTitle = 'Comparison of '+str(specfileNumber)+' spectrum files:'
@@ -118,19 +120,19 @@ axarr[1, 0].set_xticklabels(['E'+str(x) for x in tickList])
 axarr[1, 0].set_ylabel('MS1 counts')
 
 
-# Histogram - TotalIonCurrent (log10) MS2
+# Histogram - RecordedTotalIonCurrent (log10) MS2
 dataList = list()
 for specfile in targetSpecfiles:
     report = qcReport[specfile]
-    dataList.append([numpy.log10(x) for x in report['ticListMs2']])
+    dataList.append([numpy.log10(x) for x in report['rticListMs2']])
 minBin = int(min([min(y) for y in dataList]))
 maxBin = int(max([max(y) for y in dataList]))+1
 binList = [x/5.0 for x in range(minBin*5,maxBin*5)]
 tickList = [x/1.0 for x in range(minBin*1,maxBin*1)]
 
-axarr[1, 1].set_title('Total Ion Current distribution of all MS2 scans', fontsize=13)
+axarr[1, 1].set_title('Recorded Total Ion Current of MS2 scans', fontsize=13)
 axarr[1, 1].hist(dataList,bins=binList, alpha=generalAlpha, color=colorList[0:specfileNumber], normed=False)
-axarr[1, 1].set_xlabel('TIC (log10)')
+axarr[1, 1].set_xlabel('RTIC (log10)')
 axarr[1, 1].set_xticks(tickList)
 axarr[1, 1].set_xticklabels(['E'+str(x) for x in tickList])
 axarr[1, 1].set_ylabel('MS2 counts')
@@ -184,11 +186,73 @@ plt.show()
 plt.clf()
 
 
+#topx in different time windows of the run
+plt.clf()
+f, axarr = plt.subplots(len(targetSpecfiles), 10, figsize=(12,8), sharex=True, sharey=True)
+f.suptitle(plotTitle, fontsize=14, weight = 'bold')
+f.subplots_adjust(hspace=0.4)
+
+for pos, specfile in enumerate(targetSpecfiles):
+    bins = range(0, max(qcReport[specfile]['ms2PerMs1'])+1)
+    msnList = list()
+    rtAreas = numpy.zeros_like(qcReport[specfile]['ms2PerMs1'])
+    for x in range(10):
+        minRt = max(qcReport[specfile]['rtMs1']) / 10. * x
+        maxRt = max(qcReport[specfile]['rtMs1']) / 10. * (x+1)
+        rtFilter = (qcReport[specfile]['rtMs1'] >= minRt) & (qcReport[specfile]['rtMs1'] <= maxRt)
+        rtAreas[rtFilter] = x
+
+        msnList.append(qcReport[specfile]['ms2PerMs1'][rtFilter])
+        axarr[pos][x].hist(qcReport[specfile]['ms2PerMs1'][rtFilter], bins=bins)
+    if pos%2 == 1:
+        axarr[pos][x].set_ylabel(specfile)
+        axarr[pos][x].yaxis.set_label_position('right')
+    else:
+        axarr[pos][0].set_ylabel(specfile)
+plt.show()
+
+
+
+#ms2 iit in different time windows of the run
+plt.clf()
+f, axarr = plt.subplots(len(targetSpecfiles), 10, figsize=(12,8), sharex=True, sharey=True)
+f.suptitle(plotTitle, fontsize=14, weight = 'bold')
+f.subplots_adjust(hspace=0.4)
+
+for pos, specfile in enumerate(targetSpecfiles):
+    bins = [x*10. for x in range(0, 12)]
+    msnList = list()
+    rtAreas = numpy.zeros_like(qcReport[specfile]['iitListMs2'])
+    for x in range(10):
+        minRt = max(qcReport[specfile]['rtMs2']) / 10. * x
+        maxRt = max(qcReport[specfile]['rtMs2']) / 10. * (x+1)
+        rtFilter = (qcReport[specfile]['rtMs2'] >= minRt) & (qcReport[specfile]['rtMs2'] <= maxRt)
+        rtAreas[rtFilter] = x
+
+        msnList.append(qcReport[specfile]['iitListMs2'][rtFilter])
+        axarr[pos][x].hist(qcReport[specfile]['iitListMs2'][rtFilter], bins=bins)
+    if pos%2 == 1:
+        axarr[pos][x].set_ylabel(specfile)
+        axarr[pos][x].yaxis.set_label_position('right')
+    else:
+        axarr[pos][0].set_ylabel(specfile)
+plt.show()
+
+
+sns.boxplot(rtAreas, qcReport[specfile]['ms2PerMs1'])
+plt.ylim(0,11)
+plt.show()
+
 
 
 for specfile in specfiles:
     plt.scatter(qcReport[specfile]['rtMs1'], qcReport[specfile]['iitListMs1'], color='grey', alpha=0.2)
     plt.show()
+
+for specfile in specfiles:
+    plt.scatter(qcReport[specfile]['rtMs2'], qcReport[specfile]['iitListMs2'], color='grey', alpha=0.2)
+    plt.show()
+
 
 
 

@@ -19,6 +19,7 @@ atomicMassH = 1.00782504
 atomicMassProton = 1.00727646677
 
 unimodToMassDict = dict()
+unimodToMassDict['34'] = 14.015650 # Methylation
 unimodToMassDict['36'] = 28.031300 # Dimethyl light label
 unimodToMassDict['199'] = 32.056407 # Dimethyl medium label
 unimodToMassDict['4'] = 57.021464 # Carbamidomethylation

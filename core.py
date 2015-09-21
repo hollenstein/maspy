@@ -310,7 +310,7 @@ class SiiContainer(ItemContainer):
             if specfile not in self.specfiles:
                 print(specfile, 'not present in siiContainer.')
             else:
-                for sii in self.getItems(specfiles=specfile):
+                for sii in self.getItems(specfiles=specfile, filterAttribute=None):
                     charge = sii.charge
                     peptide = sii.peptide
                     if peptide not in tempPeptideMasses:
@@ -1098,7 +1098,7 @@ def _importFromPercolatorArrays(siiContainer, psmArrays, specfile, qValueCutOff=
 
 
 def _importPercolatorResults(fileLocation, psmEngine=None):
-    """Reads percolator PSM results from txt file.
+    """Reads percolator PSM results from a txt file.
 
     :ivar fileLocation: File path
     :ivar psmEngine: Specifies the used peptide spectrum matching engine ('comet', 'msgf', 'xtandem')
@@ -1148,7 +1148,7 @@ def _importPercolatorResults(fileLocation, psmEngine=None):
         print('No valid psm engine specified, can\'t import percolator results!')
 
     for headerName in scanArrDict.keys():
-        scanArrDict[headerName] = numpy.array( scanArrDict[headerName] )
+        scanArrDict[headerName] = numpy.array(scanArrDict[headerName])
     return scanArrDict
 
 
@@ -1925,7 +1925,7 @@ def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='m
     for specfile in specfiles:
         multiMatchCounter = int()
         isotopeErrorMatchCounter = int()
-        specArrays = specContainer.getArrays([sMassKey, 'rt', 'charge'], specfiles=specfile)
+        specArrays = specContainer.getArrays([sMassKey, 'rt', 'charge', 'msLevel'], specfiles=specfile)
         featureArrays = featureContainer.getArrays(['rtHigh', 'rtLow', 'charge', fMassKey],
                                                    specfiles=specfile, sort=fMassKey
                                                    )
@@ -2003,7 +2003,7 @@ def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='m
         stats['totalFeatures'] = len(featureArrays['containerId'])
         stats['matchedFeatures'] = len(featureSpecDict)
         stats['relMatchedFeatures'] = round(1.*stats['matchedFeatures']/stats['totalFeatures'], 3)
-        stats['totalSpectra'] = len(specArrays['containerId'])
+        stats['totalSpectra'] = len(specArrays['containerId'][(specArrays['msLevel'] != 1)])
         stats['matchedSpectra'] = len(specFeatureDict)
         stats['relMatchedSpectra'] = round(1.*stats['matchedSpectra']/stats['totalSpectra'], 3)
 
