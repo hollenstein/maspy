@@ -47,6 +47,26 @@ class ContainerItem(object):
         self.specfile = specfile
         self.isValid = None
 
+    def __str__(self):
+        maxStrLength = max([len(str(key)) for key in self.__dict__.keys()])
+
+        primaryKeys = ['id', 'specfile', 'isValid', 'containerId']
+        secondaryKeys = sorted(list(set(self.__dict__.keys()).difference(set(primaryKeys))))
+
+        output = [str(self.__class__)]
+        for key in primaryKeys:
+            value = getattr(self, key)
+            output.append(' '.join([str(key).ljust(maxStrLength), repr(value)]))
+        output.append('')
+        for key in secondaryKeys:
+            value = getattr(self, key)
+            output.append(' '.join([str(key).ljust(maxStrLength), repr(value)]))
+
+        return '\n'.join(output)
+
+    def __repr__(self):
+        return self.__str__()
+
     def copy(self):
         """Returns a copy of itself.
 
@@ -147,8 +167,12 @@ class ItemContainer(object):
                 emptyArray[:] = arrays[key]
                 arrays[key] = emptyArray
             else:
-                arrays[key] = numpy.array(arrays[key])
-
+                if type(arrays[key][0]) is float:
+                    arrays[key] = numpy.array(arrays[key], dtype='float64')
+                elif type(arrays[key][0]) is int:
+                    arrays[key] = numpy.array(arrays[key], dtype='int64')
+                else:
+                    arrays[key] = numpy.array(arrays[key])
         return arrays
 
     def save(self, filefolder, filename):
@@ -157,8 +181,11 @@ class ItemContainer(object):
         :ivar filefolder: folder where the container should be saved
         :ivar filename: filename to store the container, should not contain any appendix like .txt
         """
+        #Note: delete the index for storing containers and rewrite upon import to prevent duplication of ContainerItem instances.
+        tempIndex = self.index
         del(self.index)
         self._save(filefolder, filename)
+        self.index = tempIndex
 
     def _save(self, filefolder, filename):
         filename = '.'.join((filename, self.__class__.__name__.lower()))
@@ -174,6 +201,7 @@ class ItemContainer(object):
         :ivar filename: filename of the stores container, without file appendix
         """
         classInstance = cls._load(filefolder, filename)
+        #Note: delete the index for storing containers and rewrite upon import to prevent duplication of ContainerItem instances.
         classInstance.index = dict()
         for items in classInstance.container.values():
             for item in items:
@@ -186,6 +214,33 @@ class ItemContainer(object):
         filepath = os.path.join(filefolder, filename).replace('\\', '/')
         with open(filepath, 'r') as openFile:
             return pickle.load(openFile)
+
+    def __str__(self):
+        numSpecfiles = len(self.specfiles)
+        numItems = sum([len(container) for container in self.container.values()])
+
+        output = [str(self.__class__)]
+        output.append(' '.join(['Containing', str(numSpecfiles), 'specfiles and', str(numItems), 'items.']))
+        for specfile in self.specfiles:
+            output.append(''.join([specfile, ', ', str(len(self.container[specfile])), ' items.']))
+        return '\n'.join(output)
+
+    def __repr__(self):
+        return self.__str__()
+
+    def itemStats(self):
+        itemAttributes = ddict(int)
+        for item in self.getItems(filterAttribute=None):
+            for key in item.__dict__.keys():
+                itemAttributes[key] += 1
+        attributeNames = itemAttributes.keys() + ['Attribute name']
+        maxStrLength = max([len(str(key)) for key in attributeNames])
+
+        itemCounts = ['  '.join(['Attribute name'.ljust(maxStrLength), 'item counts']),
+                      '  '.join(['--------------'.ljust(maxStrLength), '-----------'])
+                      ]
+        itemCounts.extend(['  '.join([key.ljust(maxStrLength), str(itemAttributes[key])]) for key in sorted(itemAttributes.keys())])
+        print('\n'.join(itemCounts))
 
 
 class SpectrumItem(ContainerItem):
@@ -202,7 +257,7 @@ class SiContainer(ItemContainer):
     for parameter and method description see :class:`ItemContainer`
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
 
-    :ivar ionLists: spectrum ion information, not loaded by default
+    :ivar ionLists: spectrum ion m/z and intensity information, not loaded by default
     dict(containerId=dict(mz=nump.array([mass / charge, ...]), i=numpy.array([intensity, ...]))).
     """
     def __init__(self):
@@ -559,6 +614,15 @@ class FeatureGroupContainer(ItemContainer):
                 classInstance.index[featureId].append(item)
         return classInstance
 
+    def __str__(self):
+        numSpecfiles = len(self.specfiles)
+        numItems = len(self.container)
+
+        output = [str(self.__class__)]
+        output.append(' '.join(['Containing', str(numSpecfiles), 'specfiles and', str(numItems), 'items.']))
+        output.extend(self.specfiles)
+        return '\n'.join(output)
+
 
 class PeptideSequence(object):
     """Describes a peptide as derived by digestion of one or multiple proteins, can't contain any modified amino acids.
@@ -672,7 +736,7 @@ class ProteinEvidence(ProteinSequence):
 
 
 class ProteinDatabase(object):
-    """Describes proteins and peptides derived by an in silico digest.
+    """Describes proteins and peptides generated by an in silico digestion of proteins.
 
     :ivar peptides: {sequence:PeptideSequence(), ...} contains elements of :class:`PeptideSequence` derived by an in silico digest of the proteins
     :ivar proteins: {proteinId:Protein(), proteinId:Protein()}, used to access :class:`ProteinSequence` elements by their id
@@ -781,7 +845,7 @@ def addContainer(baseContainer, *newContainers):
     return baseContainer
 
 
-def importSpecfiles(specfiles, fileDirectory, importIonList=False, siContainer=None):
+def importSpecfiles(specfiles, fileDirectory, importIonList=False, siContainer=None, subdir=True):
     """Auxiliary function to conveniently import a group of specfiles.
 
     :ivar specfiles: Filenames which should be imported
@@ -789,17 +853,18 @@ def importSpecfiles(specfiles, fileDirectory, importIonList=False, siContainer=N
     :ivar fileDirectory: Filenames are searched in this folder and its folder
     :ivar bool importIonList: True if ion arrays (mz and intensity) should be imported
     :ivar siContainer: Add imported specfiles to siContainer, if None a new instance of :class:`SiContainer` is returned
+    :ivar subdir: bool, specify whether subdirectories should be searched
     """
     if siContainer is None:
         siContainer = SiContainer()
     specfiles = aux.toList(specfiles)
     for specfile in specfiles:
-        specfilePath = aux.searchFileLocation(specfile, 'sicontainer', fileDirectory)
+        specfilePath = aux.searchFileLocation(specfile, 'sicontainer', fileDirectory, subdir=subdir)
         if specfilePath:
             fileFolder = os.path.dirname(specfilePath)
             addContainer(siContainer, SiContainer.load(fileFolder, specfile, importIonList=importIonList))
         else:
-            specfilePath = aux.searchFileLocation(specfile, 'mzML', fileDirectory)
+            specfilePath = aux.searchFileLocation(specfile, 'mzML', fileDirectory, subdir=subdir)
             if specfilePath is None:
                 print('File not found: ', specfile)
             else:
@@ -847,23 +912,20 @@ def removeSiContainerFiles(fileDirectory, report=True):
 ###############################################
 ### Import functions for various file types ###
 ###############################################
-def pymzmlReadMzml(mzmlPath):
+def pymzmlReadMzml(mzmlPath, mzmlAccessions):
     """Auxiliary function to specify extra accesions when reading an mzml file with :func:`pymzml.run.Reader`.
 
     :ivar mzmlPath: File path
+    :ivar mzmlAccessions: a diciontary describing the attributes that will be extracted from the mzml file, see: :func:`importSpectrumItems`.
     """
-    extraAccessions = [('MS:1000827', ['value']),
-                       ('MS:1000828', ['value']),
-                       ('MS:1000829', ['value']),
-                       ('MS:1000744', ['value']),
-                       ('MS:1000016', ['value']),
-                       ('MS:1000927', ['value']),
-                       ('MS:1000512', ['value'])
-                       ]
+    extraAccessions = list()
+    for accessionId in mzmlAccessions.keys():
+        extraAccessions.append((accessionId, ['value', 'unitName']))
     return pymzml.run.Reader(mzmlPath, extraAccessions=extraAccessions)
 
 
-def importSpectrumItems(siContainer, specfilePath, specfile, msLevel=[1, 2], importIonList=True, mgfType=None):
+def importSpectrumItems(siContainer, specfilePath, specfile, msLevel=[1, 2], importIonList=True,
+                        mgfType=None, mzmlAccessions=None):
     """ Import spectra from mzml or mgf files.
 
     :param siContainer: Spectra are added to to this instance of :class:`SiContainer`
@@ -871,7 +933,12 @@ def importSpectrumItems(siContainer, specfilePath, specfile, msLevel=[1, 2], imp
     :param specfile: Keyword (filename) to represent file in the :class:`SiContainer`. Each filename
     can only occure once, therefore importing the same filename again is prevented
     :param importIonList: bool if ion arrays (mz and intensity) should be imported
-    :param mgfType: if the file is of type '.mgf', and the mgf was generated by pParse set to mgfType="pParse" because of header information ambiguity.
+    :param mgfType: if the file is of type '.mgf', and the mgf was generated by pParse set to
+    mgfType="pParse" because of header information ambiguity.
+    :param mzmlAccessions: A diciontary describing the attributes that will be extracted from the mzml file.
+    {MS:accessionId:{'name':the si attribute name, 'msLevel':ms level or None}, ...}
+    If 'msLevel' is None the attribute is added to every SI, by specifying a number the attribute
+    is only added to SI of this msLevel.
     """
     if specfilePath is None:
         raise Exception('SpecfilePath not specified, pyms.core.importSpectrumItems()') #TODO
@@ -884,15 +951,17 @@ def importSpectrumItems(siContainer, specfilePath, specfile, msLevel=[1, 2], imp
             siContainer.specfiles.append(specfile)
             siContainer.container[specfile] = list()
             if specfilePath.lower().endswith('.mzml'):
-                msrun = pymzmlReadMzml(specfilePath)
-                importMzmlSpectrumItems(siContainer, msrun, specfile, importIonList=importIonList)
+                #If no mzmlAccession dictionary is specified, the standard dict from pyms.auxiliary is used
+                mzmlAccessions = mzmlAccessions if mzmlAccessions is not None else aux.mzmlAccessions
+                msrun = pymzmlReadMzml(specfilePath, mzmlAccessions)
+                importMzmlSpectrumItems(siContainer, msrun, specfile, mzmlAccessions, importIonList=importIonList)
             elif specfilePath.lower().endswith('.mgf'):
                 importMgfSpectrumItems(siContainer, specfilePath, specfile, importIonList=importIonList, mgfType=mgfType)
         else:
             print(specfile, 'is already present in the SiContainer, import interrupted.')
 
 
-def importMzmlSpectrumItems(siContainer, msrun, specfile, importIonList=False):
+def importMzmlSpectrumItems(siContainer, msrun, specfile, mzmlAccessions, importIonList=False):
     """Import spectrum information from mzML files. Mostly used as a private function by :func:`importSpectrumItems`.
 
     :param siContainer: Spectra are added to this instance of :class:`SiContainer`
@@ -904,24 +973,16 @@ def importMzmlSpectrumItems(siContainer, msrun, specfile, importIonList=False):
         si = SpectrumItem(str(spectrum['id']), specfile)
         si.msLevel = spectrum['ms level']
         si.isValid = True
-        for attributeName, accession, msLevel in [('iit', 'MS:1000927', None),
-                                                  ('tic', 'MS:1000285', None),
-                                                  ('rt', 'MS:1000016', None),
-                                                  ('targetWindowMz', 'MS:1000827', 2),
-                                                  ('lowWindowOffset', 'MS:1000828', 2),
-                                                  ('highWindowOffset', 'MS:1000829', 2),
-                                                  ('obsMz', 'MS:1000744', 2),
-                                                  ('charge', 'MS:1000041', 2),
-                                                  ('filterString', 'MS:1000512', None)
-                                                  ]:
-            if msLevel is None or si.msLevel == msLevel:
-                if accession in spectrum:
-                    setattr(si, attributeName, spectrum[accession])
-                    if attributeName == 'rt':
-                        #change from minutes to seconds
-                        setattr(si, attributeName, spectrum[accession] * 60)
+        for accessionId, accessionInfo in mzmlAccessions.items():
+            if accessionInfo['msLevel'] is None or si.msLevel == accessionInfo['msLevel']:
+                if accessionId in spectrum:
+                    setattr(si, accessionInfo['name'], spectrum[accessionId][0])
+                    if accessionInfo['name'] == 'rt':
+                        #change retentiontime unit from minutes to seconds
+                        if spectrum[accessionId][1] == 'minute':
+                            setattr(si, accessionInfo['name'], spectrum[accessionId][0] * 60)
                 else:
-                    setattr(si, attributeName, None)
+                    setattr(si, accessionInfo['name'], None)
         return si
 
     currMsnContainerIdList = list()
@@ -1320,7 +1381,6 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]', contamin
             protein.fastaHeader = header
             protein.fastaInfo = headerInfo
             proteindb.proteins[protein.id] = protein
-            proteindb.proteinNames[protein.name] = protein
 
         for unmodPeptide, info in digestInSilico(sequence, cleavageRule, missedCleavage,
                                                  removeNtermM, minLength, maxLength
@@ -1379,8 +1439,6 @@ def _readFastaFile(fastaFileLocation):
 
     See also :func:`returnDigestedFasta` and :func:`digestInSilico`
     """
-    #fastaPattern = '>(?P<header>.+\n)(?P<sequence>[A-Z\*\n]+)' #[\*\n)
-
     fastaPattern = '(?P<header>([>;].+\n)+)(?P<sequence>[A-Z\*\n]+)' #[\*\n)
     with open(fastaFileLocation, 'r') as openfile:
         readfile = openfile.read()
@@ -1429,7 +1487,7 @@ def _extractFastaHeader(fastaHeader, parser=None, forceId=False):
 
 
 def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, removeNtermM=True, minLength=5, maxLength=40):
-    """Yields peptides derived from an in silico digest of a protein.
+    """Yields peptides derived from an in silico digest of a polypeptide.
 
     :param proteinSequence: amino acid sequence of the protein to be digested
     :param cleavageRule: TODO add description
@@ -1541,7 +1599,7 @@ def generateEvidence(evContainer, siiContainer, scoreKey, largerBetter, peptideK
     evContainer.largerBetter = largerBetter
     evContainer.peptideKey = peptideKey
 
-    #Summarize psm informatino into unique peptides
+    #Summarize psm information into unique peptides
     for sii in siiContainer.getItems(sort=scoreKey, reverse=largerBetter):
         peptide = getattr(sii, peptideKey)
         siiScore = getattr(sii, scoreKey)
@@ -1881,7 +1939,7 @@ def expectedLabelPosition(peptide, labelStateInfo, sequence=None, modPositions=N
 ##########################################
 ### Functions to work with FeatureItem ###
 ##########################################
-def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='mz', sMassKey='obsMz', isotopeErrorList=(0, 1),
+def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='mz', sMassKey='obsMz', isotopeErrorList=(0),
                     precursorTolerance=5, toleranceUnit='ppm', rtExpansionUp=0.10, rtExpansionDown=0.05, matchCharge=True,
                     scoreKey='pep', largerBetter=False):
     """Annotate :class:`FeatureItem` in :class:`FeatureContainer` by matching :class:`SpectrumItem` (Si) or :class:`SpectrumIdentificationItem` (Sii).
@@ -2321,7 +2379,7 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
             groupItem.sequence = scorePepList[0][2]
             groupItem.isAnnotated = True
         else:
-            groupItem.isMatched = False
+            groupItem.isAnnotated = False
         groupItem.isValid = True
         groupContainer.container.append(groupItem)
         matchedFeatures.update(groupItem.featureIds)

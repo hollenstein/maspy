@@ -21,7 +21,7 @@ specfiles.append('JD_06232014_sample2_A')
 specfiles.append('JD_06232014_sample3_A')
 
 specfileFolder = 'D:/massData/specfiles/pyms_testing'
-
+specfileFolder = 'J:/lab/specfiles'
 # Import spectrum files
 siContainer = pyms.importSpecfiles(specfiles, specfileFolder)
 
@@ -29,7 +29,7 @@ siContainer = pyms.importSpecfiles(specfiles, specfileFolder)
 targetSpecfiles = specfiles #[specfiles[0], specfiles[1], specfiles[2]]
 specfileNumber = len(targetSpecfiles)
 
-arrays = siContainer.getArrays(['rt', 'tic', 'iit', 'msLevel', 'msnIdList'])
+arrays = siContainer.getArrays(['rt', 'tic', 'iit', 'msLevel', 'msnIdList', 'obsMz'])
 qcReport = ddict(dict)
 
 for specfileCounter, specfile in enumerate(targetSpecfiles):
@@ -58,14 +58,13 @@ for specfileCounter, specfile in enumerate(targetSpecfiles):
 
 # Generate plot
 plotTitle = 'Comparison of '+str(specfileNumber)+' spectrum files:'
-colorList = ['#73d216','#3465a4','#f57900','#75507b','#cc0000', 'grey']
+colorList = ['#73d216','#3465a4','#f57900','#75507b','#cc0000', 'grey', 'black', 'darkgrey']
 generalAlpha = 0.75
 
 plt.clf()
-f, axarr = plt.subplots(3, 2,figsize=(12,15))
+f, axarr = plt.subplots(3, 2, figsize=(12,15))
 f.suptitle(plotTitle, fontsize=14, weight = 'bold')
 f.subplots_adjust(hspace=0.4)
-
 
 # Histogram - Number of MS2 scans per MS1 scan
 dataList = list()
@@ -220,7 +219,7 @@ f.suptitle(plotTitle, fontsize=14, weight = 'bold')
 f.subplots_adjust(hspace=0.4)
 
 for pos, specfile in enumerate(targetSpecfiles):
-    bins = [x*10. for x in range(0, 12)]
+    bins = [x*50. for x in range(0, 12)]
     msnList = list()
     rtAreas = numpy.zeros_like(qcReport[specfile]['iitListMs2'])
     for x in range(10):
@@ -246,16 +245,26 @@ plt.show()
 
 
 for specfile in specfiles:
-    plt.scatter(qcReport[specfile]['rtMs1'], qcReport[specfile]['iitListMs1'], color='grey', alpha=0.2)
+    plt.scatter(qcReport[specfile]['rtMs1'], qcReport[specfile]['iitListMs1'], color='grey', alpha=0.3, marker='.')
     plt.show()
 
 for specfile in specfiles:
-    plt.scatter(qcReport[specfile]['rtMs2'], qcReport[specfile]['iitListMs2'], color='grey', alpha=0.2)
+    plt.scatter(qcReport[specfile]['rtMs2'], qcReport[specfile]['iitListMs2'], color='grey', alpha=0.3, marker='.')
     plt.show()
 
 
 
+plt.clf()
+f, axarr = plt.subplots(2, 1, figsize=(12,8), sharex=True, sharey=False)
+f.suptitle(specfile, fontsize=14, weight = 'bold')
+f.subplots_adjust(hspace=0.4)
 
+cycleTimes = list()
+for rt1, rt2 in zip(qcReport[specfile]['rtMs1'][:-2], qcReport[specfile]['rtMs1'][1:]):
+    cycleTimes.append(rt2-rt1)
+axarr[0].scatter(qcReport[specfile]['rtMs1'][:-2], cycleTimes, color='grey', marker='.', alpha=0.5)
+axarr[1].scatter(qcReport[specfile]['rtMs1'], qcReport[specfile]['ms2PerMs1'], color='grey', marker='.', alpha=0.5)
+plt.show()
 
 """ This is something different as the rawMeat like report
 for specfile in specfiles[0:2]:

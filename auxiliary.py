@@ -88,6 +88,23 @@ expasy_rules = {'arg-c': 'R',
                 'trypsin simple': '[KR]'
                 }
 
+mzmlAccessions = dict()
+mzmlAccessions['MS:1000927'] = {'name':'iit', 'msLevel':None}
+mzmlAccessions['MS:1000285'] = {'name':'tic', 'msLevel':None}
+mzmlAccessions['MS:1000016'] = {'name':'rt', 'msLevel':None}
+mzmlAccessions['MS:1000827'] = {'name':'targetWindowMz', 'msLevel':2}
+mzmlAccessions['MS:1000828'] = {'name':'lowWindowOffset', 'msLevel':2}
+mzmlAccessions['MS:1000829'] = {'name':'highWindowOffset', 'msLevel':2}
+mzmlAccessions['MS:1000744'] = {'name':'obsMz', 'msLevel':2}
+mzmlAccessions['MS:1000042'] = {'name':'obsI', 'msLevel':2}
+mzmlAccessions['MS:1000041'] = {'name':'charge', 'msLevel':2}
+mzmlAccessions['MS:1000501'] = {'name':'lowWindowLimit', 'msLevel':2}
+mzmlAccessions['MS:1000500'] = {'name':'highWindowLimit', 'msLevel':2}
+mzmlAccessions['MS:1000504']  = {'name':'basePeakMz', 'msLevel':None}
+mzmlAccessions['MS:1000505']  = {'name':'basePeakI', 'msLevel':None}
+
+#mzmlAccessions['MS:1000512'] = {'name':'filterString', 'msLevel':None}
+
 def fastaParseSgd(header):
     ID, name, description = re.match('([\S]+)\s([\S]+).+(\".+\")', header).groups()
     info = {'id':ID, 'name':name, 'description':description}
@@ -252,23 +269,34 @@ def calcMassFromMz(mz, charge):
     return mass
 
 
-def searchFileLocation(targetFileName, targetFileExtension, rootDirectory):
+def searchFileLocation(targetFileName, targetFileExtension, rootDirectory, subdir=True):
     """Search for file with specified file extension in all subfolders of specified rootDirectory, returns first matching instance.
 
     :type targetFileName: str
     :type rootDirectory: str
     :type targetFileExtension: str
+    :ivar subdir: bool, specify whether subdirectories should be searched
     """
     expectedFileName = targetFileName.split('.')[0] + '.' + targetFileExtension
     targetFilePath = None
 
-    for dirpath, dirnames, filenames in os.walk( rootDirectory ):
-        for filename in filenames:
-            if filename == expectedFileName:
-                targetFilePath = os.path.join(dirpath, filename).replace('\\','/')
+    if subdir:
+        for dirpath, dirnames, filenames in os.walk(rootDirectory):
+            for filename in filenames:
+                if filename == expectedFileName:
+                    targetFilePath = os.path.join(dirpath, filename).replace('\\','/')
+                    break
+            if targetFilePath is not None:
                 break
-        if targetFilePath is not None:
-            break
+    else:
+        for filename in os.listdir(rootDirectory):
+            filePath = os.path.join(rootDirectory, filename).replace('\\','/')
+            if not os.path.isfile(filePath):
+                continue
+            if filename == expectedFileName:
+                targetFilePath = filePath
+                break
+
     return targetFilePath
 
 
@@ -317,9 +345,9 @@ def findAllSubstrings(a_str, sub):
 
 
 def toList(potentialNoList, types=(str, int, float)):
-    """ Converts a string / int to a list
+    """ Converts a string, int, float to a list
 
-    :type potentialString: (str, list)
+    :type potentialNoList: (str, int, float, others)
     """
     if isinstance(potentialNoList, types):
         return [potentialNoList]
