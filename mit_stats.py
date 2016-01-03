@@ -22,8 +22,8 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 """
-from collections import deque, Counter
 from bisect import insort, bisect_left
+from collections import deque, Counter
 from itertools import islice
 
 def runningMode(seq, N, M):
