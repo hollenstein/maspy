@@ -144,6 +144,7 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
     return unidmodPositionDict
 
 
+# --- Functions to transform mass to mz values --- #
 def calcMhFromMz(mz, charge):
     """Calculate the MH+ value from mz and charge.
 
