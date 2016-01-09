@@ -1,21 +1,23 @@
 import sys
 sys.path.append('D:/Dropbox/python')
 import unittest
-import pyms.auxiliary as aux
-
+import maspy.auxiliary as module
 
 class TestOtherAuxiliaryMethods(unittest.TestCase):
     def test_findAllSubstrings(self):
-        self.assertEqual(list(aux.findAllSubstrings('AASDITSLYK', 'S')), [2, 6])
-        self.assertEqual(list(aux.findAllSubstrings('AADISPLYSKABSPR', 'SP')), [4, 12])
+        self.assertEqual(list(module.findAllSubstrings('AASDITSLYK', 'S')), [2, 6])
+        self.assertEqual(list(module.findAllSubstrings('AADISPLYSKABSPR', 'SP')), [4, 12])
 
     def test_toList(self):
-        self.assertEqual(aux.toList((1, 2, 3, 'A')), (1, 2, 3, 'A'))
-        self.assertEqual(aux.toList('A'), ['A'])
-        self.assertEqual(aux.toList(123), [123])
+        self.assertEqual(module.toList((1, 2, 3, 'A')), (1, 2, 3, 'A'))
+        self.assertEqual(module.toList('A'), ['A'])
+        self.assertEqual(module.toList(123), [123])
+
+    def test_joinpath(self):
+        self.assertEqual(module.joinpath('C:/basedir', 'adir', 'afile.ext'), 'C:/basedir/adir/afile.ext')
 
     def test_Factorial(self):
-        factorial = aux.Factorial()
+        factorial = module.Factorial()
         self.assertEqual(factorial[1], 1)
         self.assertEqual(factorial[2], 2)
         self.assertEqual(factorial[3], 6)
@@ -26,11 +28,11 @@ class TestOtherAuxiliaryMethods(unittest.TestCase):
 class TestLookUpFileLocationMethods(unittest.TestCase):
     def test_searchFileLocation(self):
         pass
-        #aux.searchFileLocation
+        #module.searchFileLocation
 
     def test_matchingFilePaths(self):
         pass
-        #aux.matchingFilePaths
+        #module.matchingFilePaths
 
 
 #class DataFit

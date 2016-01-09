@@ -40,13 +40,13 @@ def searchFileLocation(targetFileName, targetFileExtension, rootDirectory, recur
         for dirpath, dirnames, filenames in os.walk(rootDirectory):
             for filename in filenames:
                 if filename == expectedFileName:
-                    targetFilePath = os.path.join(dirpath, filename).replace('\\','/')
+                    targetFilePath = joinpath(dirpath, filename)
                     break
             if targetFilePath is not None:
                 break
     else:
         for filename in os.listdir(rootDirectory):
-            filePath = os.path.join(rootDirectory, filename).replace('\\','/')
+            filePath = joinpath(rootDirectory, filename)
             if not os.path.isfile(filePath):
                 continue
             if filename == expectedFileName:
@@ -56,38 +56,34 @@ def searchFileLocation(targetFileName, targetFileExtension, rootDirectory, recur
     return targetFilePath
 
 
-def matchingFilePaths(targetFileName, rootDirectory, targetFileExtension=None, selector=None):
-    """Search for files in all subfolders of specified rootDirectory, return filepaths of all matching instances.
-    :param targetFileName: filename to search for, only the string before the last '.' is used for filename matching
-    :param rootDirectory: search directory, including all subdirectories
-    :param targetFileExtension: string after the last '.' in the filename, has to be identical if specified
+def matchingFilePaths(targetfilename, directory, targetFileExtension=None, selector=None):
+    """Search for files in all subfolders of specified directory, return filepaths of all matching instances.
+    :param targetfilename: filename to search for, only the string before the last '.' is used for filename matching
+    :param directory: search directory, including all subdirectories
+    :param targetFileExtension: string after the last '.' in the filename, has to be identical if specified.
+                                '.' in targetFileExtension are ignored, thus '.txt' is equal to 'txt'.
 
-    :param selector: a function which is called with the value of targetFileName
+    :param selector: a function which is called with the value of targetfilename
     and has to return True (include value) or False (discard value).
-    If no selector is specified, equality to targetFileName is used.
+    If no selector is specified, equality to targetfilename is used.
     """
-    if targetFileName.find('.') != -1:
-        dotPosition = [x for x in findAllSubstrings(targetFileName, '.')][-1]
-        targetFileName = targetFileName[:dotPosition]
-    matchExtensions = False if targetFileExtension is None else True
     targetFilePaths = list()
 
+    targetfilename = os.path.splitext(targetfilename)[0]
+    targetFileExtension = targetFileExtension.replace('.', '')
+    matchExtensions = False if targetFileExtension is None else True
     if selector is None:
-        selector = functools.partial(operator.eq, targetFileName)
+        selector = functools.partial(operator.eq, targetfilename)
 
-    for dirpath, dirnames, filenames in os.walk( rootDirectory ):
+    for dirpath, dirnames, filenames in os.walk(directory):
         for filename in filenames:
-            if filename.find('.') != -1:
-                dotPosition = [x for x in findAllSubstrings(filename, '.')][-1]
-                filenameWithoutExtension = filename[:dotPosition]
-            else:
-                filenameWithoutExtension = filename
+            filenameNoextension = os.path.splitext(filename)[0]
 
-            if selector(filenameWithoutExtension):
+            if selector(filenameNoextension):
                 if matchExtensions:
-                    if not filename.endswith(''.join(('.', targetFileExtension))):
+                    if not filename.endswith('.' + targetFileExtension):
                         continue
-                targetFilePaths.append(os.path.join(dirpath, filename).replace('\\','/'))
+                targetFilePaths.append(joinpath(dirpath, filename))
     return targetFilePaths
 
 
@@ -100,15 +96,20 @@ def findAllSubstrings(a_str, sub):
         start +=  1# use start += 1 to find overlapping matches, otherwise len(sub)
 
 
-def toList(potentialNoList, types=(str, int, float)):
-    """ Converts a string, int, float to a list
+def toList(variable, types=(str, int, float)):
+    """ Converts variable of type string, int, float to a list: variable -> [variable]
 
-    :type potentialNoList: (str, int, float, others)
+    :type variable: (str, int, float, others)
     """
-    if isinstance(potentialNoList, types):
-        return [potentialNoList]
+    if isinstance(variable, types):
+        return [variable]
     else:
-        return potentialNoList
+        return variable
+
+
+def joinpath(path, *paths):
+    """Join two or more pathname components, inserting "/" as needed and replacing all "\\" by "/". """
+    return os.path.join(path, *paths).replace('\\','/')
 
 
 class Factorial():
@@ -137,21 +138,18 @@ class DataFit(object):
         self.independentVar = list()
 
     def processInput(self, dataAveraging=False, windowSize=None):
-        self.dependentVar = numpy.array(self.dependentVarInput, dtype='float64')
-        self.independentVar = numpy.array(self.independentVarInput, dtype='float64')
+        self.dependentVar = numpy.array(self.dependentVarInput, dtype=numpy.float64)
+        self.independentVar = numpy.array(self.independentVarInput, dtype=numpy.float64)
 
         sortMask = self.independentVar.argsort()
         self.dependentVar = self.dependentVar[sortMask]
         self.independentVar = self.independentVar[sortMask]
 
         if dataAveraging:
-            if dataAveraging == 'median':
-                averagedData = averagingData(self.dependentVar, windowSize=windowSize, averagingType=dataAveraging)
-            elif dataAveraging =='mean':
-                averagedData = averagingData(self.dependentVar, windowSize=windowSize, averagingType=dataAveraging)
-            averagedData = numpy.array(averagedData, dtype='float64')
+            averagedData = averagingData(self.dependentVar, windowSize=windowSize, averagingType=dataAveraging)
+            averagedData = numpy.array(averagedData, dtype=numpy.float64)
 
-            missingNumHigh = (self.independentVar.size - averagedData.size) / 2
+            missingNumHigh = numpy.floor((self.independentVar.size - averagedData.size) / 2)
             missingNumLow = (self.independentVar.size - averagedData.size) - missingNumHigh
 
             self.dependentVar = averagedData
@@ -191,17 +189,20 @@ def returnSplineList(dependentVar, independentVar, subsetPercentage=0.4, cycles=
     """Expects sorted arrays.
 
     :ivar terminalExpansion: expand subsets on both sides
+
+    return TODO: what is returned?
     """
     expansions = ddict(list)
     expansionArea = (independentVar[-1] - independentVar[0]) * terminalExpansion
+    #adds 100 data points at both ends of the dependent and independent array
     for i in range(100):
         expansions['indUp'].append(independentVar[-1] + expansionArea/100*i)
         expansions['indDown'].append(independentVar[0] - expansionArea/100*(100-i+1))
         expansions['depUp'].append(dependentVar[-1])
         expansions['depDown'].append(dependentVar[0])
 
-    dependentVar = numpy.array(expansions['depDown'] + list(dependentVar) + expansions['depUp'], dtype='float64')
-    independentVar = numpy.array(expansions['indDown'] + list(independentVar) + expansions['indUp'], dtype='float64')
+    dependentVar = numpy.array(expansions['depDown'] + list(dependentVar) + expansions['depUp'], dtype=numpy.float64)
+    independentVar = numpy.array(expansions['indDown'] + list(independentVar) + expansions['indUp'], dtype=numpy.float64)
 
     splineList = list()
     for cycle in range(cycles):

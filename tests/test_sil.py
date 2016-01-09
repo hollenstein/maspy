@@ -1,7 +1,7 @@
 import sys
 sys.path.append('D:/Dropbox/python')
 import unittest
-import pyms.sil as module
+import maspy.sil as module
 
 
 class TestIsotopicLabelMethods(unittest.TestCase):

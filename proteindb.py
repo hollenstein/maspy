@@ -229,6 +229,7 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]', contamin
             proteinEntry.isUnique = True
         else:
             proteinEntry.isUnique = False
+    #Note: TODO, altough isoleucin is ignored, the protein entry should only show the actually present ILE / LEU occurence
     return proteindb
 
 

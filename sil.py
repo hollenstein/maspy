@@ -3,6 +3,7 @@ from __future__ import print_function
 import itertools
 
 import maspy.auxiliary as aux
+import maspy.constants
 import maspy.peptidemethods
 
 # --- Functions dealing with isotopic labels --- #
@@ -22,10 +23,10 @@ class LabelDescriptor(object):
 
         :ivar aminoAcidsLabels: Describes which amino acids can bear which labels
         possible keys amino acids in one letter code and ('nTerm', 'cTerm')
-        possible values are keys from :var:`pyms.auxiliary.unimodToMassDict` as strings or list of strings
+        possible values are keys from :var:`maspy.constants.unimodToMassDict` as strings or list of strings
         eg. {'nTerm':'188', 'K':['188', '188']} for one expected label at the nterminus and two expected labels at Lysine
         :ivar excludingModifications: Describes which modifications can prevent the addition of labels
-        keys and values have to be keys from :var:`pyms.auxiliary.unimodToMassDict` written as a string.
+        keys and values have to be keys from :var:`maspy.constants.unimodToMassDict` written as a string.
         eg. {'1':'188'} For each modification '1' that is present at an amino acid or terminus of a peptide
         the number of expected labels at this position is reduced by one
         """
@@ -68,7 +69,7 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
     # calculate the combined labels mass of the peptide
     labelMass = int()
     for labelMod, modCounts in labelModNumbers.items():
-        labelMass += aux.unimodToMassDict[labelMod] * modCounts
+        labelMass += maspy.constants.unimodToMassDict[labelMod] * modCounts
 
     # calculate mass differences to all other possible label states
     labelStateMassDifferences = dict()
@@ -84,7 +85,7 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
 
         possibleLabelMass = int()
         for labelMod, modCounts in labelModNumbers.items():
-            possibleLabelMass += aux.unimodToMassDict[labelMod] * modCounts
+            possibleLabelMass += maspy.constants.unimodToMassDict[labelMod] * modCounts
 
         possibleLabelMassDifference = possibleLabelMass - labelMass
         labelStateMassDifferences[possibleLabelState] = possibleLabelMassDifference

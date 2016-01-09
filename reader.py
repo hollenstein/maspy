@@ -110,7 +110,12 @@ def importMzmlSpectrumItems(siContainer, msrun, specfile, mzmlAccessions, import
 
             else:
                 currMsnContainerIdList.append(si.containerId)
-                setattr(si, 'ms1Id', lastMs1Item.containerId)
+                try:
+                    ms1Id = lastMs1Item.containerId
+                except UnboundLocalError:
+                    #In case the first MS2 scan preceeds the first MS1 scan (shouldn't occur normally)
+                    ms1Id = None
+                setattr(si, 'ms1Id', ms1Id)
     setattr(lastMs1Item, 'msnIdList', currMsnContainerIdList)
 
 

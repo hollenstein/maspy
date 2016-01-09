@@ -1,7 +1,7 @@
 import sys
 sys.path.append('D:/Dropbox/python')
 import unittest
-import pyms.peptidemethods as module
+import maspy.peptidemethods as module
 
 class TestTransformMassToMzMethods(unittest.TestCase):
     def test_calcMhFromMz(self):
@@ -37,4 +37,5 @@ class TestPeptideSequenceMethods(unittest.TestCase):
 
 class TestInsilicoDigestionMethods(unittest.TestCase):
     def test_digestInSilico(self):
+        pass
         #module.digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, removeNtermM=True, minLength=5, maxLength=40)
