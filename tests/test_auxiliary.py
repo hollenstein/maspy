@@ -38,3 +38,6 @@ class TestLookUpFileLocationMethods(unittest.TestCase):
 #class DataFit
 #def averagingData
 #def returnSplineList
+#runningMode
+#runningMean
+#runningMedian

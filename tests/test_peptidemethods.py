@@ -23,8 +23,8 @@ class TestTransformMassToMzMethods(unittest.TestCase):
 
 class TestPeptideSequenceMethods(unittest.TestCase):
     def test_calcPeptideMass(self):
-        self.assertEqual(module.calcPeptideMass('AADITSLYK'), 980.5178616504401)
-        self.assertEqual(module.calcPeptideMass('AADITS[UNIMOD:21]LYK'), 1060.48419265044)
+        self.assertEqual(round(module.calcPeptideMass('AADITSLYK'), 6), 980.517862)
+        self.assertEqual(round(module.calcPeptideMass('AADITS[UNIMOD:21]LYK'), 6), 1060.484192)
 
     def test_removeModifications(self):
         self.assertEqual(module.removeModifications('[UNIMOD:1]AADI[DSS]T[UNIMOD:21]SLYK'), 'AADITSLYK')
@@ -37,5 +37,59 @@ class TestPeptideSequenceMethods(unittest.TestCase):
 
 class TestInsilicoDigestionMethods(unittest.TestCase):
     def test_digestInSilico(self):
-        pass
-        #module.digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, removeNtermM=True, minLength=5, maxLength=40)
+        polypeptide = 'MSFLNASCTLCDEPISNRRKGEKIIELACGHLSHQECLIISGEIIELACGHLSHQECLIISECLIISGEIIELACGHLSHQECLIISECLIISGEIIELACGHLSHQECLIISRADAI'
+
+        #cleavage rules
+        params = {'cleavageRule':'[R]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':1000}
+        self.assertTrue(len(module.digestInSilico(polypeptide, **params)) == polypeptide.count('R') + 1)
+
+        params = {'cleavageRule':'[K]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':1000}
+        self.assertTrue(len(module.digestInSilico(polypeptide, **params)) == polypeptide.count('K') + 1)
+
+        params = {'cleavageRule':'[R]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':1000}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertIn('MSFLNASCTLCDEPISNR', peptides)
+        self.assertNotIn('MSFLNASCTLCDEPISNRRK', peptides)
+
+        params = {'cleavageRule':'[K]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':1000}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertIn('MSFLNASCTLCDEPISNRRK', peptides)
+        self.assertNotIn('MSFLNASCTLCDEPISNR', peptides)
+        self.assertNotIn('MSFLNASCTLCDEPISNRRKGEK', peptides)
+        self.assertNotIn('SFLNASCTLCDEPISNRRK', peptides)
+
+        params = {'cleavageRule':'\w(?=[R])', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':1000}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertIn('MSFLNASCTLCDEPISN', peptides)
+        self.assertNotIn('MSFLNASCTLCDEPISNR', peptides)
+
+        params = {'cleavageRule':'[K]', 'missedCleavages':1, 'removeNtermM':False, 'minLength':23, 'maxLength':23}
+        digestionresults = module.digestInSilico(polypeptide, **params)
+        self.assertEqual(digestionresults, [('MSFLNASCTLCDEPISNRRKGEK', {'endPos': 23, 'missedCleavage': 1, 'startPos': 1})])
+
+        #min and max length
+        params = {'cleavageRule':'[K]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':5, 'maxLength':1000}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertIn('MSFLNASCTLCDEPISNRRK', peptides)
+        self.assertNotIn('GEK', peptides)
+
+        params = {'cleavageRule':'[K]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':95}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertEqual(len(peptides), 3)
+
+        params = {'cleavageRule':'[K]', 'missedCleavages':0, 'removeNtermM':False, 'minLength':1, 'maxLength':94}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertEqual(len(peptides), 2)
+
+        #missed cleavage
+        params = {'cleavageRule':'[K]', 'missedCleavages':1, 'removeNtermM':False, 'minLength':5, 'maxLength':1000}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertEqual(len(peptides), 4)
+        self.assertIn('MSFLNASCTLCDEPISNRRKGEK', peptides)
+
+        #remove nterminal methionine
+        params = {'cleavageRule':'[K]', 'missedCleavages':1, 'removeNtermM':True, 'minLength':5, 'maxLength':40}
+        peptides = [pep for pep, info in module.digestInSilico(polypeptide, **params)]
+        self.assertEqual(len(peptides), 4)
+        self.assertIn('SFLNASCTLCDEPISNRRK', peptides)
+        self.assertIn('SFLNASCTLCDEPISNRRKGEK', peptides)

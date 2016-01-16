@@ -1,3 +1,5 @@
+from __future__ import print_function, division
+
 import zlib
 import numpy
 from base64 import b64decode as b64dec

@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 
 from collections import defaultdict as ddict
 import functools
@@ -8,7 +8,6 @@ import os
 
 import cPickle as pickle
 import numpy
-import pyteomics.mass
 
 import maspy.auxiliary as aux
 from maspy.auxiliary import lazyAttribute

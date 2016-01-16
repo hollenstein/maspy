@@ -8,20 +8,20 @@ class TestIsotopicLabelMethods(unittest.TestCase):
     def setUp(self):
         self.labelDescriptor = module.LabelDescriptor()
         self.labelDescriptor.addLabel({'K':'', 'R':''})
-        self.labelDescriptor.addLabel({'K':'188', 'R':'188'})
-        self.labelDescriptor.addLabel({'nTerm':'36', 'K':['188','36'], 'R':['188','36']}, {'1':'36'})
-        self.labelDescriptor.addLabel({'nTerm':'199', 'K':['188','199'], 'R':['188','199']}, {'1':'199'})
+        self.labelDescriptor.addLabel({'K':'u:188', 'R':'u:188'})
+        self.labelDescriptor.addLabel({'nTerm':'u:36', 'K':['u:188','u:36'], 'R':['u:188','u:36']}, {'u:1':'u:36'})
+        self.labelDescriptor.addLabel({'nTerm':'u:199', 'K':['u:188','u:199'], 'R':['u:188','u:199']}, {'u:1':'u:199'})
 
     def test_complex_returnLabelState(self):
         peptide0 = 'KASFDJK'
-        peptide1 = 'K[UNIMOD:188]ASFDJK[UNIMOD:188]'
-        peptide2 = '[UNIMOD:36]K[UNIMOD:188][UNIMOD:36]ASFDJK[UNIMOD:188][UNIMOD:36]'
-        peptide3 = '[UNIMOD:199]K[UNIMOD:188][UNIMOD:199]ASFDJK[UNIMOD:188][UNIMOD:199]'
-        peptide4 = '[UNIMOD:1]ASFDJ'
-        peptide5 = '[UNIMOD:1]K[UNIMOD:188]ASFDJK[UNIMOD:188]'
-        peptide6 = 'KASFDJ[UNIMOD:188]'
-        peptide7 = '[UNIMOD:1]KASFDJK[UNIMOD:188]'
-        peptide8 = '[UNIMOD:1]ASF[UNIMOD:188]DJ'
+        peptide1 = 'K[u:188]ASFDJK[u:188]'
+        peptide2 = '[u:36]K[u:188][u:36]ASFDJK[u:188][u:36]'
+        peptide3 = '[u:199]K[u:188][u:199]ASFDJK[u:188][u:199]'
+        peptide4 = '[u:1]ASFDJ'
+        peptide5 = '[u:1]K[u:188]ASFDJK[u:188]'
+        peptide6 = 'KASFDJ[u:188]'
+        peptide7 = '[u:1]KASFDJK[u:188]'
+        peptide8 = '[u:1]ASF[u:188]DJ'
 
         self.assertEqual(module.returnLabelState(peptide0, self.labelDescriptor), 0)
         self.assertEqual(module.returnLabelState(peptide1, self.labelDescriptor), 1)
@@ -36,10 +36,10 @@ class TestIsotopicLabelMethods(unittest.TestCase):
     def test_simple_returnLabelState(self):
         labelDescriptor = module.LabelDescriptor()
         labelDescriptor.addLabel({'K':'', 'R':''})
-        labelDescriptor.addLabel({'K':'188', 'R':'188'})
+        labelDescriptor.addLabel({'K':'u:188', 'R':'u:188'})
 
         peptide0 = 'ASFDJK'
-        peptide1 = 'ASFDJK[UNIMOD:188]'
+        peptide1 = 'ASFDJK[u:188]'
         peptide2 = 'ASFDJ'
 
         self.assertEqual(module.returnLabelState(peptide0, labelDescriptor), 0)
@@ -48,29 +48,41 @@ class TestIsotopicLabelMethods(unittest.TestCase):
 
     def test_returnLabelStateMassDifferences(self):
         peptide0 = 'KASFDJK'
-        peptide1 = '[UNIMOD:1]KASFDJK'
-        peptide2 = 'KASFDJ[UNIMOD:188]'
+        peptide1 = '[u:1]KASFDJK'
+        peptide2 = 'KASFDJ[u:188]'
 
-        self.assertEqual(module.returnLabelStateMassDifferences(peptide0, self.labelDescriptor), {1: 12.040258, 2: 96.134158, 3: 108.20947899999999})
-        self.assertEqual(module.returnLabelStateMassDifferences(peptide1, self.labelDescriptor), {1: 12.040258, 2: 68.102858, 3: 76.153072})
+        result = dict([(acc, round(mass, 6)) for acc, mass in
+                       module.returnLabelStateMassDifferences(peptide0, self.labelDescriptor).items()])
+        self.assertEqual(result, {1: 12.040258, 2: 96.134158, 3: 108.209479})
+
+        result = dict([(acc, round(mass, 6)) for acc, mass in
+                       module.returnLabelStateMassDifferences(peptide1, self.labelDescriptor).items()])
+        self.assertEqual(result, {1: 12.040258, 2: 68.102858, 3: 76.153072})
+
         self.assertEqual(module.returnLabelStateMassDifferences(peptide2, self.labelDescriptor), {})
 
     def test_modSymbolsFromLabelInfo(self):
-        self.assertEqual(module.modSymbolsFromLabelInfo(self.labelDescriptor), {'188', '199', '36'})
+        self.assertEqual(module.modSymbolsFromLabelInfo(self.labelDescriptor), {'u:188', 'u:199', 'u:36'})
 
     def test_modAminoacidsFromLabelInfo(self):
         self.assertEqual(module.modAminoacidsFromLabelInfo(self.labelDescriptor), {'K', 'R', 'nTerm'})
 
     def test_expectedLabelPosition(self):
         peptide0 = 'KASFDJK'
-        peptide1 = '[UNIMOD:1]KASFDJK'
+        peptide1 = '[u:1]KASFDJK'
 
         self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[0]), {})
-        self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[1]), {0: ['188'], 6: ['188']})
-        self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[2]), {0: ['188', '36', '36'], 6: ['188', '36']})
-        self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[3]), {0: ['188', '199', '199'], 6: ['188', '199']})
+        self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[1]),
+                         {0: ['u:188'], 6: ['u:188']})
+        self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[2]),
+                         {0: ['u:188', 'u:36', 'u:36'], 6: ['u:188', 'u:36']})
+        self.assertEqual(module.expectedLabelPosition(peptide0, self.labelDescriptor.labels[3]),
+                         {0: ['u:188', 'u:199', 'u:199'], 6: ['u:188', 'u:199']})
 
         self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[0]), {})
-        self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[1]), {0: ['188'], 6: ['188']})
-        self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[2]), {0: ['188', '36'], 6: ['188', '36']})
-        self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[3]), {0: ['188', '199'], 6: ['188', '199']})
+        self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[1]),
+                         {0: ['u:188'], 6: ['u:188']})
+        self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[2]),
+                         {0: ['u:188', 'u:36'], 6: ['u:188', 'u:36']})
+        self.assertEqual(module.expectedLabelPosition(peptide1, self.labelDescriptor.labels[3]),
+                         {0: ['u:188', 'u:199'], 6: ['u:188', 'u:199']})

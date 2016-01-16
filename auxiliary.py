@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 
 from collections import defaultdict as ddict
 import functools
@@ -172,13 +172,12 @@ class DataFit(object):
 
 def averagingData(array, windowSize=None, averagingType='median'):
     assert averagingType in ['median', 'mean']
+    if windowSize is None:
+        windowSize = int(len(array) / 50) if int(len(array) / 50) > 100 else 100
+
     if averagingType == 'median':
-        if windowSize is None:
-            windowSize = int(float(len(array)) / (50)) if int(float(len(array) / (50))) > 100 else 100
         averagedData = runningMedian(array, windowSize)
     elif averagingType == 'mean':
-        if windowSize is None:
-            windowSize = int(float(len(array)) / (50)) if int(float(len(array) / (50))) > 100 else 100
         averagedData = runningMean(array, None, windowSize)
     return averagedData
 
@@ -206,7 +205,7 @@ def returnSplineList(dependentVar, independentVar, subsetPercentage=0.4, cycles=
 
     splineList = list()
     for cycle in range(cycles):
-        subset = sorted(random.sample(xrange(len(dependentVar)), int(len(dependentVar)*subsetPercentage )) )
+        subset = sorted(random.sample(range(len(dependentVar)), int(len(dependentVar) * subsetPercentage)))
         terminalExpansion
 
         dependentSubset = dependentVar[subset]
@@ -221,9 +220,9 @@ def returnSplineList(dependentVar, independentVar, subsetPercentage=0.4, cycles=
         newKnotList = [lastKnot]
         for knotPos in range(1,len(knots)):
             nextKnot = knots[knotPos]
-            numHits = len(independentSubset[(independentSubset >= lastKnot) & (independentSubset <= nextKnot)] )
+            numHits = len(independentSubset[(independentSubset >= lastKnot) & (independentSubset <= nextKnot)])
             if numHits >= minKnotPoints:
-                newKnotList.append( nextKnot )
+                newKnotList.append(nextKnot)
                 lastKnot = nextKnot
         knots = newKnotList
 

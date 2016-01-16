@@ -1,4 +1,4 @@
-from __future__ import print_function
+from __future__ import print_function, division
 
 import itertools
 
@@ -23,11 +23,11 @@ class LabelDescriptor(object):
 
         :ivar aminoAcidsLabels: Describes which amino acids can bear which labels
         possible keys amino acids in one letter code and ('nTerm', 'cTerm')
-        possible values are keys from :var:`maspy.constants.unimodToMassDict` as strings or list of strings
-        eg. {'nTerm':'188', 'K':['188', '188']} for one expected label at the nterminus and two expected labels at Lysine
+        possible values are keys from :var:`maspy.constants.aaModMass` as strings or list of strings
+        eg. {'nTerm':'u:188', 'K':['u:188', 'u:188']} for one expected label at the nterminus and two expected labels at Lysine
         :ivar excludingModifications: Describes which modifications can prevent the addition of labels
-        keys and values have to be keys from :var:`maspy.constants.unimodToMassDict` written as a string.
-        eg. {'1':'188'} For each modification '1' that is present at an amino acid or terminus of a peptide
+        keys and values have to be keys from :var:`maspy.constants.aaModMass` written as a string.
+        eg. {'u:1':'u:188'} For each modification 'u:1' that is present at an amino acid or terminus of a peptide
         the number of expected labels at this position is reduced by one
         """
         if excludingModifications is not None:
@@ -69,7 +69,7 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
     # calculate the combined labels mass of the peptide
     labelMass = int()
     for labelMod, modCounts in labelModNumbers.items():
-        labelMass += maspy.constants.unimodToMassDict[labelMod] * modCounts
+        labelMass += maspy.constants.aaModMass[labelMod] * modCounts
 
     # calculate mass differences to all other possible label states
     labelStateMassDifferences = dict()
@@ -85,7 +85,7 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
 
         possibleLabelMass = int()
         for labelMod, modCounts in labelModNumbers.items():
-            possibleLabelMass += maspy.constants.unimodToMassDict[labelMod] * modCounts
+            possibleLabelMass += maspy.constants.aaModMass[labelMod] * modCounts
 
         possibleLabelMassDifference = possibleLabelMass - labelMass
         labelStateMassDifferences[possibleLabelState] = possibleLabelMassDifference
@@ -110,7 +110,7 @@ def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacid
     labelAminoacids = modAminoacidsFromLabelInfo(labelDescriptor) if labelAminoacids is None else labelAminoacids
 
     sequence = maspy.peptidemethods.removeModifications(peptide)
-    modPositions = maspy.peptidemethods.returnModPositions(peptide, indexStart=0)
+    modPositions = maspy.peptidemethods.returnModPositions(peptide, indexStart=0, removeModString=False)
 
     labelState = None
 

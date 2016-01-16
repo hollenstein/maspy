@@ -1,10 +1,8 @@
-from __future__ import print_function
+from __future__ import print_function, division
 
 import itertools
-import re
-
 import numpy
-import pyteomics.mass
+import re
 
 from maspy.auxiliary import lazyAttribute
 import maspy.peptidemethods
@@ -35,7 +33,7 @@ class PeptideSequence(object):
         return len(self.sequence)
     @lazyAttribute
     def mass(self):
-        return pyteomics.mass.calculate_mass(self.sequence, charge=0)
+        return maspy.peptidemethods.calcPeptideMass(self.sequence)
 
 
 class ProteinSequence(object):
@@ -63,7 +61,7 @@ class ProteinSequence(object):
 
     @lazyAttribute
     def mass(self):
-        return pyteomics.mass.calculate_mass(self.sequence, charge=0)
+        return maspy.peptidemethods.calcPeptideMass(self.sequence)
 
     @lazyAttribute
     def length(self):

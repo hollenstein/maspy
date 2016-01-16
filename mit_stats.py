@@ -76,7 +76,7 @@ def runningMedian(seq, M):
     """
     seq = iter(seq)
     s = []
-    m = M // 2
+    m = M // 2 #// does a truncated division like integer division in Python 2
 
     # Set up list s (to be sorted) and load deque with first window of seq
     s = [item for item in islice(seq,M)]
@@ -114,12 +114,12 @@ def runningMean(seq, N, M):
     """
     # Load deque (d) with first window of seq
     d = deque(seq[0:M])
-    means = [float(sum(d))/len(d)] # contains mean of first window
+    means = [sum(d) / len(d)] # contains mean of first window
     # Now slide the window by one point to the right for each new position (each pass through
     # the loop). Stop when the item in the right end of the deque contains the last item in seq
     for item in islice(seq, M, N):
         old = d.popleft()            # pop oldest from left
         d.append(item)               # push newest in from right
-        m = float(sum(d))/len(d)
+        m = sum(d) / len(d)
         means.append(m)     # mean for current window
     return means
