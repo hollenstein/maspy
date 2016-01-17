@@ -1,3 +1,4 @@
+from __future__ import print_function, division
 import copy
 
 import pyteomics.mass
@@ -149,6 +150,16 @@ expasy_rules = {'arg-c': 'R',
                 }
 
 mzmlAccessions = dict()
+""" A dictionary with accession ids of the PSI controlled vocabulary which should be
+extracted from spectra of parsed mzML files. Each entry contains a dictionary with the
+keys 'name' and 'msLevel'. The 'name' specifies the attribute name that will be used
+to store the value in the SpectrumItem. 'msLevel' can be set if an attribute should
+only be extraced for spectra of a certain ms level, default is None.
+
+For details on the PSI controlled vocabulary see:
+http://www.psidev.info/controlled-vocabularies
+http://psidev.cvs.sourceforge.net/viewvc/psidev/psi/psi-ms/mzML/controlledVocabulary/psi-ms.obo
+"""
 mzmlAccessions['MS:1000927'] = {'name':'iit', 'msLevel':None}
 mzmlAccessions['MS:1000285'] = {'name':'tic', 'msLevel':None}
 mzmlAccessions['MS:1000016'] = {'name':'rt', 'msLevel':None}

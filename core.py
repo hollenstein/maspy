@@ -22,7 +22,8 @@ class ContainerItem(object):
     :ivar containerId: used to look up item in :attr:`ItemContainer.index`
     :ivar id: identifier in original file
     :ivar specfile: Keyword (filename) to represent the originating file
-    :ivar isValid: should evaluate to True or False, None if unspecified - used to filter data
+    :ivar isValid: this attribute can be used to filter data.
+    Should be set to True or False, None if unspecified
 
     See also :class:`ItemContainer`
     """
@@ -83,8 +84,8 @@ class ItemContainer(object):
 
         :param specfiles: filenames of spectrum files - return only items from those files.
         :type specfiles: str or [str, str, ...]
-        :param sort: if sort is None items are returned in the import order, otherwise the items are sorted according to the
-        item attribute specified by sort
+        :param sort: if sort is specified the returned list of items is sorted according to the
+        item attribute specified by sort.
         :param reverse: boolean to reverse sort order
 
         :param selector: a function which is called with the value of
@@ -174,7 +175,7 @@ class ItemContainer(object):
 
     def _save(self, filefolder, filename):
         filename = '.'.join((filename, self.__class__.__name__.lower()))
-        filepath = os.path.join(filefolder, filename).replace('\\', '/')
+        filepath = aux.joinpath(filefolder, filename)
         with open(filepath, 'w') as openFile:
             pickle.dump(self, openFile)
 
@@ -196,7 +197,7 @@ class ItemContainer(object):
     @classmethod
     def _load(cls, filefolder, filename):
         filename = '.'.join((filename, cls.__name__.lower()))
-        filepath = os.path.join(filefolder, filename).replace('\\', '/')
+        filepath = aux.joinpath(filefolder, filename)
         with open(filepath, 'r') as openFile:
             return pickle.load(openFile)
 
@@ -214,6 +215,8 @@ class ItemContainer(object):
         return self.__str__()
 
     def itemStats(self):
+        """Prints the names and the number of occurences of all item attributes that are set
+        in items stored in the container instance. """
         itemAttributes = ddict(int)
         for item in self.getItems(filterAttribute=None):
             for key in item.__dict__.keys():
@@ -232,15 +235,12 @@ class ItemContainer(object):
 def addContainer(baseContainer, *newContainers):
     """Merge the content of multiple instances of :class:`ItemContainer` or its subclasses, containers must be of same type.
 
-    :param baseContainer: append newContainers to the baseContainer, can be an class or an instance
+    :param baseContainer: append newContainers to the baseContainer, has to a class instance
     :param newContainer: one or multiple containers to be appended to the baseContainer
 
     CAUTION, order of :class:`SpectrumIdentificationItem` in :attr:`SiiContainer.index` can be changed by merging
-    #todo
+    #TODO
     """
-    if isinstance(baseContainer, type):
-        baseContainer = baseContainer()
-
     for newContainer in newContainers:
         if not isinstance(newContainer, type(baseContainer)):
             print('Cannot combine different container classes, ',
@@ -267,9 +267,7 @@ def addContainer(baseContainer, *newContainers):
 
                     if baseContainer.__class__.__name__ == 'SiContainer':
                         if len(newContainer.ionLists) > 0:
-                            baseContainer.ionLists[newItem.containerId] = dict()
-                            baseContainer.ionLists[newItem.containerId]['i'] = newContainer.ionLists[newItem.containerId]['i']
-                            baseContainer.ionLists[newItem.containerId]['mz'] = newContainer.ionLists[newItem.containerId]['mz']
+                            baseContainer.ionLists[newItem.containerId] = dict(newContainer.ionLists[newItem.containerId])
             else:
                 print(specfile, 'already present in baseContainer.')
     return baseContainer
@@ -291,7 +289,7 @@ class SiContainer(ItemContainer):
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
 
     :ivar ionLists: spectrum ion m/z and intensity information, not loaded by default
-    dict(containerId=dict(mz=nump.array([mass / charge, ...]), i=numpy.array([intensity, ...]))).
+    dict(containerId=dict(mz=numpy.array([mass / charge, ...]), i=numpy.array([intensity, ...]))).
     """
     def __init__(self):
         super(SiContainer, self).__init__()
@@ -302,9 +300,9 @@ class SiContainer(ItemContainer):
 
         Stores the ionList in a separate file with appendix '.ionlist'.
         """
-        ionLists = self.ionLists
-        del(self.ionLists)
         try:
+            ionLists = self.ionLists
+            del self.ionList
             super(self.__class__, self).save(filefolder, filename)
         finally:
             self.ionLists = ionLists
@@ -335,9 +333,7 @@ class SiContainer(ItemContainer):
         if importIonList and os.path.isfile(ionListFilePath):
             importedArray = numpy.load(ionListFilePath)
             for key, mzList, iList in itertools.izip(importedArray[0], importedArray[1], importedArray[2]):
-                siContainer.ionLists[key] = dict()
-                siContainer.ionLists[key]['mz'] = mzList
-                siContainer.ionLists[key]['i'] = iList
+                siContainer.ionLists[key] = {'mz': mzList, 'i':iList}
         return siContainer
 
 
@@ -383,10 +379,7 @@ class SiiContainer(ItemContainer):
         """
         if not isinstance(key, tuple):
             key = tuple(key)
-        items = list()
-        for item in self.index[key]:
-            if item.isValid:
-                items.append(item)
+        items = [item for item in self.index[key] if item.isValid]
         items = items[0] if len(items) == 1 else tuple(items)
         return items
 
@@ -434,7 +427,7 @@ class SiiContainer(ItemContainer):
 
 
 class FeatureItem(ContainerItem):
-    """Representation of a peptide elution feature.
+    """Representation of a peptide LC-MS feature.
 
     :ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
     :ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
