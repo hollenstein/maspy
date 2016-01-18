@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 import itertools
 import re
@@ -100,7 +101,7 @@ def calcPeptideMass(peptide, **kwargs):
 
     addModMass = float()
     unmodPeptide = peptide
-    for modId, modMass in aaModMass.items():
+    for modId, modMass in viewitems(aaModMass):
         modSymbol = '[' + modId + ']'
         numMod = peptide.count(modSymbol)
         if numMod > 0:

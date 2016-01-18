@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 from collections import defaultdict as ddict
 import functools
@@ -6,6 +7,7 @@ import math
 import operator
 import os
 import random
+import re
 
 import numpy
 from scipy.interpolate import LSQUnivariateSpline
@@ -87,13 +89,19 @@ def matchingFilePaths(targetfilename, directory, targetFileExtension=None, selec
     return targetFilePaths
 
 
-def findAllSubstrings(a_str, sub):
+def findAllSubstrings(string, substring):
+    """ Returns a list of all substring starting positions in string
+    or an empty list if substring is not present in string."""
+    #TODO: solve with regex? what about '.': return [m.start() for m in re.finditer('(?='+substring+')', string)]
     start = 0
+    positions = []
     while True:
-        start = a_str.find(sub, start)
-        if start == -1: return
-        yield start
-        start +=  1# use start += 1 to find overlapping matches, otherwise len(sub)
+        start = string.find(substring, start)
+        if start == -1:
+            break
+        positions.append(start)
+        start += 1 #to find overlapping matches
+    return positions
 
 
 def toList(variable, types=(str, int, float)):
@@ -112,7 +120,7 @@ def joinpath(path, *paths):
     return os.path.join(path, *paths).replace('\\','/')
 
 
-class Factorial():
+class Factorial(object):
     def __getitem__(self, n):
         try:
             return getattr(self, str(n))

@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 from maspy.auxiliary import lazyAttribute
 import maspy.proteindb
@@ -63,8 +64,8 @@ class EvidenceContainer(object):
     :ivar peptideEvidence: {peptide: :class:`PeptideEvidence`, ...}
 
     :ivar uniqueProteins: list of protein ids which have at least one unique peptideEvidence entry.
-    :ivar scoreKey: score attribtue name of :class:`SiiItem`
-    :ivar largerBetter: boolean, True if a larger score is better
+    :ivar scoreKey: specify what attribute of :class:`SiiItem` should be used as a peptide identification score
+    :ivar largerBetter: boolean, True if a larger peptide identification score is better
     """
     def __init__(self, proteinDatabase):
         assert isinstance(proteinDatabase, maspy.proteindb.ProteinDatabase)
@@ -79,7 +80,7 @@ class EvidenceContainer(object):
     def calculateCoverage(self):
         """Calcualte the sequence coverage masks for all ProteinEvidence() elements.
 
-        For detailed description see :func:`ProteinDatabase._calculateCoverageMasks`
+        For detailed description see :func:`maspy.proteindb.ProteinDatabase._calculateCoverageMasks`
         """
         maspy.proteindb.ProteinDatabase._calculateCoverageMasks(self.proteinEvidence, self.peptideEvidence)
 
@@ -116,11 +117,13 @@ def generateEvidence(evContainer, siiContainer, scoreKey, largerBetter, peptideK
                 pepEv.scores.append(siiScore)
                 evContainer.peptideEvidence[peptide] = pepEv
             except KeyError:
+                #TODO: sequences without a protein entry should be accessible via a own list
+                #-> one print stateing the number of peptides without a protein in the end
                 print('Sequence not found in evContainer.db.peptides: ', sii.sequence, sii.containerId)
                 pass
 
     #Assemble peptide evidence into protein evidence
-    for peptide, pepEv in evContainer.peptideEvidence.items():
+    for peptide, pepEv in viewitems(evContainer.peptideEvidence):
         for protein in pepEv.proteins:
             if protein in evContainer.proteinEvidence:
                 proteinEv = evContainer.proteinEvidence[protein]
@@ -139,7 +142,7 @@ def generateEvidence(evContainer, siiContainer, scoreKey, largerBetter, peptideK
 
     #Define proteins which have unique evidence
     evContainer.uniqueProteins = list()
-    for proteinEv in evContainer.proteinEvidence.values():
+    for proteinEv in viewvalues(evContainer.proteinEvidence):
         if len(proteinEv.uniquePeptides) > 0:
             proteinEv.isUnique = True
             evContainer.uniqueProteins.append(proteinEv.id)

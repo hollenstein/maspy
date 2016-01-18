@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 import itertools
 
@@ -61,30 +62,30 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
 
     # define type and number of labels of the peptide
     labelModNumbers = dict()
-    for labelStateModList in expectedLabelPosition(peptide, labelDescriptor.labels[labelState], sequence=sequence).values():
+    for labelStateModList in viewvalues(expectedLabelPosition(peptide, labelDescriptor.labels[labelState], sequence=sequence)):
         for labelMod in labelStateModList:
             labelModNumbers.setdefault(labelMod, int())
             labelModNumbers[labelMod] += 1
 
     # calculate the combined labels mass of the peptide
     labelMass = int()
-    for labelMod, modCounts in labelModNumbers.items():
+    for labelMod, modCounts in viewitems(labelModNumbers):
         labelMass += maspy.constants.aaModMass[labelMod] * modCounts
 
     # calculate mass differences to all other possible label states
     labelStateMassDifferences = dict()
-    for possibleLabelState in labelDescriptor.labels.keys():
+    for possibleLabelState in viewkeys(labelDescriptor.labels):
         if possibleLabelState == labelState:
             continue
 
         labelModNumbers = dict()
-        for labelStateModList in expectedLabelPosition(peptide, labelDescriptor.labels[possibleLabelState], sequence=sequence).values():
+        for labelStateModList in viewvalues(expectedLabelPosition(peptide, labelDescriptor.labels[possibleLabelState], sequence=sequence)):
             for labelMod in labelStateModList:
                 labelModNumbers.setdefault(labelMod, int())
                 labelModNumbers[labelMod] += 1
 
         possibleLabelMass = int()
-        for labelMod, modCounts in labelModNumbers.items():
+        for labelMod, modCounts in viewitems(labelModNumbers):
             possibleLabelMass += maspy.constants.aaModMass[labelMod] * modCounts
 
         possibleLabelMassDifference = possibleLabelMass - labelMass
@@ -124,15 +125,15 @@ def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacid
     if labelState is None:
         peptideLabelPositions = dict()
         for labelSymbol in labelSymbols:
-            if labelSymbol in modPositions.keys():
+            if labelSymbol in viewkeys(modPositions):
                 for sequencePosition in modPositions[labelSymbol]:
                     peptideLabelPositions.setdefault(sequencePosition, list())
                     peptideLabelPositions[sequencePosition].append(labelSymbol)
-        for sequencePosition in peptideLabelPositions.keys():
+        for sequencePosition in list(viewkeys(peptideLabelPositions)):
             peptideLabelPositions[sequencePosition] = sorted(peptideLabelPositions[sequencePosition])
 
         predictedLabelStates = dict()
-        for predictedLabelState, labelStateInfo in labelDescriptor.labels.items():
+        for predictedLabelState, labelStateInfo in viewitems(labelDescriptor.labels):
             expectedLabelMods = expectedLabelPosition(peptide, labelStateInfo, sequence=sequence, modPositions=modPositions)
             predictedLabelStates[predictedLabelState] = expectedLabelMods
             if peptideLabelPositions == expectedLabelMods:
@@ -158,8 +159,8 @@ def modSymbolsFromLabelInfo(labelDescriptor):
     :ivar labelDescriptor: :class:`LabelDescriptor` describes the label setup of an experiment
     """
     modSymbols = set()
-    for labelStateEntry in labelDescriptor.labels.values():
-        for labelPositionEntry in labelStateEntry['aminoAcidLabels'].values():
+    for labelStateEntry in viewvalues(labelDescriptor.labels):
+        for labelPositionEntry in viewvalues(labelStateEntry['aminoAcidLabels']):
             for modSymbol in aux.toList(labelPositionEntry):
                 if modSymbol != '':
                     modSymbols.add(modSymbol)
@@ -172,8 +173,8 @@ def modAminoacidsFromLabelInfo(labelDescriptor):
     :ivar labelDescriptor: :class:`LabelDescriptor` describes the label setup of an experiment
     """
     modAminoacids = set()
-    for labelStateEntry in labelDescriptor.labels.values():
-        for labelPositionEntry in labelStateEntry['aminoAcidLabels'].keys():
+    for labelStateEntry in viewvalues(labelDescriptor.labels):
+        for labelPositionEntry in viewkeys(labelStateEntry['aminoAcidLabels']):
             for modAminoacid in aux.toList(labelPositionEntry):
                 if modAminoacid != '':
                     modAminoacids.add(modAminoacid)
@@ -195,7 +196,7 @@ def expectedLabelPosition(peptide, labelStateInfo, sequence=None, modPositions=N
     sequence = maspy.peptidemethods.removeModifications(peptide) if sequence is None else sequence
 
     currLabelMods = dict()
-    for labelPosition, labelSymbols in labelStateInfo['aminoAcidLabels'].items():
+    for labelPosition, labelSymbols in viewitems(labelStateInfo['aminoAcidLabels']):
         labelSymbols = aux.toList(labelSymbols)
         if labelSymbols == ['']:
             pass
@@ -208,7 +209,7 @@ def expectedLabelPosition(peptide, labelStateInfo, sequence=None, modPositions=N
                 currLabelMods[sequencePosition].extend(labelSymbols)
 
     if labelStateInfo['excludingModifications'] is not None:
-        for excludingModification, excludedLabelSymbol in labelStateInfo['excludingModifications'].items():
+        for excludingModification, excludedLabelSymbol in viewitems(labelStateInfo['excludingModifications']):
             if excludingModification in modPositions:
                 for excludingModPosition in modPositions[excludingModification]:
                     if excludingModPosition in currLabelMods:
@@ -219,6 +220,6 @@ def expectedLabelPosition(peptide, labelStateInfo, sequence=None, modPositions=N
                                 excludedModIndex = currLabelMods[excludingModPosition].index(excludedLabelSymbol)
                                 currLabelMods[excludingModPosition].pop(excludedModIndex)
 
-    for sequencePosition in currLabelMods.keys():
+    for sequencePosition in list(viewkeys(currLabelMods)):
         currLabelMods[sequencePosition] = sorted(currLabelMods[sequencePosition])
     return currLabelMods

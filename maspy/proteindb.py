@@ -1,11 +1,15 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
+import io
 import itertools
 import numpy
 import re
 
 from maspy.auxiliary import lazyAttribute
 import maspy.peptidemethods
+import pyteomics
+import pyteomics.fasta
 
 # --- Protein and peptide related classes --- #
 class PeptideSequence(object):
@@ -116,7 +120,7 @@ class ProteinDatabase(object):
         :ivar :attr:`PeptideSequence.coverageMaskUnique`: coverage mask of unique peptides
         :ivar :attr:`PeptideSequence.coverageMaskShared`: coverage mask of shared peptides
         """
-        for proteinId, proteinEntry in proteindb.items():
+        for proteinId, proteinEntry in viewitems(proteindb):
             coverageMaskUnique = numpy.zeros(proteinEntry.length, dtype='bool')
             for peptide in proteinEntry.uniquePeptides:
                 startPos, endPos = peptidedb[peptide].proteinPositions[proteinId]
@@ -207,14 +211,14 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]', contamin
                 currPeptide.proteins.add(proteinId)
                 currPeptide.proteinPositions[proteinId] = (info['startPos'], info['endPos'])
 
-    for peptide, peptideEntry in proteindb.peptides.items():
+    for peptide, peptideEntry in viewitems(proteindb.peptides):
         numProteinMatches = len(peptideEntry.proteins)
         if numProteinMatches == 1:
             peptideEntry.isUnique = True
         elif numProteinMatches > 1:
             peptideEntry.isUnique = False
         else:
-            print('No protein matches in proteindb for peptide sequence: ', peptide)
+            raise Exception('No protein matches in proteindb for peptide sequence: ', peptide)
 
         for proteinId in peptideEntry.proteins:
             if peptideEntry.isUnique:
@@ -222,7 +226,7 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]', contamin
             else:
                 proteindb.proteins[proteinId].sharedPeptides.add(peptide)
 
-    for proteinEntry in proteindb.proteins.values():
+    for proteinEntry in viewvalues(proteindb.proteins):
         if len(proteinEntry.uniquePeptides) > 0:
             proteinEntry.isUnique = True
         else:
@@ -242,7 +246,7 @@ def _readFastaFile(fastaFileLocation):
     See also :func:`returnDigestedFasta` and :func:`maspy.peptidemethods.digestInSilico`
     """
     fastaPattern = '(?P<header>([>;].+\n)+)(?P<sequence>[A-Z\*\n]+)' #[\*\n)
-    with open(fastaFileLocation, 'r') as openfile:
+    with io.open(fastaFileLocation, 'rb') as openfile:
         readfile = openfile.read()
         entries = list()
 

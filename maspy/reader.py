@@ -1,6 +1,8 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 import csv
+import io
 import itertools
 import os
 import re
@@ -23,7 +25,7 @@ def pymzmlReadMzml(mzmlPath, mzmlAccessions):
     :ivar mzmlAccessions: a diciontary describing the attributes that will be extracted from the mzml file, see: :func:`importSpectrumItems`.
     """
     extraAccessions = list()
-    for accessionId in mzmlAccessions.keys():
+    for accessionId in viewkeys(mzmlAccessions):
         extraAccessions.append((accessionId, ['value', 'unitName']))
     return pymzml.run.Reader(mzmlPath, extraAccessions=extraAccessions)
 
@@ -77,7 +79,7 @@ def importMzmlSpectrumItems(siContainer, msrun, specfile, mzmlAccessions, import
         si = maspy.core.SpectrumItem(str(spectrum['id']), specfile)
         si.msLevel = spectrum['ms level']
         si.isValid = True
-        for accessionId, accessionInfo in mzmlAccessions.items():
+        for accessionId, accessionInfo in viewitems(mzmlAccessions):
             if accessionInfo['msLevel'] is None or si.msLevel == accessionInfo['msLevel']:
                 if accessionId in spectrum:
                     setattr(si, accessionInfo['name'], spectrum[accessionId][0])
@@ -91,7 +93,7 @@ def importMzmlSpectrumItems(siContainer, msrun, specfile, mzmlAccessions, import
 
     currMsnContainerIdList = list()
     for spectrum in msrun:
-        if spectrum['ms level'] >= 1:
+        if spectrum['ms level'] is not None and spectrum['ms level'] >= 1:
             si = _generateSpectrumItem(spectrum)
             siContainer.container[specfile].append(si)
             siContainer.index[si.containerId] = si
@@ -177,7 +179,7 @@ def importMgfSpectrumItems(siContainer, specfilePath, specfile, importIonList=Fa
                 iList.append(ionEntry[1])
         return mzList, iList
 
-    with open(specfilePath,'rb') as mgfFile:
+    with io.open(specfilePath,'rb') as mgfFile:
         mgfRead  = mgfFile.read()
         mgfSplit = mgfRead.split('BEGIN IONS\n')
         for mgfEntry in mgfSplit:
@@ -344,14 +346,14 @@ def _importPercolatorResults(fileLocation, psmEngine=None):
     See also :func:`importPsmResults` and :func:`_importFromPercolatorArray`
     """
     #HEADERLINE: xtandem seperates proteins with ';', msgf separates proteins by a tab
-    with open(fileLocation,'rb') as openFile:
+    with io.open(fileLocation,'rb') as openFile:
         tsvreader = csv.reader(openFile, delimiter='\t')
-        headerLine = tsvreader.next()
+        headerLine = next(tsvreader)
         headerDict = dict([[y,x] for (x,y) in enumerate(headerLine)])
         scanEntryList = list()
         for line in tsvreader:
             entryDict = dict()
-            for headerName,headerPos in headerDict.items():
+            for headerName,headerPos in viewitems(headerDict):
                 entryDict[headerName] = line[headerPos]
             if psmEngine == 'msgf':
                 entryDict['proteinIds'] = list(line[headerDict['proteinIds']:])
@@ -360,16 +362,16 @@ def _importPercolatorResults(fileLocation, psmEngine=None):
             scanEntryList.append(entryDict)
 
     scanArrDict = dict()
-    for headerName in headerDict.keys():
+    for headerName in viewkeys(headerDict):
         scanArrDict[headerName] = list()
 
     # Define list of headers #
     for scanEntryDict in scanEntryList:
-        for headerName,entry in scanEntryDict.items():
+        for headerName,entry in viewitems(scanEntryDict):
             if headerName in ['score','q-value','posterior_error_prob']:
-                scanArrDict[headerName].append( float(entry) )
+                scanArrDict[headerName].append(float(entry))
             else:
-                scanArrDict[headerName].append( entry )
+                scanArrDict[headerName].append(entry)
 
     if psmEngine in ['comet','msgf','xtandem']:
         scanNrList = list()
@@ -383,7 +385,7 @@ def _importPercolatorResults(fileLocation, psmEngine=None):
     else:
         print('No valid psm engine specified, can\'t import percolator results!')
 
-    for headerName in scanArrDict.keys():
+    for headerName in list(viewkeys(scanArrDict)):
         scanArrDict[headerName] = numpy.array(scanArrDict[headerName])
     return scanArrDict
 
@@ -407,7 +409,7 @@ def importPeptideFeatures(featureContainer, filelocation, specfile):
             featureContainer.container[specfile] = list()
             featureDict = _importFeatureXml(filelocation)
 
-            for featureId, featureEntryDict in featureDict.items():
+            for featureId, featureEntryDict in viewitems(featureDict):
                 rtArea = set()
                 for convexHullEntry in featureEntryDict['convexHullDict']['0']:
                     rtArea.update([convexHullEntry[0]])
@@ -439,7 +441,7 @@ def _importFeatureXml(fileLocation):
 
     See also :func:`importPeptideFeatures`
     """
-    with open(fileLocation, 'r') as openFile:
+    with io.open(fileLocation, 'rb') as openFile:
         readingFeature = False
         readingHull = False
         featureDict = dict()

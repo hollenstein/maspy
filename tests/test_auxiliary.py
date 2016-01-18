@@ -1,12 +1,15 @@
 import sys
-sys.path.append('D:/Dropbox/python')
+sys.path.append('D:/Dropbox/python/maspy')
 import unittest
 import maspy.auxiliary as module
 
 class TestOtherAuxiliaryMethods(unittest.TestCase):
     def test_findAllSubstrings(self):
-        self.assertEqual(list(module.findAllSubstrings('AASDITSLYK', 'S')), [2, 6])
-        self.assertEqual(list(module.findAllSubstrings('AADISPLYSKABSPR', 'SP')), [4, 12])
+        self.assertEqual(module.findAllSubstrings('AASDITSLYK', 'S'), [2, 6])
+        self.assertEqual(module.findAllSubstrings('AADISPLYSKABSPR', 'SP'), [4, 12])
+        self.assertEqual(module.findAllSubstrings('AAADISPLYSKAABSPR', 'AA'), [0, 1, 11])
+        self.assertEqual(module.findAllSubstrings('folder/filname.ext', '/'), [6])
+        self.assertEqual(module.findAllSubstrings('folder/filname.ext', '.'), [14])
 
     def test_toList(self):
         self.assertEqual(module.toList((1, 2, 3, 'A')), (1, 2, 3, 'A'))

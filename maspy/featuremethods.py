@@ -1,12 +1,17 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+
+try: # python 2.7
+    import cPickle as pickle
+except ImportError: # python 3.x series
+    import pickle
 
 import bisect
 from collections import defaultdict as ddict
 import functools
+import io
 import operator
 import os
-
-import cPickle as pickle
 from matplotlib import pyplot as plt
 import numpy
 
@@ -111,20 +116,19 @@ class FeatureGroupContainer(object):
         :param attributes: list of item attributes that should be written to the returned array.
         for the other parameters see :func:`FeatureGroupContainer.getItems`
 
+        :param report: 'lfq' or 'sil'
+
         :returns: dict(key1 from keylist: numpy.array, key2 from keylist: numpy.array, ..., indexPos: numpy.array, id: numpy.array, specfile: numpy.array),
         i.e. returns the columns of the table specified by the list of keys, each numpy.array has the dimensions Nx1. If a value is not present, None, is substituted.
         """
+        #TODO: return string is not clear, docstring is not clear
+        #TODO: explain lfq/sil report type
+
         items = self.getItems(sort=sort, reverse=reverse, filterAttribute=filterAttribute,
                               filterTargetValue=filterTargetValue, selector=selector
                               )
-        if report.lower() in ['lfq', 'labelfree']:
-            report = 'lfq'
-        elif report.lower() in ['label', 'labeled', 'sil']:
-            report = 'sil'
 
-        arrays = dict()
-        for key in attributes:
-            arrays[key] = list()
+        arrays = dict([(key, []) for key in attributes])
 
         reportAttributes = list()
         if report == 'lfq':
@@ -136,35 +140,38 @@ class FeatureGroupContainer(object):
         elif report == 'sil':
             arrays['charge'] = list()
             arrays['specfile'] = list()
-            for labelState in self.labelDescriptor.labels.keys() + [-1]:
+            for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
                 labelAttributeName = ' '.join(('label:', str(labelState)))
                 arrays[labelAttributeName] = list()
                 reportAttributes.append(labelAttributeName)
 
-        for item in items:
-            if report == 'sil':
-                for charge in item.intensityMatrix.keys():
-                    for specfile, specfilePosition in self.specfilePositions.items():
+        if report == 'sil':
+            for item in items:
+                for charge in viewkeys(item.intensityMatrix):
+                    for specfile, specfilePosition in viewitems(self.specfilePositions):
                         for key in attributes:
                             arrays[key].append(getattr(item, key, None))
                         arrays['charge'].append(charge)
                         arrays['specfile'].append(specfile)
-                        for labelState in self.labelDescriptor.labels.keys() + [-1]:
+                        for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
                             labelAttributeName = ' '.join(('label:', str(labelState)))
                             arrays[labelAttributeName].append(item.intensityMatrix[charge][specfilePosition, labelState])
-            if report == 'lfq':
-                for charge in item.intensityMatrix.keys():
-                    for labelState in self.labelDescriptor.labels.keys() + [-1]:
+        elif report == 'lfq':
+            for item in items:
+                for charge in viewkeys(item.intensityMatrix):
+                    for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
                         for key in attributes:
                             arrays[key].append(getattr(item, key, None))
                         arrays['charge'].append(charge)
                         arrays['labelState'].append(labelState)
-                        for specfile, specfilePosition in self.specfilePositions.items():
+                        for specfile, specfilePosition in viewitems(self.specfilePositions):
                             arrays[specfile].append(item.intensityMatrix[charge][specfilePosition, labelState])
+        else:
+            raise Exception('report must be either "lfq" or "sil", not '+report)
 
-        for key in arrays.keys():
+        for key in list(viewkeys(arrays)):
             if key in reportAttributes:
-                arrays[key] = numpy.array(arrays[key], dtype='float64')
+                arrays[key] = numpy.array(arrays[key], dtype=numpy.float64)
             else:
                 arrays[key] = numpy.array(arrays[key])
         return arrays
@@ -182,9 +189,10 @@ class FeatureGroupContainer(object):
         self.index = tempIndex
 
     def _save(self, filefolder, filename):
+        #TODO: replace by jjh safe replace method
         filename = '.'.join((filename, self.__class__.__name__.lower()))
-        filepath = os.path.join(filefolder, filename).replace('\\', '/')
-        with open(filepath, 'w') as openFile:
+        filepath = aux.joinpath(filefolder, filename)
+        with io.open(filepath, 'wb') as openFile:
             pickle.dump(self, openFile)
 
     @classmethod
@@ -206,8 +214,8 @@ class FeatureGroupContainer(object):
     @classmethod
     def _load(cls, filefolder, filename):
         filename = '.'.join((filename, cls.__name__.lower()))
-        filepath = os.path.join(filefolder, filename).replace('\\', '/')
-        with open(filepath, 'r') as openFile:
+        filepath = aux.joinpath(filefolder, filename)
+        with io.open(filepath, 'rb') as openFile:
             return pickle.load(openFile)
 
     def __str__(self):
@@ -236,11 +244,11 @@ def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='m
     :type specfiles: str, list or None
     :ivar fMassKey: mass attribute key in :attr:`FeatureItem.__dict__`
     :ivar sMassKey: mass attribute key in :attr:`SpectrumItem.__dict__` or :attr:`SpectrumIdentificationItem.__dict__` (eg 'obsMz', 'calcMz')
-    :ivar isotopeErrorList: allowed isotope errors relative to the spectrum mass
-    eg. [0, 1] if no feature has been matched with isotope error 0, the spectrum mass is increased by 1*C13 and matched again
-    the different isotope error values are tested in the specified order therefore 0 should normally be the 1st value of the tuple
+    :ivar isotopeErrorList: allowed isotope errors relative to the spectrum mass. Eg. [0, 1] if no feature has been matched with isotope error 0,
+    the spectrum mass is increased by the mass difference of carbon isotopes 12 and 13 and matched again. The different isotope error values are
+    tested in the specified order therefore 0 should normally be the 1st value of the tuple
     :type isotopeErrorList: list or tuple of int
-    :ivar precursorTolerance: is used to calculate the mass window to match Si or Sii to :class:`FeatureItem`
+    :ivar precursorTolerance: is the largest allowed mass deviation of Si or Sii to :class:`FeatureItem`
     :ivar toleranceUnit: defines how the precursorTolerance is applied to the mass value, 'ppm' * (1 +/- tolerance*1E-6) or 'da': +/- value
     :ivar rtExpansionUp: relative upper expansion of :class:`FeatureItem` retention time areas
     :ivar rtExpansionDown: relative lower expansion of :class:`FeatureItem` retention time areas
@@ -253,6 +261,7 @@ def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='m
     If specContainer is :class:`SiiContainer` then matched features are annotated with :attr:`SpectrumIdentificationItem.peptide`,
     if multiple Sii are matched to the same :class:`FeatureItem` the one with the best score is used
     """
+    #TODO: this function is nested and should maybe be rewritten
     isotopeErrorList = aux.toList(isotopeErrorList)
 
     if specContainer.__class__.__name__ == 'SiiContainer':
@@ -279,11 +288,11 @@ def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='m
         featureSpecDict = dict() ## key = featureKey, value = set(scanNrs)
 
         for specPos, specId in enumerate(specArrays['containerId']):
-            specMass = specArrays[sMassKey][specPos]
-            specRt = specArrays['rt'][specPos]
             specZ = specArrays['charge'][specPos]
             if specZ is None:
                 continue
+            specMass = specArrays[sMassKey][specPos]
+            specRt = specArrays['rt'][specPos]
 
             matchComplete = False
             isotopeErrorPos = 0
@@ -360,7 +369,7 @@ def matchToFeatures(featureContainer, specContainer, specfiles=None, fMassKey='m
 
         #annotate feature with sii information (peptide, sequence, score)
         if isinstance(specContainer, maspy.core.SiiContainer):
-            for featureId in featureSpecDict.keys():
+            for featureId in viewkeys(featureSpecDict):
                 matches = list()
                 for specId in featureContainer[featureId].siiIds:
                     _sii = specContainer.getValidItem(specId)
@@ -386,6 +395,7 @@ def rtCalibration(featureContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots
     :ivar reference: Can be used to specifically specify a reference specfile
     :ivar specfiles: Limit alignment to those specfiles in the featureContainer
     """
+    #TODO: long function, maybe split into subfunctions
     specfiles = featureContainer.specfiles if specfiles is None else specfiles
     matchCharge = True
 
@@ -410,7 +420,7 @@ def rtCalibration(featureContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots
                                                    )
         if minIntensity is not None:
             intensityMask = (featureArrays['intensity'] > minIntensity)
-            for key in featureArrays.keys():
+            for key in list(viewkeys(featureArrays)):
                 featureArrays[key] = featureArrays[key][intensityMask]
 
         if referenceArrays is None:
@@ -424,7 +434,7 @@ def rtCalibration(featureContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots
         mzDevRelList = list()
         mzDevAbsList = list()
 
-        for featurePos in xrange(len(featureArrays[mzKey])):
+        for featurePos in range(len(featureArrays[mzKey])):
             currRt = featureArrays['rt'][featurePos]
             currMz = featureArrays[mzKey][featurePos]
             currZ = featureArrays['charge'][featurePos]
@@ -453,10 +463,10 @@ def rtCalibration(featureContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots
         rtPosList = numpy.array(rtPosList)
         rtDevList = numpy.array(rtDevList)
 
-        splineInitialKnots = int(max(rtPosList)-min(rtPosList))
+        splineInitialKnots = int(max(rtPosList) - min(rtPosList))
         dataFit = aux.DataFit(rtDevList, rtPosList)
-        dataFit.splineInitialKnots=splineInitialKnots
-        dataFit.splineTerminalExpansion=0.2
+        dataFit.splineInitialKnots = splineInitialKnots
+        dataFit.splineTerminalExpansion = 0.2
         dataFit.processInput(dataAveraging='median', windowSize=10)
         dataFit.generateSplines()
 
@@ -464,21 +474,21 @@ def rtCalibration(featureContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots
             corrDevArr = rtDevList - dataFit.corrArray(rtPosList)
             timePoints = [min(rtPosList) + x for x in range(int(max(rtPosList)-min(rtPosList)))]
             corrValues  = dataFit.corrArray(timePoints)
-            plt.supfig, ( ax ) = plt.subplots(3, 2, sharex=False, sharey=False, figsize=(20, 18))
-            plt.suptitle(specfile)
-            ax[0][0].hist(rtDevList, bins = 100, color='grey', alpha=0.5, label='observed')
-            ax[0][0].hist(corrDevArr, bins = 100, color='red', alpha=0.5, label='corrected')
+            fig, ax = plt.subplots(3, 2, sharex=False, sharey=False, figsize=(20, 18))
+            fig.suptitle(specfile)
+            ax[0][0].hist(rtDevList, bins=100, color='grey', alpha=0.5, label='observed')
+            ax[0][0].hist(corrDevArr, bins=100, color='red', alpha=0.5, label='corrected')
             ax[0][0].set_title('Retention time deviation')
             ax[0][0].legend()
-            ax[0][1].hist(mzDevRelList, bins = 100, color = 'grey')
+            ax[0][1].hist(mzDevRelList, bins=100, color='grey')
             ax[0][1].set_title('Mz deviation [ppm]')
-            ax[1][0].scatter(rtPosList, rtDevList, color = 'grey', alpha = 0.1, label='observed')
+            ax[1][0].scatter(rtPosList, rtDevList, color='grey', alpha=0.1, label='observed')
             ax[1][0].plot(timePoints,corrValues, color='red', alpha=0.5, label='correction function')
             ax[1][0].set_title('Retention time deviation over time')
             ax[1][0].legend()
-            ax[1][1].scatter(rtPosList, mzDevRelList, color = 'grey', alpha = 0.1)
+            ax[1][1].scatter(rtPosList, mzDevRelList, color='grey', alpha=0.1)
             ax[1][1].set_title('Mz deviation over time')
-            ax[2][0].scatter(rtPosList, corrDevArr, color = 'grey', alpha = 0.1)
+            ax[2][0].scatter(rtPosList, corrDevArr, color='grey', alpha=0.1)
             ax[2][0].set_title('Aligned retention time deviation over time')
             plt.show()
 
@@ -522,10 +532,10 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
     :ivar targetChargeStates: list of charge states which are used for feature Grouping if :ivar:`matchCharge` is False
 
     See also :class:`FeatureGroupContainer` and :class:`FeatureGroupItem`
-
-    NOTE: TODO -> feature groups still can contain multiple features per charge/specfile/label position.
-                  such entries should be removed or the group tagged as self.isValid = False
     """
+    #TODO: -> feature groups still can contain multiple features per charge/specfile/label position.
+    # such entries should be removed or the group tagged as self.isValid = False
+    #TODO: function nested and too long, split in subfunctions
     specfiles = featureContainer.specfiles if specfiles is None else aux.toList(specfiles)
 
     matchedFeatures = set()
@@ -582,7 +592,7 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
                 except IndexError:
                     labelState = -1
 
-                for charge, idMatches in chargeIdMatches.items():
+                for charge, idMatches in viewitems(chargeIdMatches):
                     if charge not in groupItem.matchMatrix:
                         groupItem.matchMatrix[charge] = numpy.empty((len(specfiles), len(labelDescriptor.labels)+1), dtype='object')
                         groupItem.intensityMatrix[charge] = numpy.empty((len(specfiles), len(labelDescriptor.labels)+1), dtype='object')
@@ -598,11 +608,11 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
                 else:
                     matching = 'labels'
                     labelMassDifferences = maspy.sil.returnLabelStateMassDifferences(peptide, labelDescriptor)
-                    labelState = labelMassDifferences.keys()[0]
+                    labelState = list(viewkeys(labelMassDifferences))[0] #TODO: this is now an unsorted list of keys, if they need to be sorted use sort()
                     labelMassDiff = labelMassDifferences[labelState]
                     del(labelMassDifferences[labelState])
             else:
-                for charge, idMatches in chargeIdMatches.items():
+                for charge, idMatches in viewitems(chargeIdMatches):
                     if charge not in groupItem.matchMatrix:
                         groupItem.matchMatrix[charge] = numpy.empty((len(specfiles), len(labelDescriptor.labels)+1), dtype='object')
                         groupItem.intensityMatrix[charge] = numpy.empty((len(specfiles), len(labelDescriptor.labels)+1), dtype='object')
@@ -615,7 +625,7 @@ def groupFeatures(featureContainer, specfiles=None, featureFilterAttribute='isAn
                 if len(labelMassDifferences) == 0:
                     matching = False
                 else:
-                    labelState = labelMassDifferences.keys()[0]
+                    labelState = list(viewkeys(labelMassDifferences))[0]
                     labelMassDiff = labelMassDifferences[labelState]
                     del(labelMassDifferences[labelState])
 

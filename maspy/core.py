@@ -1,13 +1,18 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+
+try: # python 2.7
+    from itertools import izip as zip
+    import cPickle as pickle
+except ImportError: # python 3.x series
+    import pickle
 
 from collections import defaultdict as ddict
 import functools
-import itertools
+import io
+import numpy
 import operator
 import os
-
-import cPickle as pickle
-import numpy
 
 import maspy.auxiliary as aux
 from maspy.auxiliary import lazyAttribute
@@ -34,10 +39,10 @@ class ContainerItem(object):
         self.isValid = None
 
     def __str__(self):
-        maxStrLength = max([len(str(key)) for key in self.__dict__.keys()])
+        maxStrLength = max([len(str(key)) for key in viewkeys(self.__dict__)])
 
         primaryKeys = ['id', 'specfile', 'isValid', 'containerId']
-        secondaryKeys = sorted(list(set(self.__dict__.keys()).difference(set(primaryKeys))))
+        secondaryKeys = sorted(list(set(viewkeys(self.__dict__)).difference(set(primaryKeys))))
 
         output = [str(self.__class__)]
         for key in primaryKeys:
@@ -147,7 +152,7 @@ class ItemContainer(object):
             for key in attributes:
                 arrays[key].append(getattr(item, key, None))
 
-        for key in arrays.keys():
+        for key in list(viewkeys(arrays)):
             if isinstance(arrays[key][0], tuple):
                 emptyArray = numpy.empty(len(arrays[key]), dtype='object')
                 emptyArray[:] = arrays[key]
@@ -176,7 +181,7 @@ class ItemContainer(object):
     def _save(self, filefolder, filename):
         filename = '.'.join((filename, self.__class__.__name__.lower()))
         filepath = aux.joinpath(filefolder, filename)
-        with open(filepath, 'w') as openFile:
+        with io.open(filepath, 'wb') as openFile:
             pickle.dump(self, openFile)
 
     @classmethod
@@ -189,7 +194,7 @@ class ItemContainer(object):
         classInstance = cls._load(filefolder, filename)
         #Note: delete the index for storing containers and rewrite upon import to prevent duplication of ContainerItem instances.
         classInstance.index = dict()
-        for items in classInstance.container.values():
+        for items in viewvalues(classInstance.container):
             for item in items:
                 classInstance.index[item.containerId] = item
         return classInstance
@@ -198,12 +203,12 @@ class ItemContainer(object):
     def _load(cls, filefolder, filename):
         filename = '.'.join((filename, cls.__name__.lower()))
         filepath = aux.joinpath(filefolder, filename)
-        with open(filepath, 'r') as openFile:
+        with io.open(filepath, 'rb') as openFile:
             return pickle.load(openFile)
 
     def __str__(self):
         numSpecfiles = len(self.specfiles)
-        numItems = sum([len(container) for container in self.container.values()])
+        numItems = sum([len(container) for container in viewvalues(self.container)])
 
         output = [str(self.__class__)]
         output.append(' '.join(['Containing', str(numSpecfiles), 'specfiles and', str(numItems), 'items.']))
@@ -219,15 +224,15 @@ class ItemContainer(object):
         in items stored in the container instance. """
         itemAttributes = ddict(int)
         for item in self.getItems(filterAttribute=None):
-            for key in item.__dict__.keys():
+            for key in viewkeys(item.__dict__):
                 itemAttributes[key] += 1
-        attributeNames = itemAttributes.keys() + ['Attribute name']
+        attributeNames = list(viewkeys(itemAttributes)) + ['Attribute name']
         maxStrLength = max([len(str(key)) for key in attributeNames])
 
         itemCounts = ['  '.join(['Attribute name'.ljust(maxStrLength), 'item counts']),
                       '  '.join(['--------------'.ljust(maxStrLength), '-----------'])
                       ]
-        itemCounts.extend(['  '.join([key.ljust(maxStrLength), str(itemAttributes[key])]) for key in sorted(itemAttributes.keys())])
+        itemCounts.extend(['  '.join([key.ljust(maxStrLength), str(itemAttributes[key])]) for key in sorted(viewkeys(itemAttributes))])
         print('\n'.join(itemCounts))
 
 
@@ -302,7 +307,7 @@ class SiContainer(ItemContainer):
         """
         try:
             ionLists = self.ionLists
-            del self.ionList
+            del self.ionLists
             super(self.__class__, self).save(filefolder, filename)
         finally:
             self.ionLists = ionLists
@@ -311,7 +316,7 @@ class SiContainer(ItemContainer):
             keyList = list()
             mzList = list()
             iList = list()
-            for key, value in self.ionLists.items():
+            for key, value in viewitems(self.ionLists):
                 keyList.append(key)
                 mzList.append(value['mz'])
                 iList.append(value['i'])
@@ -319,7 +324,7 @@ class SiContainer(ItemContainer):
 
             ionListFileName = '.'.join((filename, 'ionlist'))
             ionListFilePath = os.path.join(filefolder, ionListFileName).replace('\\', '/')
-            with open(ionListFilePath, 'wb') as openFile:
+            with io.open(ionListFilePath, 'wb') as openFile:
                 numpy.save(openFile, ionArray)
 
     @classmethod
@@ -332,7 +337,7 @@ class SiContainer(ItemContainer):
         ionListFilePath = os.path.join(filefolder, ionListFileName).replace('\\', '/')
         if importIonList and os.path.isfile(ionListFilePath):
             importedArray = numpy.load(ionListFilePath)
-            for key, mzList, iList in itertools.izip(importedArray[0], importedArray[1], importedArray[2]):
+            for key, mzList, iList in zip(importedArray[0], importedArray[1], importedArray[2]):
                 siContainer.ionLists[key] = {'mz': mzList, 'i':iList}
         return siContainer
 
@@ -418,7 +423,7 @@ class SiiContainer(ItemContainer):
         """
         classInstance = cls._load(filefolder, filename)
         classInstance.index = dict()
-        for items in classInstance.container.values():
+        for items in viewvalues(classInstance.container):
             for item in items:
                 if item.containerId not in classInstance.index:
                     classInstance.index[item.containerId] = list()
@@ -460,7 +465,7 @@ class FeatureContainer(ItemContainer):
 
     def removeAnnotation(self):
         """Remove all annotation information from :class:`FeatureItem` in :class:`FeatureContainer`."""
-        for items in self.container.values():
+        for items in viewvalues(self.container):
             for item in items:
                 item.isMatched = False
                 item.isAnnotated = False

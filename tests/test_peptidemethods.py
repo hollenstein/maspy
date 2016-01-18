@@ -1,5 +1,5 @@
 import sys
-sys.path.append('D:/Dropbox/python')
+sys.path.append('D:/Dropbox/python/maspy')
 import unittest
 import maspy.peptidemethods as module
 

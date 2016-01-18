@@ -1,4 +1,5 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 import zlib
 import numpy
@@ -26,14 +27,14 @@ class FastReader(object):
             self.info['fileObject'] = open(self.info['inputPath'], 'rb')
 
         self.iter = iter(etree.iterparse(self.info['fileObject'], events=(b'start', b'end')))
-        self.event, self.element = self.next()
+        self.event, self.element = next(self)
 
     def __iter__(self):
         return self
 
     def __next__(self):
         """ The python 2.6+ iterator """
-        return self.next()
+        return next(self)
 
     def next(self):
         event, element = next(self.iter, ('END', 'END'))
@@ -72,7 +73,7 @@ class PymzmlWriter(object):
         # Initialize mzML reader, if the input file is an indexed mzML file, go to mzML node
         self.reader = FastReader(self.info['inputPath'])
         if self.reader.event == b'start' and self.reader.element.tag.endswith('indexedmzML'):
-            self.reader.next()
+            next(self.reader)
 
         # Open output file, write declaration and the XML root node, "mzML"
         if self.debug:
@@ -95,16 +96,16 @@ class PymzmlWriter(object):
         self.xmlWriter.write('\n')
 
     def writeMetaData(self, newMetaNodeElements=dict()):
-        self.reader.next()
+        next(self.reader)
         currSubChildTag = self.reader.element.tag
         # possible child nodes: cvList, fileDescription, referenceableParamGroupList, sampleList, softwareList, instrumentConfigurationList, dataProcessingList, run
 
         while not currSubChildTag.endswith('run'):
             while not(self.reader.element.tag == currSubChildTag and self.reader.event == b'end'):
-                self.reader.next()
+                next(self.reader)
 
             # new child nodes can be added via the dictionary newMetaNodeElements #
-            for newNodeTag, newNodeList in newMetaNodeElements.items():
+            for newNodeTag, newNodeList in viewitems(newMetaNodeElements):
                 if self.reader.element.tag.endswith(newNodeTag):
                     for newNode in newNodeList:
                         self.reader.element.append(newNode)
@@ -115,7 +116,7 @@ class PymzmlWriter(object):
             self.reader.clearParsedElements()
 
             # proceed to next child node #
-            self.reader.next()
+            next(self.reader)
             currSubChildTag = self.reader.element.tag
 
     def writeRunNode(self, specWriter=None):
@@ -126,7 +127,7 @@ class PymzmlWriter(object):
         xmlRunNode.__enter__()
         self.xmlWriter.write('\n')
 
-        self.reader.next()
+        next(self.reader)
         currSubChildTag = self.reader.element.tag
         while not (self.reader.element.tag.endswith('run') and self.reader.event == b'end'):
             if currSubChildTag.endswith('spectrumList'):
@@ -136,17 +137,17 @@ class PymzmlWriter(object):
                 else:
                     specWriter()
                 while not(self.reader.element.tag == currSubChildTag and self.reader.event == b'end'):
-                    self.reader.next()
+                    next(self.reader)
 
             else:
                 while not(self.reader.element.tag == currSubChildTag and self.reader.event == b'end'):
-                    self.reader.next()
+                    next(self.reader)
                 removeTreeFormating(self.reader.element)
                 self.xmlWriter.write(self.reader.element, pretty_print=True)
                 self.reader.clearParsedElements()
 
             # proceed to next child node #
-            self.reader.next()
+            next(self.reader
             currSubChildTag = self.reader.element.tag
 
         xmlRunNode.__exit__(None,None,None)
@@ -162,11 +163,11 @@ class PymzmlWriter(object):
         while not(self.reader.element.tag.endswith('spectrumList') and self.reader.event == b'end'):
             if self.reader.element.tag.endswith('spectrum') and self.reader.event == b'start':
                 while not(self.reader.element.tag.endswith('spectrum') and self.reader.event == b'end'):
-                    self.reader.next()
+                    next(self.reader)
                 removeTreeFormating(self.reader.element)
                 self.xmlWriter.write(self.reader.element, pretty_print=True)
                 self.reader.clearParsedElements()
-            self.reader.next()
+            next(self.reader)
         xmlSpectrumListNode.__exit__(None, None, None)
 
     def cleanUp(self):
@@ -258,7 +259,7 @@ def writeXmlSpectrumList(writer, siContainer, selectedMsLevel=[1, 2], CorrFactor
         pass
 
     while not(writer.reader.element.tag.endswith('spectrumList') and writer.reader.event == b'start'):
-        writer.reader.next()
+        next(writer.reader)
     writer.reader.element.attrib['count'] = str(spectraCounts)
 
     # Write and open spectrum list node
@@ -274,7 +275,7 @@ def writeXmlSpectrumList(writer, siContainer, selectedMsLevel=[1, 2], CorrFactor
     while not(writer.reader.element.tag.endswith('spectrumList') and writer.reader.event == b'end'):
         if writer.reader.element.tag.endswith('spectrum') and writer.reader.event == b'start':
             while not(writer.reader.element.tag.endswith('spectrum') and writer.reader.event == b'end'):
-                writer.reader.next()
+                next(writer.reader)
 
             nativeSpecId = writer.reader.element.attrib['id']
             scanNr = nativeSpecId.split('scan=')[1]
@@ -378,7 +379,7 @@ def writeXmlSpectrumList(writer, siContainer, selectedMsLevel=[1, 2], CorrFactor
                 writer.xmlWriter.flush()
                 writer.reader.clearParsedElements()
         else:
-            writer.reader.next()
+            next(writer.reader)
     xmlSpectrumListNode.__exit__(None, None, None)
     writer.reader.clearParsedElements()
     writer.xmlWriter.write('\n')

@@ -1,4 +1,6 @@
 from __future__ import print_function, division
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+
 import copy
 
 import pyteomics.mass
@@ -39,7 +41,7 @@ aaComp.update({'A':COMPOSITION({'H': 5, 'C': 3, 'O': 1, 'N': 1}),
                'W':COMPOSITION({'C': 11, 'H': 10, 'N': 2, 'O': 1}),
                'Y':COMPOSITION({'H': 9, 'C': 9, 'O': 2, 'N': 1})
               })
-aaMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in aaComp.items()])
+aaMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in viewitems(aaComp)])
 
 aaModComp = dict()
 """ A dictionary with elemental compositions of the peptide modifications.
@@ -67,9 +69,9 @@ aaModComp.update({'u:1':COMPOSITION({'C': 2, 'H': 2, 'O': 1}),
                   'DSS':COMPOSITION({'C': 8, 'H': 10, 'O': 2}),
                   '*':COMPOSITION({})
                  })
-aaModMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in aaModComp.items()])
+aaModMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in viewitems(aaModComp)])
 #TODO change all modification instances from "UNIMOD:X" to "u:X"
-for accession, composition in aaModMass.items():
+for accession, composition in listitems(aaModMass):
     if accession.startswith('u:'):
         aaModMass[accession.replace('u:', 'UNIMOD:')] = composition
 
@@ -104,7 +106,7 @@ xTandemMassToUniModDict = copy.deepcopy(unimodToMassDict)
 xTandemMassToUniModDict[4] = 57.02147
 xTandemMassToUniModDict[374] = -1.00783
 xTandemMassToUniModDict[1] = 42.01057
-xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in xTandemMassToUniModDict.items()])
+xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in viewitems(xTandemMassToUniModDict)])
 """
 
 """
