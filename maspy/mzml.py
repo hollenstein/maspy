@@ -147,7 +147,7 @@ class PymzmlWriter(object):
                 self.reader.clearParsedElements()
 
             # proceed to next child node #
-            next(self.reader
+            next(self.reader)
             currSubChildTag = self.reader.element.tag
 
         xmlRunNode.__exit__(None,None,None)
@@ -197,8 +197,10 @@ def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
 
     if bitEncoding == '64':
         floattype = 'd' # 64-bit
+        numpyType = numpy.float64
     else:
         floattype = 'f' # 32-bit
+        numpyType = numpy.float32
 
     if compression == 'zlib':
         decompressedData = zlib.decompress(bitDecodedData)
@@ -206,7 +208,7 @@ def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
         decompressedData = bitDecodedData
 
     fmt = '{endian}{arraylength}{floattype}'.format(endian='<', arraylength=arrayLength, floattype=floattype)
-    dataArray = numpy.array(unpack(fmt, decompressedData))
+    dataArray = numpy.array(unpack(fmt, decompressedData), dtype=numpyType)
     return dataArray
 
 
