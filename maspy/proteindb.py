@@ -3,13 +3,35 @@ from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 import io
 import itertools
+import json
 import numpy
 import re
+import zipfile
 
-from maspy.auxiliary import lazyAttribute
+import maspy.new.auxiliary as aux
 import maspy.peptidemethods
 import pyteomics
 import pyteomics.fasta
+
+
+#TODO:
+## eventually move somewhere else
+def writeJsonItemContainer(filepath, itemContainer, compress=True, mode='w', name='data'):
+    #TODO: docstring
+    zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+    with zipfile.ZipFile(filepath, mode, allowZip64=True) as containerFile:
+        containerFile.writestr(name, json.dumps(itemContainer, cls=MaspyJsonEncoder), zipcomp)
+
+#TODO:
+class MaspyJsonEncoder(json.JSONEncoder):
+    #TODO: docstring
+    def default(self, obj):
+        if hasattr(obj, '_reprJSON'):
+            return obj._reprJSON()
+        else:
+            #Let the base class default method raise the TypeError
+            return json.JSONEncoder.default(self, obj)
+
 
 # --- Protein and peptide related classes --- #
 class PeptideSequence(object):
@@ -24,20 +46,39 @@ class PeptideSequence(object):
     :ivar mass: peptide mass in Daltons
     :ivar length: number of amino acids
     """
+    __slots__ = ['sequence', 'missedCleavage', 'isUnique', 'proteins', 'proteinPositions']
     def __init__(self, sequence, mc=None):
         self.sequence = sequence
-
         self.missedCleavage = mc
         self.isUnique = None
         self.proteins = set()
         self.proteinPositions = dict()
 
-    @lazyAttribute
     def length(self):
         return len(self.sequence)
-    @lazyAttribute
+
     def mass(self):
         return maspy.peptidemethods.calcPeptideMass(self.sequence)
+
+    def _reprJSON(self):
+        return {'__PepSeq__': [self.sequence, self.missedCleavage, self.isUnique,
+                              list(self.proteins), self.proteinPositions]}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(jsonobject[0], jsonobject[1])
+        newInstance.isUnique = jsonobject[2]
+        newInstance.proteins = set(jsonobject[3])
+        newInstance.proteinPositions = jsonobject[4]
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__PepSeq__' in encoded:
+            return PeptideSequence._fromJSON(encoded['__PepSeq__'])
+        else:
+            return encoded
+
 
 
 class ProteinSequence(object):
@@ -63,13 +104,32 @@ class ProteinSequence(object):
         self.uniquePeptides = set()
         self.sharedPeptides = set()
 
-    @lazyAttribute
     def mass(self):
         return maspy.peptidemethods.calcPeptideMass(self.sequence)
 
-    @lazyAttribute
     def length(self):
         return len(self.sequence)
+
+    def _reprJSON(self):
+        jsonDict = self.__dict__
+        jsonDict['uniquePeptides'] = list(jsonDict['uniquePeptides'])
+        jsonDict['sharedPeptides'] = list(jsonDict['sharedPeptides'])
+        return {'__ProtSeq__': jsonDict}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(None, None)
+        newInstance.__dict__.update(jsonobject)
+        newInstance.uniquePeptides = set(newInstance.uniquePeptides)
+        newInstance.sharedPeptides = set(newInstance.sharedPeptides)
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__ProtSeq__' in encoded:
+            return ProteinSequence._fromJSON(encoded['__ProtSeq__'])
+        else:
+            return encoded
 
 
 class ProteinDatabase(object):
@@ -84,6 +144,8 @@ class ProteinDatabase(object):
         self.peptides = dict()
         self.proteins = dict()
         self.proteinNames = dict()
+        self.info = {'name': '', 'mc': 0, 'cleavageRule': '', 'minLength': 0,
+                     'maxLength': 0, 'ignoreIsoleucine': False, 'removeNtermM': False}
 
     def __getitem__(self, key):
         """Uses key to return protein entries :class:`Protein`.
@@ -96,6 +158,36 @@ class ProteinDatabase(object):
             return self.proteinNames[key]
         else:
             raise KeyError(key)
+
+    def save(self, path, compress=True):
+        with aux.PartiallySafeReplace() as msr:
+            filename = self.info['name'] + '.proteindb'
+            filepath = aux.joinpath(path, filename)
+            with msr.open(filepath, mode='w+b') as openfile:
+                self._writeContainer(openfile, compress=compress)
+
+    def _writeContainer(self, filelike, compress=True):
+        writeJsonItemContainer(filelike, self.proteins, compress, 'w', 'proteins')
+        writeJsonItemContainer(filelike, self.peptides, compress, 'a', 'peptides')
+        zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+        with zipfile.ZipFile(filelike, 'a', allowZip64=True) as containerFile:
+            infodata = {key: value for key, value in viewitems(self.info) if key != 'path'}
+            containerFile.writestr('info', json.dumps(infodata, zipcomp))
+
+    @classmethod
+    def load(cls, path, name):
+        """Import specfiles"""
+        filepath = aux.joinpath(path, name + '.proteindb')
+        with zipfile.ZipFile(filepath, 'r', allowZip64=True) as containerZip:
+            #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
+            proteinsString = io.TextIOWrapper(containerZip.open('proteins'), encoding='utf-8').read()
+            peptidesString = io.TextIOWrapper(containerZip.open('peptides'), encoding='utf-8').read()
+            infoString = io.TextIOWrapper(containerZip.open('info'), encoding='utf-8').read()
+        newInstance = cls()
+        newInstance.proteins = json.loads(proteinsString, object_hook=ProteinSequence.jsonHook)
+        newInstance.peptides = json.loads(peptidesString, object_hook=PeptideSequence.jsonHook)
+        newInstance.info.update(json.loads(infoString))
+        return newInstance
 
     def calculateCoverage(self):
         """Calcualte the sequence coverage masks for all ProteinEvidence() elements.

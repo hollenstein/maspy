@@ -1,4 +1,4 @@
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 try: # python 2.7
@@ -6,6 +6,10 @@ try: # python 2.7
 except ImportError: # python 3.x series
     pass
 ###############################################################################
+try:
+   basestring
+except NameError:
+   basestring=str
 
 from collections import defaultdict as ddict
 import contextlib
@@ -28,6 +32,7 @@ from maspy.mit_stats import runningMedian as runningMedian
 
 class PartiallySafeReplace(object):
     #TODO: Docstring missing
+    #TODO: raise exception if _fileAccessible returns False
     def __init__(self):
         pass
 
@@ -35,19 +40,10 @@ class PartiallySafeReplace(object):
         self._files = {}
         return self
 
-    def _fileAccessible(self, filepath):
-        """Ensures that the specified filepath can be used to write a file. """
-        directory = os.path.dirname(filepath)
-        print(os.access(directory, os.W_OK)) #<- must be True
-        if os.path.exists(filepath):
-            print(os.access(filepath, os.W_OK)) #<- must be True
-            openfile = os.open(filepath, os.O_WRONLY) #Raie Exception if file is locked
-            os.close(openfile)
-
     @contextlib.contextmanager
     def open(self, filepath, mode='w+b'):
         #TODO: check if file already in self._files
-        self._fileAccessible(filepath)
+        _fileAccessible(filepath)
 
         tempfilepath = None
         with tempfile.NamedTemporaryFile(delete=False, mode=mode) as tmpf:
@@ -58,19 +54,33 @@ class PartiallySafeReplace(object):
     def __exit__(self, x, y, z):
         for filepath in self._files:
             #Check if all filepaths can be accessed and are writable before moving the tempfiles
-            self._fileAccessible(filepath)
+            _fileAccessible(filepath)
         for filepath, tempfilepath in viewitems(self._files):
             #Note: here unhandled exceptions may still occur because of race conditions, messing things up.
             shutil.move(tempfilepath, filepath)
 
 
 @contextlib.contextmanager
-def openSafeReplace(filename, mode='w+b'):
+def openSafeReplace(filepath, mode='w+b'):
+    #Todo: raise Exception if _fileAccessible returns False
     tempfileName = None
+    _fileAccessible(filepath)
     with tempfile.NamedTemporaryFile(delete=False, mode=mode) as tmpf:
         tempfileName = tmpf.name
         yield tmpf
-    shutil.move(tempfileName, filename)
+    #Todo: raise Exception if _fileAccessible returns False
+    _fileAccessible(filepath)
+    shutil.move(tempfileName, filepath)
+
+
+def _fileAccessible(filepath):
+    """Ensures that the specified filepath can be used to write a file. """
+    directory = os.path.dirname(filepath)
+    print(os.access(directory, os.W_OK)) #<- must be True
+    if os.path.exists(filepath):
+        print(os.access(filepath, os.W_OK)) #<- must be True
+        openfile = os.open(filepath, os.O_WRONLY) #Raie Exception if file is locked
+        os.close(openfile)
 
 
 def lazyAttribute(fn):
@@ -160,7 +170,7 @@ def findAllSubstrings(string, substring):
     return positions
 
 
-def toList(variable, types=(str, int, float)):
+def toList(variable, types=(basestring, int, float, )):
     """ Converts variable of type string, int, float to a list: variable -> [variable]
 
     :type variable: (str, int, float, others)

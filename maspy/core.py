@@ -1,406 +1,939 @@
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
 try: # python 2.7
     from itertools import izip as zip
-    import cPickle as pickle
 except ImportError: # python 3.x series
-    import pickle
+    pass
+###############################################################################
 
 from collections import defaultdict as ddict
-import functools
 import io
+from lxml import etree as ETREE
 import numpy
-import operator
 import os
 
-import maspy.auxiliary as aux
-from maspy.auxiliary import lazyAttribute
+import maspy.new.auxiliary as aux
+from maspy.new.auxiliary import lazyAttribute
 import maspy.constants
 import maspy.peptidemethods
 
+import json
+from operator import itemgetter as ITEMGETTER
 
-# --- Container and item main classes --- #
-class ContainerItem(object):
-    """Mass spectrometry data elemtents, derived from specfiles.
+import zipfile
 
-    :ivar containerId: used to look up item in :attr:`ItemContainer.index`
-    :ivar id: identifier in original file
-    :ivar specfile: Keyword (filename) to represent the originating file
-    :ivar isValid: this attribute can be used to filter data.
-    Should be set to True or False, None if unspecified
 
-    See also :class:`ItemContainer`
+
+############################################
+### Common container functions #############
+############################################
+def _getArrays(container, attr=None, containerKeys=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
+    """Return a condensed array of data selected items from the "container" for fast and convenient data processing.
+
+    :param attr: list of item attributes that should be added to the returned array.
+    If an attribute is not present the "defaultValue" is added instead.
+    :param containerKeys: valid keys of the "container", if None all keys are considered
+    :type containerKeys: a single dictionary key or a list of keys
+    :param sort: if "sort" is specified the returned list of items is sorted according to the item
+    attribute specified by "sort", if the attribute is not present the item is skipped.
+    :param reverse: boolean to reverse sort order
+    :param selector: a function which is called with each item and returns
+    True (include item) or False (discard item). If not specified all items are returned
+
+    return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+    """
+    arrays = dict([(key, []) for key in attr])
+    for item in _getItems(container, containerKeys, sort, reverse, selector):
+        for key in attr:
+            arrays[key].append(getattr(item, key, defaultValue))
+    for key in [_ for _ in viewkeys(arrays)]:
+        arrays[key] = numpy.array(arrays[key])
+
+    return arrays
+
+
+def _getItems(container, containerKeys=None, sort=False, reverse=False, selector=lambda item: True):
+    """Generator that yields filtered and/or sorted items from the specified "container".
+
+    :param containerKeys: valid keys of the "container", if None all keys are considered
+    :type containerKeys: a single dictionary key or a list of keys
+    :param sort: if "sort" is specified the returned list of items is sorted according to the item
+    attribute specified by "sort", if the attribute is not present the item is skipped.
+    :param reverse: boolean to reverse sort order
+    :param selector: a function which is called with each item and returns
+    True (include item) or False (discard item). If not specified all items are returned
+    """
+    containerKeys = [_ for _ in viewkeys(container)] if containerKeys is None else aux.toList(containerKeys)
+
+    if sort:
+        sortIdentifier = list()
+        for containerKey in containerKeys:
+            for identifier in [_ for _ in viewkeys(container[containerKey])]:
+                item = container[containerKey][identifier]
+                if selector(item):
+                    try:
+                        sortIdentifier.append((getattr(item, sort), containerKey, identifier))
+                    except AttributeError:
+                        pass
+        sortIdentifier.sort(key=ITEMGETTER(0), reverse=reverse)
+        for _, containerKey, identifier in sortIdentifier:
+            yield container[containerKey][identifier]
+    else:
+        for containerKey in containerKeys:
+            for identifier in [_ for _ in viewkeys(container[containerKey])]:
+                item = container[containerKey][identifier]
+                if selector(item):
+                    yield item
+
+
+def _getListItems(container, containerKeys=None, sort=False, reverse=False, selector=lambda item: True):
+    """Generator that yields filtered and/or sorted items from the specified "container",
+    Note: use this function if the value of the container is not the item itself but a list of items
+
+    :param containerKeys: valid keys of the "container", if None all keys are considered
+    :type containerKeys: a single dictionary key or a list of keys
+    :param sort: if "sort" is specified the returned list of items is sorted according to the item
+    attribute specified by "sort", if the attribute is not present the item is skipped.
+    :param reverse: boolean to reverse sort order
+    :param selector: a function which is called with each item and returns
+    True (include item) or False (discard item). If not specified all items are returned
+    """
+    containerKeys = [_ for _ in viewkeys(container)] if containerKeys is None else aux.toList(containerKeys)
+    if sort:
+        sortIdentifier = list()
+        for containerKey in containerKeys:
+            for identifier in [_ for _ in viewkeys(container[containerKey])]:
+                for itemPos, item in enumerate(container[containerKey][identifier]):
+                    if selector(item):
+                        try:
+                            sortIdentifier.append((getattr(item, sort), containerKey, identifier, itemPos))
+                        except AttributeError:
+                            pass
+        sortIdentifier.sort(key=ITEMGETTER(0), reverse=reverse)
+        for _, containerKey, identifier, itemPos in sortIdentifier:
+            yield container[containerKey][identifier][itemPos]
+    else:
+        for containerKey in containerKeys:
+            for identifier in [_ for _ in viewkeys(container[containerKey])]:
+                for itemPos, item in enumerate(container[containerKey][identifier]):
+                    if selector(item):
+                        yield item
+
+
+##############################################################
+### MsrunContainer related classes and functions #############
+##############################################################
+class MsrunContainer(object):
+    """Container for mass spectrometry data (eg MS1 and MS2 spectra), provides full support for mzml files.
+
+    The structure of the following containers is: {"specfilename": {"itemId": item, ...}}
+    :ivar rmc: "run metadata container", contains mzml metadata xml strings, as imported from the mzML file
+    :ivar cic: "chromatogram item container", see :class:`Ci`
+    :ivar smic: "spectrum metadata item container", see :class:`Smi`
+    :ivar saic: "spectrum array item container", see :class:`Sai`
+    :ivar sic: "spectrum item container", see :class:`Si`
+
+    :ivar msrunInfo: a dictionary containing information about the imported specfiles; key = specfilename, value = {'path': str, 'status': {}}
+                     "path" contains information about the filelocation used for saving and loading msrun files in
+                     the maspy dataformat and "status" about which datatypes have been imported by using bool values.
+    eg {"specfilename": {"path": an absolute path to a filedirectory,
+                         "status": {"ci": bool, "rm": bool, "sai": bool, "si": bool, "smi": bool}
+                         }}
+    """
+    def __init__(self):
+        self.rmc = {}
+        self.cic = {}
+        self.smic = {}
+        self.saic = {}
+        self.sic = {}
+        self.msrunInfo = {}
+
+    def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
+        """Return a condensed array of data selected from :class:`Si` objects of :instance:`self.sic`
+        for fast and convenient data processing.
+
+        :param attr: list of :class:`Si` item attributes that should be added to the returned array.
+        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
+        are always included, in combination they serve as a unique id.
+        :param specfiles: filenames of msrun files - if specified return only items from those files
+        :type specfiles: str or [str, str, ...]
+        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+        attribute specified by "sort", if the attribute is not present the item is skipped.
+        :param reverse: boolean to reverse sort order
+        :param selector: a function which is called with each :class:`Si` item and returns
+        True (include item) or False (discard item). If not specified all items are returned
+
+        return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+        """
+        attr = attr if attr is not None else []
+        attr = set(['id', 'specfile'] + aux.toList(attr))
+        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else aux.toList(specfiles)
+        #return _getArrays(self.sic, attr, specfiles, sort, reverse, selector, defaultValue)
+
+        arrays = arrays = dict([(key, []) for key in attr])
+        for item in _getItems(self.sic, specfiles, sort, reverse, selector):
+            for key in attr:
+                arrays[key].append(getattr(item, key, defaultValue))
+        for key in [_ for _ in viewkeys(arrays)]:
+            arrays[key] = numpy.array(arrays[key])
+
+        return arrays
+
+    def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda si: True):
+        """Generator that yields filtered and/or sorted :class:`Si` objects from :instance:`self.sic`
+
+        :param specfiles: filenames of msrun files - if specified return only items from those files
+        :type specfiles: str or [str, str, ...]
+        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+        attribute specified by "sort", if the attribute is not present the item is skipped.
+        :param reverse: boolean to reverse sort order
+        :param selector: a function which is called with each :class:`Si` item and returns
+        True (include item) or False (discard item). If not specified all items are returned
+        """
+        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else aux.toList(specfiles)
+        return _getItems(self.sic, specfiles, sort, reverse, selector)
+
+    def getItem(self, specfile, identifier):
+        """Returns a :class:`Si` instance (SpectrumItem) from :instance:`self.sic` (SpectrumItemContainer)."""
+        return self.sic[specfile][identifier]
+
+    def addSpecfile(self, specfiles, path):
+        """Adds a number of maspy msrun files to self.msrunInfo, but doesn't import any data yet.
+        To actually import the specfile data, call :func:`msrunContainer.load()`.
+        """
+        for specfile in aux.toList(specfiles):
+            if specfile in self.msrunInfo:
+                print('Specfile already present in msrunContainer:', specfile, self.msrunInfo[specfile]['path'])
+            else:
+                 self._addSpecfile(specfile, path)
+
+    def _addSpecfile(self, specfile, path):
+        """Adds a new specfile entry to MsrunContainer.msrunInfo. """
+        datatypeStatus = {'rm':False, 'ci':False, 'smi':False, 'sai':False, 'si':False}
+        self.msrunInfo[specfile] = {'path': path, 'status': datatypeStatus}
+
+    def setPath(self, folderpath, specfiles=None):
+        """Change the folderpath of the specified specfiles. If save is called and no container file is
+        present in the specified path, a new file is generated.
+        """
+        #TODO: check if folderpath exists, if not generate new folderspecfiles
+        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.msrunInfo:
+                #TODO: warning here?
+                continue
+            self.msrunInfo[specfile]['path'] = folderpath
+
+    def removeData(self, specfiles, rm=False, ci=False, smi=False, sai=False, si=False):
+        """Removes the specified datatypes of the specfiles from the msrunContainer.
+        To completely remove the specfile, also from msrunInfo, use :func:`MsrunContainer.removeSpecfile`
+        """
+        datatypes = self._processDatatypes(rm, ci, smi, sai, si)
+        for specfile in aux.toList(specfiles):
+            for datatype in datatypes:
+                datatypeContainer = datatype+'c'
+                dataContainer = getattr(self, datatypeContainer)
+                try:
+                    del dataContainer[specfile]
+                except KeyError:
+                    pass
+                finally:
+                    self.msrunInfo[specfile]['status'][datatype] = False
+
+    def removeSpecfile(self, specfiles):
+        """Completely removes the specified specfiles from the msrunContainer."""
+        for specfile in aux.toList(specfiles):
+            for datatypeContainer in ['rmc', 'cic', 'smic', 'saic', 'sic']:
+                dataContainer = getattr(self, datatypeContainer)
+                try:
+                    del dataContainer[specfile]
+                except KeyError:
+                    pass
+            del self.msrunInfo[specfile]
+
+    def _processDatatypes(self, rm, ci, smi, sai, si):
+        datatypes = list()
+        for datatype, value in [('rm', rm), ('ci', ci), ('smi', smi), ('sai', sai), ('si', si)]:
+            if value:
+                datatypes.append(datatype)
+        return datatypes
+
+    def save(self, specfiles=None, rm=False, ci=False, smi=False, sai=False, si=False, compress=True, path=None):
+        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else specfiles
+        datatypes = self._processDatatypes(rm, ci, smi, sai, si)
+        if len(datatypes) == 0:
+            datatypes = ['rm', 'ci', 'smi', 'sai', 'si']
+
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.msrunInfo:
+                print('Error while saving', specfile, ', not found in msrunCountainer!')
+                continue
+            else:
+                msrunInfo = self.msrunInfo[specfile]
+                specfilePath = msrunInfo['path'] if path is None else path
+
+            with aux.PartiallySafeReplace() as msr:
+                for datatype in datatypes:
+                    filename = specfile + '.mrc_' + datatype
+                    filepath = aux.joinpath(specfilePath, filename)
+                    with msr.open(filepath, 'w+b') as openfile:
+                        if datatype == 'rm':
+                           self._writeRmc(openfile, specfile, compress=compress)
+                        elif datatype == 'ci':
+                           self._writeCic(openfile, specfile, compress=compress)
+                        elif datatype == 'si':
+                           self._writeSic(openfile, specfile, compress=compress)
+                        elif datatype == 'smi':
+                           self._writeSmic(openfile, specfile, compress=compress)
+                        elif datatype == 'sai':
+                           self._writeSaic(openfile, specfile, compress=compress)
+
+    def _writeCic(self, filelike, specfile, compress=True):
+        writeBinaryItemContainer(filelike, self.cic[specfile], compress=compress)
+
+    def _writeSaic(self, filelike, specfile, compress=True):
+        writeBinaryItemContainer(filelike, self.saic[specfile], compress=compress)
+
+    def _writeSmic(self, filelike, specfile, compress=True):
+        writeJsonItemContainer(filelike, self.smic[specfile], compress=compress)
+
+    def _writeSic(self, filelike, specfile, compress=True):
+        writeJsonItemContainer(filelike, self.sic[specfile], compress=compress)
+
+    def _writeRmc(self, filelike, specfile, compress=True):
+        xmlString = ETREE.tostring(self.rmc[specfile], pretty_print=True)
+        filelike.write(xmlString)
+
+    def load(self, specfiles=None, rm=False, ci=False, smi=False, sai=False, si=False):
+        """Import the specified datatypes from specfiles"""
+        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else specfiles
+        datatypes = self._processDatatypes(rm, ci, smi, sai, si)
+        if len(datatypes) == 0:
+            datatypes = ['rm', 'ci', 'smi', 'sai', 'si']
+
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.msrunInfo:
+                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.msrunInfo')))
+                continue
+            else:
+                msrunInfo = self.msrunInfo[specfile]
+                specfilePath = msrunInfo['path']
+
+            if 'rm' in datatypes:
+                rmPath = aux.joinpath(specfilePath, specfile+'.mrc_rm')
+                with open(rmPath, 'rb') as openfile:
+                    xmlString = openfile.read()
+                self.rmc[specfile] = ETREE.fromstring(xmlString)
+                msrunInfo['status']['rm'] = True
+
+            if 'ci' in datatypes:
+                ciPath = aux.joinpath(specfilePath, specfile+'.mrc_ci')
+                self.cic[specfile] = loadBinaryItemContainer(ciPath, Ci.jsonHook)
+                msrunInfo['status']['ci'] = True
+
+            if 'smi' in datatypes:
+                smiPath = aux.joinpath(specfilePath, specfile+'.mrc_smi')
+                with zipfile.ZipFile(smiPath, 'r') as containerZip:
+                    #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
+                    jsonString = io.TextIOWrapper(containerZip.open('data'), encoding='utf-8').read()
+                self.smic[specfile] = json.loads(jsonString, object_hook=Smi.jsonHook)
+                msrunInfo['status']['smi'] = True
+
+            if 'sai' in datatypes:
+                saiPath = aux.joinpath(specfilePath, specfile+'.mrc_sai')
+                self.saic[specfile] = loadBinaryItemContainer(saiPath, Sai.jsonHook)
+                msrunInfo['status']['sai'] = True
+
+            if 'si' in datatypes:
+                siPath = aux.joinpath(specfilePath, specfile+'.mrc_si')
+                with zipfile.ZipFile(siPath, 'r') as containerZip:
+                    #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
+                    jsonString = io.TextIOWrapper(containerZip.open('data'), encoding='utf-8').read()
+                self.sic[specfile] = json.loads(jsonString, object_hook=Si.jsonHook)
+                msrunInfo['status']['si'] = True
+
+
+class Ci(object):
+    """Chromatogram item (Ci), representation of a mzML chromatogram.
+
+    identifier: The unique id of this chromatogram. Typically descriptive for the chromatogram, eg. "TIC".
+    dataProcessingRef: This attribute can optionally reference the 'id' of the appropriate dataProcessing, from mzML
+    precursor: The method of precursor ion selection and activation, from mzML
+    product: The method of product ion selection and activation in a precursor ion scan, from mzML
+    params: A list of parameter tuple, TODO: as described elsewhere
+    arrays: dictionary of nummpy arrays containing the chromatogram data points. Keys are derived from the
+        specified cvParam, see func:`findBinaryDataType`.
+    arrayInfo: dictionary describing the data from binaryData.
+        {dataType: {'dataProcessingRef': None or a reference to a dataProcessing entry, 'params': a list of param tuple}, ...}
+    """
+    __slots__ = ['id', 'dataProcessingRef', 'precursor', 'product', 'params', 'attrib', 'arrays', 'arrayInfo']
+
+    def __init__(self):
+        self.id = str()
+        self.dataProcessingRef = None
+        self.precursor = None
+        self.product = None
+        self.params = list()
+        self.attrib = dict()
+        self.arrays = dict()
+        self.arrayInfo = dict()
+
+    def _reprJSON(self):
+        return {'__Ci__': (self.id, self.dataProcessingRef, self.precursor, self.product,
+                           self.params, self.attrib, self.arrayInfo
+                           )}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls()
+        attribDict = {}
+        attribDict['id'] = jsonobject[0]
+        attribDict['dataProcessingRef'] = jsonobject[1]
+        attribDict['precursor'] = jsonobject[2]
+        attribDict['product'] = jsonobject[3]
+        attribDict['params'] = [tuple(param) for param in jsonobject[4]]
+        attribDict['attrib'] = jsonobject[5]
+        attribDict['arrayInfo'] = dict()
+        for arrayType in jsonobject[6]:
+            attribDict['arrayInfo'][arrayType] = {'dataProcessingRef': jsonobject[6][arrayType]['dataProcessingRef'],
+                                                  'params': [tuple(param) for param in jsonobject[6][arrayType]['params']]
+                                                  }
+        for key, value in viewitems(attribDict):
+            setattr(newInstance, key, value)
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__Ci__' in encoded:
+            return Ci._fromJSON(encoded['__Ci__'])
+        elif '__MzmlProduct__' in encoded:
+            return MzmlProduct._fromJSON(encoded['__MzmlProduct__'])
+        elif '__MzmlPrecursor__' in encoded:
+            return MzmlPrecursor._fromJSON(encoded['__MzmlPrecursor__'])
+        else:
+            return encoded
+
+
+class Sai(object):
+    """Spectrum array item (Sai)
+    Includes all spectrum information provided by a mzML file, excluding the actual data arrays.
+
+    identifier: The unique id of this spectrum, typically the scan number.
+        Is used together with "specfile" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
+        Should be derived from the spectrums nativeID format (MS:1000767)
+
+    specfile: An id representing a group of spectra, typically of the same mzML file.
+        Is used together with "identifier" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
+    """
+    __slots__ = ['id', 'specfile', 'arrays', 'arrayInfo']
+
+    def __init__(self, identifier, specfile):
+        self.id = identifier
+        self.specfile = specfile
+
+        self.arrays = dict()
+        self.arrayInfo = dict()
+
+    def _reprJSON(self):
+        return {'__Sai__': (self.id, self.specfile, self.arrayInfo)}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(jsonobject[0], jsonobject[1])
+        for arrayType in jsonobject[2]:
+            newInstance.arrayInfo[arrayType] = {'dataProcessingRef': jsonobject[2][arrayType]['dataProcessingRef'],
+                                                'params': [tuple(param) for param in jsonobject[2][arrayType]['params']]
+                                                 }
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__Sai__' in encoded:
+            return Sai._fromJSON(encoded['__Sai__'])
+        else:
+            return encoded
+
+
+class Smi(object):
+    """Spectrum metadata item (Smi)
+    Includes all spectrum information provided by a mzML file, excluding the actual data arrays.
+
+    identifier: The unique id of this spectrum, typically the scan number.
+        Is used together with "specfile" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
+        Should be derived from the spectrums nativeID format (MS:1000767)
+
+    specfile: An id representing a group of spectra, typically of the same mzML file.
+        Is used together with "identifier" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
+    """
+    __slots__ = ['id', 'specfile', 'attributes', 'params', 'scanListParams',
+                 'scanList', 'precursorList', 'productList'
+                 ]
+
+    def __init__(self, identifier, specfile):
+        #super(SpectrumItem, self).__init__(identifier, specfile)
+        self.id = identifier
+        self.specfile = specfile
+        self.attributes = dict()
+        self.params = dict()
+        self.scanListParams = list()
+        self.scanList = list()
+        self.precursorList = list()
+        self.productList = list()
+
+    def _reprJSON(self):
+        return {'__Smi__': (self.id, self.specfile, self.attributes, self.params, self.scanListParams,
+                            self.scanList, self.precursorList, self.productList
+                            )}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(None, None)
+        attribDict = {}
+        attribDict['id'] = jsonobject[0]
+        attribDict['specfile'] = jsonobject[1]
+        attribDict['attributes'] = jsonobject[2]
+        attribDict['params'] = [tuple(param) for param in jsonobject[3]]
+        attribDict['scanListParams'] = [tuple(param) for param in jsonobject[4]]
+        attribDict['scanList'] = jsonobject[5]
+        attribDict['precursorList'] = jsonobject[6]
+        attribDict['productList'] = jsonobject[7]
+        for key, value in viewitems(attribDict):
+            setattr(newInstance, key, value)
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__Smi__' in encoded:
+            return Smi._fromJSON(encoded['__Smi__'])
+        elif '__MzmlScan__' in encoded:
+            return MzmlScan._fromJSON(encoded['__MzmlScan__'])
+        elif '__MzmlProduct__' in encoded:
+            return MzmlProduct._fromJSON(encoded['__MzmlProduct__'])
+        elif '__MzmlPrecursor__' in encoded:
+            return MzmlPrecursor._fromJSON(encoded['__MzmlPrecursor__'])
+        else:
+            return encoded
+
+
+class Si(object):
+    """Spectrum item (Si) - this is the spectrum representation intended to be used in maspy.
+    A simplified representation of spectrum metadata. Contains only specifically imported attributes,
+    which are necessary for data analysis. Does not follow any PSI datastructure or name space rules.
+
+    Attributes can be transferred from the corresponding :class:`Smi` entry.
+
+    identifier: The unique id of this spectrum, typically the scan number.
+        Is used together with "specfile" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
+        Should be derived from the spectrums nativeID format (MS:1000767)
+
+    specfile: An id representing a group of spectra, typically of the same mzML file.
+        Is used together with "identifier" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
     """
     def __init__(self, identifier, specfile):
-        self.containerId  = (specfile, identifier)
+        #super(SpectrumItem, self).__init__(identifier, specfile)
         self.id = identifier
         self.specfile = specfile
         self.isValid = None
-
-    def __str__(self):
-        maxStrLength = max([len(str(key)) for key in viewkeys(self.__dict__)])
-
-        primaryKeys = ['id', 'specfile', 'isValid', 'containerId']
-        secondaryKeys = sorted(list(set(viewkeys(self.__dict__)).difference(set(primaryKeys))))
-
-        output = [str(self.__class__)]
-        for key in primaryKeys:
-            value = getattr(self, key)
-            output.append(' '.join([str(key).ljust(maxStrLength), repr(value)]))
-        output.append('')
-        for key in secondaryKeys:
-            value = getattr(self, key)
-            output.append(' '.join([str(key).ljust(maxStrLength), repr(value)]))
-
-        return '\n'.join(output)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def copy(self):
-        """Returns a copy of itself.
-
-        Copies all key, value pairs of self.__dict__, CAUTION: doesn't generate a new instance for values like dict, objects,...
-        """
-        newItem = self.__class__(self.id, self.specfile)
-        newItem.__dict__ = self.__dict__.copy()
-        return newItem
-
-
-class ItemContainer(object):
-    """Storage container for :class:`ContainerItem`.
-
-    :ivar index: Use :attr:`ContainerItem.containerId` to look up :class:`ContainerItem` inside the ItemContainer
-    :ivar container: Access :class:`ContainerItem` storage list via a specfile keyword: {specfile:[ContainerItem(), ContainerItem(), ...]}
-    :ivar specfiles: list of keywords (filenames) representing files
-    """
-    def __init__(self):
-        self.index = dict()
-        self.container = dict()
-        self.specfiles = list()
-
-    def __getitem__(self, key):
-        """Return an item from index using the containerId."""
-        return self.index[key]
-
-    def getItems(self, specfiles=None, sort=None, reverse=False, filterAttribute='isValid', filterTargetValue=True, selector=None):
-        """Return a filter and/or sorted set of items. By default only valid items are returned.
-
-        :param specfiles: filenames of spectrum files - return only items from those files.
-        :type specfiles: str or [str, str, ...]
-        :param sort: if sort is specified the returned list of items is sorted according to the
-        item attribute specified by sort.
-        :param reverse: boolean to reverse sort order
-
-        :param selector: a function which is called with the value of
-        the attribute specified by filterAttribute and has to return
-        True (include value) or False (discard value). if no selector
-        is specified, equality to filterTargetValue is used.
-
-        :param filterAttribute: name of an attribute to use for
-        filtering, if attribute does not exist or is set to None
-        the value "True" is silently returned -> returns all items
-
-        :param filterTargetValue: if the value of the attribute
-        specified by filterAttribute is equal to filterTargetValue the
-        element is returned. Is overwritten by specifying selector
-        """
-        if selector is None:
-            if filterAttribute is None:
-                selector = lambda x: True
-                filterAttribute = str()
-            else:
-                selector = functools.partial(operator.eq, filterTargetValue)
-
-        specfiles = self.specfiles if specfiles == None else aux.toList(specfiles)
-        items = list()
-        for specfile in specfiles:
-            items.extend(self.container[specfile])
-
-        if sort is not None:
-            sortArray = list()
-            for item in items:
-                sortValue = getattr(item, sort, 0)
-                sortArray.append((sortValue, item))
-            items = [item for sortValue, item in sorted(sortArray, reverse=reverse)]
-
-        for item in items:
-            attributeValue = getattr(item, filterAttribute, True)
-            if selector(attributeValue):
-                yield item
-
-    def getArrays(self, attributes, specfiles=None, sort=None, reverse=False, filterAttribute='isValid', filterTargetValue=True, selector=None):
-        """Return a condensed array of data selected from ContainerItems for faster data processing.
-
-        :param attributes: list of item attributes that should be written to the returned array.
-        for the other parameters see :func:`ItemContainer.getItems`
-
-        :returns: dict(key1 from keylist: numpy.array, key2 from keylist: numpy.array, ..., indexPos: numpy.array, id: numpy.array, specfile: numpy.array),
-        i.e. returns the columns of the table specified by the list of keys, each numpy.array has the dimensions Nx1. If a value is not present, None, is substituted.
-        """
-        items = self.getItems(specfiles=specfiles, sort=sort, reverse=reverse,
-                              filterAttribute=filterAttribute, filterTargetValue=filterTargetValue,
-                              selector=selector
-                              )
-        arrays = dict()
-        attributes = set(['containerId', 'id', 'specfile'] + aux.toList(attributes))
-        for key in attributes:
-            arrays[key] = list()
-
-        for item in items:
-            for key in attributes:
-                arrays[key].append(getattr(item, key, None))
-
-        for key in list(viewkeys(arrays)):
-            if isinstance(arrays[key][0], tuple):
-                emptyArray = numpy.empty(len(arrays[key]), dtype='object')
-                emptyArray[:] = arrays[key]
-                arrays[key] = emptyArray
-            else:
-                if type(arrays[key][0]) is float:
-                    arrays[key] = numpy.array(arrays[key], dtype='float64')
-                elif type(arrays[key][0]) is int:
-                    arrays[key] = numpy.array(arrays[key], dtype='int64')
-                else:
-                    arrays[key] = numpy.array(arrays[key])
-        return arrays
-
-    def save(self, filefolder, filename):
-        """Store a pickled version of self using  __class__.__name__.lower() as file-appendix.
-
-        :ivar filefolder: folder where the container should be saved
-        :ivar filename: filename to store the container, should not contain any appendix like .txt
-        """
-        #Note: delete the index for storing containers and rewrite upon import to prevent duplication of ContainerItem instances.
-        tempIndex = self.index
-        del(self.index)
-        self._save(filefolder, filename)
-        self.index = tempIndex
-
-    def _save(self, filefolder, filename):
-        filename = '.'.join((filename, self.__class__.__name__.lower()))
-        filepath = aux.joinpath(filefolder, filename)
-        with io.open(filepath, 'wb') as openFile:
-            pickle.dump(self, openFile)
-
-    @classmethod
-    def load(cls, filefolder, filename):
-        """Load a pickled version of self using __class__.__name__.lower() as file-appendix.
-
-        :ivar filefolder: folder where the container has been saved
-        :ivar filename: filename of the stores container, without file appendix
-        """
-        classInstance = cls._load(filefolder, filename)
-        #Note: delete the index for storing containers and rewrite upon import to prevent duplication of ContainerItem instances.
-        classInstance.index = dict()
-        for items in viewvalues(classInstance.container):
-            for item in items:
-                classInstance.index[item.containerId] = item
-        return classInstance
-
-    @classmethod
-    def _load(cls, filefolder, filename):
-        filename = '.'.join((filename, cls.__name__.lower()))
-        filepath = aux.joinpath(filefolder, filename)
-        with io.open(filepath, 'rb') as openFile:
-            return pickle.load(openFile)
-
-    def __str__(self):
-        numSpecfiles = len(self.specfiles)
-        numItems = sum([len(container) for container in viewvalues(self.container)])
-
-        output = [str(self.__class__)]
-        output.append(' '.join(['Containing', str(numSpecfiles), 'specfiles and', str(numItems), 'items.']))
-        for specfile in self.specfiles:
-            output.append(''.join([specfile, ', ', str(len(self.container[specfile])), ' items.']))
-        return '\n'.join(output)
-
-    def __repr__(self):
-        return self.__str__()
-
-    def itemStats(self):
-        """Prints the names and the number of occurences of all item attributes that are set
-        in items stored in the container instance. """
-        itemAttributes = ddict(int)
-        for item in self.getItems(filterAttribute=None):
-            for key in viewkeys(item.__dict__):
-                itemAttributes[key] += 1
-        attributeNames = list(viewkeys(itemAttributes)) + ['Attribute name']
-        maxStrLength = max([len(str(key)) for key in attributeNames])
-
-        itemCounts = ['  '.join(['Attribute name'.ljust(maxStrLength), 'item counts']),
-                      '  '.join(['--------------'.ljust(maxStrLength), '-----------'])
-                      ]
-        itemCounts.extend(['  '.join([key.ljust(maxStrLength), str(itemAttributes[key])]) for key in sorted(viewkeys(itemAttributes))])
-        print('\n'.join(itemCounts))
-
-
-# --- Auxiliary functions for container class --- #
-def addContainer(baseContainer, *newContainers):
-    """Merge the content of multiple instances of :class:`ItemContainer` or its subclasses, containers must be of same type.
-
-    :param baseContainer: append newContainers to the baseContainer, has to a class instance
-    :param newContainer: one or multiple containers to be appended to the baseContainer
-
-    CAUTION, order of :class:`SpectrumIdentificationItem` in :attr:`SiiContainer.index` can be changed by merging
-    #TODO
-    """
-    for newContainer in newContainers:
-        if not isinstance(newContainer, type(baseContainer)):
-            print('Cannot combine different container classes, ',
-                  repr(baseContainer), ' and ',
-                  repr(newContainer)
-                  )
-            continue
-
-        for specfile in newContainer.specfiles:
-            if specfile not in baseContainer.specfiles:
-                baseContainer.specfiles.append(specfile)
-                baseContainer.container[specfile] = list()
-
-                for item in newContainer.container[specfile]:
-                    newItem = item.copy()
-                    baseContainer.container[specfile].append(newItem)
-
-                    if baseContainer.__class__.__name__ == 'SiiContainer':
-                        if newItem.containerId not in baseContainer.index:
-                            baseContainer.index[newItem.containerId] = list()
-                        baseContainer.index[newItem.containerId].append(newItem)
-                    else:
-                        baseContainer.index[newItem.containerId] = newItem
-
-                    if baseContainer.__class__.__name__ == 'SiContainer':
-                        if len(newContainer.ionLists) > 0:
-                            baseContainer.ionLists[newItem.containerId] = dict(newContainer.ionLists[newItem.containerId])
-            else:
-                print(specfile, 'already present in baseContainer.')
-    return baseContainer
-
-
-# --- Container and item subclasses --- #
-class SpectrumItem(ContainerItem):
-    """Representation of a spectrum."""
-    def __init__(self, identifier, specfile):
-        super(SpectrumItem, self).__init__(identifier, specfile)
         self.msLevel = None
 
-
-class SiContainer(ItemContainer):
-    """ItemContainer for mass spectrometry data (eg Ms1 and Ms2 spectra),
-    SiContainer = Spectrum Item Container.
-
-    for parameter and method description see :class:`ItemContainer`
-    see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
-
-    :ivar ionLists: spectrum ion m/z and intensity information, not loaded by default
-    dict(containerId=dict(mz=numpy.array([mass / charge, ...]), i=numpy.array([intensity, ...]))).
-    """
-    def __init__(self):
-        super(SiContainer, self).__init__()
-        self.ionLists = dict()
-
-    def save(self, filefolder, filename, saveIonList=True):
-        """Store a pickled version of the self, using '.SiContainer' as file-appendix.
-
-        Stores the ionList in a separate file with appendix '.ionlist'.
-        """
-        try:
-            ionLists = self.ionLists
-            del self.ionLists
-            super(self.__class__, self).save(filefolder, filename)
-        finally:
-            self.ionLists = ionLists
-
-        if saveIonList and len(ionLists) != 0:
-            keyList = list()
-            mzList = list()
-            iList = list()
-            for key, value in viewitems(self.ionLists):
-                keyList.append(key)
-                mzList.append(value['mz'])
-                iList.append(value['i'])
-            ionArray = numpy.array([keyList, numpy.array(mzList), numpy.array(iList)])
-
-            ionListFileName = '.'.join((filename, 'ionlist'))
-            ionListFilePath = os.path.join(filefolder, ionListFileName).replace('\\', '/')
-            with io.open(ionListFilePath, 'wb') as openFile:
-                numpy.save(openFile, ionArray)
+    def _reprJSON(self):
+        return {'__Si__': self.__dict__}
 
     @classmethod
-    def load(cls, filefolder, filename, importIonList=True):
-        """Load a pickled version of the self, using the __class__.__name__ as file-appendix."""
-        siContainer = super(cls, cls).load(filefolder, filename)
-        siContainer.ionLists = dict()
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(None, None)
+        newInstance.__dict__.update(jsonobject)
+        return newInstance
 
-        ionListFileName = '.'.join((filename, 'ionlist'))
-        ionListFilePath = os.path.join(filefolder, ionListFileName).replace('\\', '/')
-        if importIonList and os.path.isfile(ionListFilePath):
-            importedArray = numpy.load(ionListFilePath)
-            for key, mzList, iList in zip(importedArray[0], importedArray[1], importedArray[2]):
-                siContainer.ionLists[key] = {'mz': mzList, 'i':iList}
-        return siContainer
+    @staticmethod
+    def jsonHook(encoded):
+        if '__Si__' in encoded:
+            return Si._fromJSON(encoded['__Si__'])
+        else:
+            return encoded
 
 
-class SpectrumIdentificationItem(ContainerItem):
-    """Representation of a peptide fragment spectrum annotation (Peptide Spectrum Match)."""
+class MzmlScan(object):
+    #TODO: docstring
+    """
+    :ivar scanWindowList: ... stored as a tuple because this variable is describing the measurement and should not be changed
+    Note: the attributes "sourceFileRef" and "externalSpectrumID" are not supported
+    TODO: add attributes "instrumentConfigurationRef" and "spectrumRef"
+    """
+    ## kwargs to only take the arguments needed and ignore additionally specified ones like 'arrayLength' of binaryDataArray
+    __slots__ = ['scanWindowList', 'params']
+    def __init__(self, scanWindowList=(), params=None, **kwargs):
+        self.scanWindowList = tuple(tuple(_) for _ in scanWindowList)
+        self.params = params
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    #def __setitem__(self, key, value):
+    #    setattr(self, key, value)
+
+    def _reprJSON(self):
+        return {'__MzmlScan__': (self.scanWindowList, self.params)}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        scanWindowList = _mzmlListAttribToTuple(jsonobject[0])
+        params = [tuple(param) for param in jsonobject[1]]
+        return cls(scanWindowList, params)
+
+
+class MzmlProduct(object):
+    #TODO: docstring
+    __slots__ = ['isolationWindow']
+    def __init__(self, isolationWindow=None, **kwargs):
+        self.isolationWindow = tuple(isolationWindow)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    #def __setitem__(self, key, value):
+    #    setattr(self, key, value)
+
+    def _reprJSON(self):
+        return {'__MzmlProduct__': self.isolationWindow}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        isolationWindow =[tuple(param) for param in jsonobject]
+        return cls(isolationWindow)
+
+
+class MzmlPrecursor(object):
+    #TODO: docstring
+    """
+    Note: the attributes "sourceFileRef" and "externalSpectrumID" are not supported
+    """
+    __slots__ = ['spectrumRef', 'activation', 'isolationWindow', 'selectedIonList']
+    def __init__(self, spectrumRef=None, activation=None, isolationWindow=None, selectedIonList=[], **kwargs):
+        self.spectrumRef = spectrumRef
+        self.isolationWindow = tuple(isolationWindow)
+        self.selectedIonList = [tuple(_) for _ in selectedIonList]
+        self.activation = tuple(activation)
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    #def __setitem__(self, key, value):
+    #    setattr(self, key, value)
+
+    def _reprJSON(self):
+        return {'__MzmlPrecursor__': (self.spectrumRef, self.activation, self.isolationWindow, self.selectedIonList)}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        spectrumRef = jsonobject[0]
+        activation = [tuple(param) for param in jsonobject[1]]
+        isolationWindow =[tuple(param) for param in jsonobject[2]]
+        selectedIonList = _mzmlListAttribToTuple(jsonobject[3])
+        return cls(spectrumRef, activation, isolationWindow, selectedIonList)
+
+
+class MaspyJsonEncoder(json.JSONEncoder):
+    #TODO: docstring
+    def default(self, obj):
+        if hasattr(obj, '_reprJSON'):
+            return obj._reprJSON()
+        else:
+            #Let the base class default method raise the TypeError
+            return json.JSONEncoder.default(self, obj)
+
+
+def writeBinaryItemContainer(filepath, binaryItemContainer, compress=True):
+    #TODO: docstring
+    allMetadata = dict()
+    binarydatafile = io.BytesIO()
+    #It would be possible to sort the items here
+    for index, binaryItem in enumerate(viewvalues(binaryItemContainer)):
+        allMetadata[index] = _dumpBinaryItemToFile(binarydatafile, binaryItem)
+    #Is seek here still necessary?
+    binarydatafile.seek(0)
+
+    zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+    with zipfile.ZipFile(filepath, 'w', allowZip64=True) as containerFile:
+        containerFile.writestr('metadata', json.dumps(allMetadata, cls=MaspyJsonEncoder), zipcomp)
+        containerFile.writestr('binarydata', binarydatafile.getvalue(), zipcomp)
+
+
+def _dumpBinaryItemToFile(filelike, binaryItem):
+    #TODO: docstring
+    binaryMetadata = list()
+    for arrayType in binaryItem.arrays:
+        array = binaryItem.arrays[arrayType]
+        bytedata = array.tobytes('C')
+        start = filelike.tell()
+        end = start + len(bytedata)
+        binaryMetadata.append({'arrayType': arrayType, 'dtype': array.dtype.name, #'shape': array.shape <- deprecated as only 1d arrays are used
+                               'start': start, 'end': end, 'size': array.size
+                               })
+        filelike.write(bytedata)
+    itemMetadata = [binaryItem._reprJSON(), binaryMetadata]
+    return itemMetadata
+
+
+def loadBinaryItemContainer(containerFile, jsonHook):
+    #TODO: docstring
+    binaryItemContainer = dict()
+    with zipfile.ZipFile(containerFile, 'r') as containerZip:
+        #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
+        metadataText = io.TextIOWrapper(containerZip.open('metadata'), encoding='utf-8').read()
+        allMetadata = json.loads(metadataText, object_hook=jsonHook)
+        metadataIndex = [str(_) for _ in sorted([int(i) for i in viewkeys(allMetadata)])]
+        binarydataFile = containerZip.open('binarydata')
+        for index in metadataIndex:
+            binaryItem = allMetadata[index][0]
+            for binMetadata in allMetadata[index][1]:
+                arrayType = binMetadata['arrayType']
+                rawdata = binarydataFile.read(binMetadata['end']-binMetadata['start'])
+                array = numpy.frombuffer(rawdata, dtype=numpy.typeDict[binMetadata['dtype']])
+                #array = array.reshape(binMetadata['shape'])
+                binaryItem.arrays[arrayType] = array
+            binaryItemContainer[binaryItem.id] = binaryItem
+    return binaryItemContainer
+
+
+def writeJsonItemContainer(filepath, itemContainer, compress=True, mode='w', name='data'):
+    #TODO: docstring
+    zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+    with zipfile.ZipFile(filepath, mode, allowZip64=True) as containerFile:
+        containerFile.writestr(name, json.dumps(itemContainer, cls=MaspyJsonEncoder), zipcomp)
+
+
+def _mzmlListAttribToTuple(oldList):
+    """ Turns the list element, elements into tuples,
+    Note: only intended for a list of elements that contain params, eg. mzml Node selectedIonList."""
+    newList = list()
+    for oldEntry in oldList:
+        newEntry = [tuple(param) for param in oldEntry]
+        newList.append(newEntry)
+    return newList
+
+
+##########################################################################
+### SpectrumIdentificationItem related classes and functions #############
+##########################################################################
+class Sii(object):
+    """Sii (SpectrumIdentificationItem),
+    representation of a fragment spectrum annotation (Peptide Spectrum Match).
+
+    :ivar identifier: The unique id of this spectrum, typically the scan number.
+        Is used together with "specfile" as a key to access this element in its container
+        or the corresponding spectrum in an :class:`maspy.core.SiContainer` container.
+
+    :ivar specfile: An id representing a group of spectra, typically of the same mzML file.
+        Is used together with "identifier" as a unique key.
+
+    :ivar rank: The rank of this Sii compared to others for the same MSN spectrum.
+    The rank is based on a score defined in the SiiContainer
+
+    :ivar isValid: this attribute can be used to filter data.
+        Should be set to True or False, None if unspecified
+    """
     def __init__(self, identifier, specfile):
-        super(SpectrumIdentificationItem, self).__init__(identifier, specfile)
-        self.diPeptide = None
+        self.id = identifier
+        self.specfile = specfile
+        self.rank = None
+        self.isValid = None
+
+    def _reprJSON(self):
+        return {'__Sii__': self.__dict__}
+
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(None, None)
+        newInstance.__dict__.update(jsonobject)
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__Sii__' in encoded:
+            return Sii._fromJSON(encoded['__Sii__'])
+        else:
+            return encoded
 
 
-class SiiContainer(ItemContainer):
+class SiiContainer(object):
     """ItemContainer for msn spectrum identifications (Peptide Spectrum Matches),
     SiiContainer = Spectrum Identification Item Container.
 
-    for parameter and method description see :class:`ItemContainer`
-    see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
+    :ivar container: Access :class:`ContainerItem` storage list via a specfile keyword: {specfile:[ContainerItem(), ContainerItem(), ...]}
+    :ivar info: a dictionary containing information about the imported specfiles;
+                key = specfilename, value = {"scoreAttr": str, "largerBetter": bool, "path": str}
+                "scoreAttr" describes which :class:`Sii` attribute should be used for ranking.
+                "largerBetter" specifies wheter a larger score signifies a better match.
+                "path" contains a directory path used for saving and loading
+
+    #Note: In the future this container may be integrated in an evidence or mzIdentML like container.
     """
     def __init__(self):
-        super(SiiContainer, self).__init__()
+        self.container = dict()
+        self.info = dict()
 
-    def addSiInfo(self, siContainer, specfiles=None, attributes=['obsMz', 'rt', 'charge']):
-        """ Copy attributes into sii from the corresponding SpectrumItem in siContainer,
+    def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False,
+                  selector=lambda sii: sii.isValid, defaultValue=None):
+        """Return a condensed array of data selected from :class:`Sii` objects of :instance:`self.container`
+        for fast and convenient data processing.
+
+        :param attr: list of :class:`Sii` item attributes that should be added to the returned array.
+        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
+        are always included, in combination they serve as a unique id.
+        :param specfiles: filenames of msrun files - if specified return only items from those files
+        :type specfiles: str or [str, str, ...]
+        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+        attribute specified by "sort", if the attribute is not present the item is skipped.
+        :param reverse: boolean to reverse sort order
+        :param selector: a function which is called with each :class:`Si` item and returns
+        True (include item) or False (discard item). If not specified all items are returned.
+        By default only items with "isValid" == True are returned.
+
+        return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+        """
+        attr = attr if attr is not None else []
+        attr = set(['id', 'specfile'] + aux.toList(attr))
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
+
+        arrays = dict([(key, []) for key in attr])
+        for item in _getListItems(self.container, specfiles, sort, reverse, selector):
+            for key in attr:
+                arrays[key].append(getattr(item, key, defaultValue))
+        for key in [_ for _ in viewkeys(arrays)]:
+            arrays[key] = numpy.array(arrays[key])
+
+        return arrays
+
+    def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda sii: sii.isValid):
+        """Generator that yields filtered and/or sorted :class:`Sii` objects from :instance:`self.container`
+
+        :param specfiles: filenames of msrun files - if specified return only items from those files
+        :type specfiles: str or [str, str, ...]
+        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+        attribute specified by "sort", if the attribute is not present the item is skipped.
+        :param reverse: boolean to reverse sort order
+        :param selector: a function which is called with each :class:`Si` item and returns
+        True (include item) or False (discard item). If not specified all items are returned
+        """
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
+        return _getListItems(self.container, specfiles, sort, reverse, selector)
+
+    def getValidItem(self, specfile, identifier):
+        """Returns a valid item or None,
+        assumes that self.container[specfile][identifier] is a sorted list"""
+        for item in self.container[specfile][identifier]:
+            if item.isValid:
+                return item
+        else:
+            return None
+
+    def addSpecfile(self, specfiles, path):
+        """Adds a number of maspy msrun files to self.info, but doesn't import any data yet.
+        To actually import the specfile data, call :func:`msrunContainer.load()`.
+        """
+        for specfile in aux.toList(specfiles):
+            if specfile in self.info:
+                print('Specfile already present in msrunContainer:', specfile, self.info[specfile]['path'])
+            else:
+                 self._addSpecfile(specfiles, path)
+
+    def _addSpecfile(self, specfile, path):
+        """Adds a new specfile entry to SiiContainer.info. """
+        self.info[specfile] = {'scoreAttr': None, 'largerBetter': None, 'path': path}
+        self.container[specfile] = dict()
+
+    def setPath(self, folderpath, specfiles=None):
+        """Change the folderpath of the specified specfiles. If save is called and no "siic"
+        (SpectrumIdentificationItemContainer) file is present in the specified path,
+        a new file is generated.
+        """
+        #TODO: check if folderpath exists, if not generate new folderspecfiles
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.info:
+                #TODO: warning here?
+                continue
+            self.info[specfile]['path'] = folderpath
+
+    def removeSpecfile(self, specfiles):
+        """Completely removes the specified specfiles from the SiiContainer."""
+        for specfile in aux.toList(specfiles):
+            del self.container[specfile]
+            del self.info[specfile]
+
+    def save(self, specfiles=None, compress=True, path=None):
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.info:
+                print('Error while saving', specfile, ', not found in msrunCountainer!')
+                continue
+            else:
+                specfilePath = self.info[specfile]['path'] if path is None else path
+
+            with aux.PartiallySafeReplace() as msr:
+                filename = specfile + '.siic'
+                filepath = aux.joinpath(specfilePath, filename)
+                with msr.open(filepath, mode='w+b') as openfile:
+                    self._writeContainer(openfile, specfile, compress=compress)
+
+    def _writeContainer(self, filelike, specfile, compress=True):
+        writeJsonItemContainer(filelike, self.container[specfile], compress=compress)
+        zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+        with zipfile.ZipFile(filelike, 'a', allowZip64=True) as containerFile:
+            infodata = {key: value for key, value in viewitems(self.info[specfile]) if key != 'path'}
+            containerFile.writestr('info', json.dumps(infodata, zipcomp))
+
+    def load(self, specfiles=None):
+        """Import specfiles"""
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.info:
+                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.msrunInfo')))
+                continue
+            else:
+                siiPath = aux.joinpath(self.info[specfile]['path'], specfile+'.siic')
+                with zipfile.ZipFile(siiPath, 'r') as containerZip:
+                    #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
+                    jsonString = io.TextIOWrapper(containerZip.open('data'), encoding='utf-8').read()
+                    infoString = io.TextIOWrapper(containerZip.open('info'), encoding='utf-8').read()
+                self.container[specfile] = json.loads(jsonString, object_hook=Sii.jsonHook)
+                self.info[specfile].update(json.loads(infoString))
+
+    def addSiInfo(self, msrunContainer, specfiles=None, attributes=['obsMz', 'rt', 'charge']):
+        #TODO: use obsMz (observed)? or mz? in contrary to exMz (exact mz) or calcMz (calculated mz)
+        """ Copy attributes into Sii from the corresponding Si in msrunContainer,
         if an attribute is not presend in the SpectrumItem the attribute value is set to None
         Attribute examples: 'obsMz', 'rt', 'charge', 'tic', 'iit', 'ms1Id'
         """
-        specfiles = self.specfiles if specfiles == None else aux.toList(specfiles)
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles == None else aux.toList(specfiles)
 
         for specfile in specfiles:
-            if specfile not in self.specfiles:
+            if specfile not in self.info:
                 print(specfile, 'not present in siiContainer.')
-            elif specfile not in siContainer.specfiles:
-                print(specfile, 'not present in siContainer.')
+            elif specfile not in msrunContainer.msrunInfo:
+                print(specfile, 'not present in msrunContainer.')
             else:
-                for sii in self.container[specfile]:
-                    si = siContainer.index[sii.containerId]
-                    for attribute in attributes:
-                        setattr(sii, attribute, getattr(si, attribute, None))
+                for identifier in self.container[specfile]:
+                    si = msrunContainer.sic[specfile][identifier]
+                    for sii in self.container[specfile][identifier]:
+                        for attribute in attributes:
+                            setattr(sii, attribute, getattr(si, attribute, None))
 
-    def getValidItem(self, key):
-        """Returns one or a tuple of only valid items from index, usually the rank1 PSM.
-
-        :param key: is the value of :attr:`SpectrumIdentificationItem.containerId` to retrieve
-        """
-        if not isinstance(key, tuple):
-            key = tuple(key)
-        items = [item for item in self.index[key] if item.isValid]
-        items = items[0] if len(items) == 1 else tuple(items)
-        return items
-
-    def calcMz(self, specfiles=None, guessCharge=True):
+    def calcMz(self, specfiles=None, guessCharge=True, obsMzKey='mz'):
         # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
-        specfiles = self.specfiles if specfiles is None else aux.toList(specfiles)
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         tempPeptideMasses = dict()
         for specfile in specfiles:
-            if specfile not in self.specfiles:
+            if specfile not in self.info:
                 print(specfile, 'not present in siiContainer.')
             else:
-                for sii in self.getItems(specfiles=specfile, filterAttribute=None):
+                for sii in self.getItems(specfiles=specfile):
                     charge = sii.charge
                     peptide = sii.peptide
                     if peptide not in tempPeptideMasses:
-                        if sii.diPeptide:
+                        if hasattr(sii, 'diPeptide'):
                             tempPeptideMasses[peptide] = (maspy.peptidemethods.calcPeptideMass(sii.peptide1) +
                                                           maspy.peptidemethods.calcPeptideMass(sii.peptide2))
                         else:
@@ -409,41 +942,42 @@ class SiiContainer(ItemContainer):
                     if charge is not None:
                         sii.calcMz = maspy.peptidemethods.calcMzFromMass(peptideMass, charge)
                     elif guessCharge:
-                        guessedCharge = round(peptideMass / (sii.obsMz - maspy.constants.atomicMassProton), 0)
+                        guessedCharge = round(peptideMass / (getattr(sii, obsMzKey) - maspy.constants.atomicMassProton), 0)
                         sii.calcMz = maspy.peptidemethods.calcMzFromMass(peptideMass, guessedCharge)
                         sii.charge = guessedCharge
         del(tempPeptideMasses)
 
-    @classmethod
-    def load(cls, filefolder, filename):
-        """Load a pickled version of self using __class__.__name__.lower() as file-appendix.
-
-        :ivar filefolder: folder where the container has been saved
-        :ivar filename: filename of the stores container, without file appendix
-        """
-        classInstance = cls._load(filefolder, filename)
-        classInstance.index = dict()
-        for items in viewvalues(classInstance.container):
-            for item in items:
-                if item.containerId not in classInstance.index:
-                    classInstance.index[item.containerId] = list()
-                classInstance.index[item.containerId].append(item)
-        return classInstance
 
 
-class FeatureItem(ContainerItem):
-    """Representation of a peptide LC-MS feature.
 
+
+
+
+
+
+
+class Fi(object):
+    """FeatureItem (Fi), representation of a peptide LC-MS feature.
+
+    :ivar containerId: used to look up item in :attr:`ItemContainer.index`
+    :ivar id: identifier in original file
+    :ivar specfile: Keyword (filename) to represent the originating file
+    :ivar isValid: this attribute can be used to filter data.
+    Should be set to True or False, None if unspecified
     :ivar isMatched: None if unspecified, should be set to False on import, True if any Si or Sii elements could be matched
     :ivar isAnnotated: None if unspecified, should be set to False on import, True if any Sii elements could be matched
-    :ivar siIds: containerId values of matched Si entries
-    :ivar siiIds: containerId values of matched Sii entries
-    :ivar peptide: peptide sequence of best scoring Sii match
+    :ivar siIds: tuple(specfile, id) of matched Si
+    :ivar siiIds: tuple(specfile, id) of matched Sii
+    :ivar peptide: peptide sequence of the best scoring Sii match
     :ivar sequence: plain amino acid sequence of best scoring Sii match, used to retrieve protein information
     :ivar score: score of best scoring Sii match
     """
     def __init__(self, identifier, specfile):
-        super(FeatureItem, self).__init__(identifier, specfile)
+        self.id = identifier
+        self.specfile = specfile
+        self.isValid = None
+
+        #Annotation information
         self.isMatched = None
         self.isAnnotated = None
         self.siIds = list()
@@ -452,8 +986,26 @@ class FeatureItem(ContainerItem):
         self.sequence = None
         self.score = None
 
+    def _reprJSON(self):
+        return {'__Fi__': self.__dict__}
 
-class FeatureContainer(ItemContainer):
+    @classmethod
+    def _fromJSON(cls, jsonobject):
+        newInstance = cls(None, None)
+        newInstance.__dict__.update(jsonobject)
+        newInstance.siIds = [tuple(_) for _ in newInstance.siIds]
+        newInstance.siiIds = [tuple(_) for _ in newInstance.siiIds]
+        return newInstance
+
+    @staticmethod
+    def jsonHook(encoded):
+        if '__Fi__' in encoded:
+            return Fi._fromJSON(encoded['__Fi__'])
+        else:
+            return encoded
+
+
+class FiContainer(object):
     """ItemContainer for peptide elution features :class`FeatureItem`.
 
     for parameter and method description see :class:`ItemContainer`
@@ -461,12 +1013,131 @@ class FeatureContainer(ItemContainer):
     see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
     """
     def __init__(self):
-        super(FeatureContainer, self).__init__()
+        self.container = dict()
+        self.info = dict()
 
-    def removeAnnotation(self):
+    def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False,
+                  selector=lambda fi: fi.isValid, defaultValue=None):
+        """Return a condensed array of data selected from :class:`Sii` objects of :instance:`self.container`
+        for fast and convenient data processing.
+
+        :param attr: list of :class:`Fi` item attributes that should be added to the returned array.
+        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
+        are always included, in combination they serve as a unique id.
+        :param specfiles: filenames of msrun files - if specified return only items from those files
+        :type specfiles: str or [str, str, ...]
+        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+        attribute specified by "sort", if the attribute is not present the item is skipped.
+        :param reverse: boolean to reverse sort order
+        :param selector: a function which is called with each :class:`Si` item and returns
+        True (include item) or False (discard item). If not specified all items are returned.
+        By default only items with "isValid" == True are returned.
+
+        return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+        """
+        attr = attr if attr is not None else []
+        attr = set(['id', 'specfile'] + aux.toList(attr))
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
+
+        arrays = dict([(key, []) for key in attr])
+        for item in _getItems(self.container, specfiles, sort, reverse, selector):
+            for key in attr:
+                arrays[key].append(getattr(item, key, defaultValue))
+        for key in [_ for _ in viewkeys(arrays)]:
+            arrays[key] = numpy.array(arrays[key])
+
+        return arrays
+
+    def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda fi: fi.isValid):
+        """Generator that yields filtered and/or sorted :class:`Fi` objects from :instance:`self.container`
+
+        :param specfiles: filenames of msrun files - if specified return only items from those files
+        :type specfiles: str or [str, str, ...]
+        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Fi`
+        attribute specified by "sort", if the attribute is not present the item is skipped.
+        :param reverse: boolean to reverse sort order
+        :param selector: a function which is called with each :class:`Si` item and returns
+        True (include item) or False (discard item). If not specified all items are returned
+        """
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
+        return _getItems(self.container, specfiles, sort, reverse, selector)
+
+    def addSpecfile(self, specfiles, path):
+        """Adds a number of maspy msrun files to self.info, but doesn't import any data yet.
+        To actually import the specfile data, call :func:`msrunContainer.load()`.
+        """
+        for specfile in aux.toList(specfiles):
+            if specfile in self.info:
+                print('Specfile already present in msrunContainer:', specfile, self.info[specfile]['path'])
+            else:
+                 self._addSpecfile(specfiles, path)
+
+    def _addSpecfile(self, specfile, path):
+        """Adds a new specfile entry to FiContainer.info. """
+        self.info[specfile] = {'path': path}
+        self.container[specfile] = dict()
+
+    def setPath(self, folderpath, specfiles=None):
+        """Change the folderpath of the specified specfiles. If save is called and no "fic"
+        (FeatureItemContainer) file is present in the specified path, a new file is generated.
+        """
+        #TODO: check if folderpath exists, if not generate new folderspecfiles
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.info:
+                #TODO: warning here?
+                continue
+            self.info[specfile]['path'] = folderpath
+
+    def removeSpecfile(self, specfiles):
+        """Completely removes the specified specfiles from the SiiContainer."""
+        for specfile in aux.toList(specfiles):
+            del self.container[specfile]
+            del self.info[specfile]
+
+    def save(self, specfiles=None, compress=True, path=None):
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.info:
+                print('Error while saving', specfile, ', not found in msrunCountainer!')
+                continue
+            else:
+                specfilePath = self.info[specfile]['path'] if path is None else path
+
+            with aux.PartiallySafeReplace() as msr:
+                filename = specfile + '.fic'
+                filepath = aux.joinpath(specfilePath, filename)
+                with msr.open(filepath) as openfile:
+                    self._writeContainer(openfile, specfile, compress=compress)
+
+    def _writeContainer(self, filelike, specfile, compress=True):
+        writeJsonItemContainer(filelike, self.container[specfile], compress=compress)
+        #zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
+        #with zipfile.ZipFile(filelike, 'a', allowZip64=True) as containerFile:
+        #    infodata = {key: value for key, value in viewitems(self.info[specfile]) if key != 'path'}
+        #    containerFile.writestr('info', json.dumps(infodata, zipcomp))
+
+    def load(self, specfiles=None):
+        """Import specfiles"""
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            if specfile not in self.info:
+                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.msrunInfo')))
+                continue
+            else:
+                fiPath = aux.joinpath(self.info[specfile]['path'], specfile+'.fic')
+                with zipfile.ZipFile(fiPath, 'r') as containerZip:
+                    #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
+                    jsonString = io.TextIOWrapper(containerZip.open('data'), encoding='utf-8').read()
+                    #infoString = io.TextIOWrapper(containerZip.open('info'), encoding='utf-8').read()
+                self.container[specfile] = json.loads(jsonString, object_hook=Fi.jsonHook)
+                #self.info[specfile].update(json.loads(infoString))
+
+    def removeAnnotation(self, specfiles=None):
         """Remove all annotation information from :class:`FeatureItem` in :class:`FeatureContainer`."""
-        for items in viewvalues(self.container):
-            for item in items:
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        for specfile in aux.toList(specfiles):
+            for item in viewvalues(self.container[specfile]):
                 item.isMatched = False
                 item.isAnnotated = False
                 item.siIds = list()

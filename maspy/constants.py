@@ -1,3 +1,4 @@
+#TODO: no changes yet
 from __future__ import print_function, division
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
@@ -110,8 +111,8 @@ xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in vie
 """
 
 """
-This dict contains regular expressions for cleavage rules of the most popular proteolytic enzymes.
-The rules were copied from pyteomics http://pythonhosted.org/pyteomics/ and originally taken from
+The dictionary expasy_rules contains regular expressions for cleavage rules of the most popular proteolytic enzymes.
+The rules were copied from pyteomics http://pythonhosted.org/pyteomics/ and initially taken from
 `PeptideCutter tool <http://ca.expasy.org/tools/peptidecutter/peptidecutter_enzymes.html>`_ at Expasy.
 """
 expasy_rules = {'arg-c': 'R',
@@ -151,6 +152,7 @@ expasy_rules = {'arg-c': 'R',
                 'trypsin simple': '[KR]'
                 }
 
+#TODO: mzmlAccessions is deprictaed and can be removed
 mzmlAccessions = dict()
 """ A dictionary with accession ids of the PSI controlled vocabulary which should be
 extracted from spectra of parsed mzML files. Each entry contains a dictionary with the
@@ -175,6 +177,5 @@ mzmlAccessions['MS:1000501'] = {'name':'lowWindowLimit', 'msLevel':2}
 mzmlAccessions['MS:1000500'] = {'name':'highWindowLimit', 'msLevel':2}
 mzmlAccessions['MS:1000504']  = {'name':'basePeakMz', 'msLevel':None}
 mzmlAccessions['MS:1000505']  = {'name':'basePeakI', 'msLevel':None}
-
 #mzmlAccessions['MS:1000512'] = {'name':'filterString', 'msLevel':None}
 
