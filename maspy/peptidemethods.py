@@ -1,7 +1,11 @@
-#TODO: no changes yet!!!
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
+try: # python 2.7
+    from itertools import izip as zip
+except ImportError: # python 3.x series
+    pass
+###############################################################################
 import itertools
 import re
 
@@ -19,7 +23,7 @@ def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, remo
     :param minLength: only yield peptides with length >= minLength
     :param maxLength: only yield peptides with length <= maxLength
 
-    return [(peptide, peptideinfo), ...]
+    return [(aa sequence, {'startPos': int, 'endPos': int, 'missedCleavage': int}), ...]
 
     Note: An example for specifying N-terminal cleavage at Lysine sites: \\w(?=[K])
     """
@@ -39,7 +43,7 @@ def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, remo
     digestionresults = list()
     #Generate protein n-terminal peptides after methionine removal
     if removeNtermM and proteinSequence[0] == 'M':
-        for cleavagePos in range(0,missedCleavages+1):
+        for cleavagePos in range(0, missedCleavages+1):
             startPos = 1
             endPos = cleavagePosList[cleavagePos]
             if passFilter(startPos, endPos):
@@ -52,7 +56,7 @@ def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, remo
 
     #Generate protein n-terminal peptides
     if cleavagePosList[0] != 0:
-        for cleavagePos in range(0,missedCleavages+1):
+        for cleavagePos in range(0, missedCleavages+1):
             startPos = 0
             endPos = cleavagePosList[cleavagePos]
             if passFilter(startPos, endPos):

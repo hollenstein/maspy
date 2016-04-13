@@ -1,36 +1,23 @@
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
+try: # python 2.7
+    from itertools import izip as zip
+except ImportError: # python 3.x series
+    pass
+###############################################################################
 import io
 import itertools
-import json
 import numpy
 import re
-import zipfile
 
-import maspy.new.auxiliary as aux
-import maspy.peptidemethods
+import json
 import pyteomics
 import pyteomics.fasta
+import zipfile
 
-
-#TODO:
-## eventually move somewhere else
-def writeJsonItemContainer(filepath, itemContainer, compress=True, mode='w', name='data'):
-    #TODO: docstring
-    zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
-    with zipfile.ZipFile(filepath, mode, allowZip64=True) as containerFile:
-        containerFile.writestr(name, json.dumps(itemContainer, cls=MaspyJsonEncoder), zipcomp)
-
-#TODO:
-class MaspyJsonEncoder(json.JSONEncoder):
-    #TODO: docstring
-    def default(self, obj):
-        if hasattr(obj, '_reprJSON'):
-            return obj._reprJSON()
-        else:
-            #Let the base class default method raise the TypeError
-            return json.JSONEncoder.default(self, obj)
+import maspy.auxiliary as aux
+import maspy.peptidemethods
 
 
 # --- Protein and peptide related classes --- #
@@ -44,7 +31,6 @@ class PeptideSequence(object):
     :ivar proteinPositions: {proteinId:(startPosition, endPositions) ...} startposition and endposition of peptide in protein
     eg. 'AADITSLYK' IN 'TAKAADITSLYKEETR':(4,12)
     :ivar mass: peptide mass in Daltons
-    :ivar length: number of amino acids
     """
     __slots__ = ['sequence', 'missedCleavage', 'isUnique', 'proteins', 'proteinPositions']
     def __init__(self, sequence, mc=None):
@@ -55,9 +41,11 @@ class PeptideSequence(object):
         self.proteinPositions = dict()
 
     def length(self):
+        """Returns the number of amino acids of the polypeptide sequence."""
         return len(self.sequence)
 
     def mass(self):
+        """Returns the mass of the polypeptide sequence in dalton."""
         return maspy.peptidemethods.calcPeptideMass(self.sequence)
 
     def _reprJSON(self):
@@ -78,7 +66,6 @@ class PeptideSequence(object):
             return PeptideSequence._fromJSON(encoded['__PepSeq__'])
         else:
             return encoded
-
 
 
 class ProteinSequence(object):
@@ -105,9 +92,11 @@ class ProteinSequence(object):
         self.sharedPeptides = set()
 
     def mass(self):
+        """Returns the number of amino acids of the polypeptide sequence."""
         return maspy.peptidemethods.calcPeptideMass(self.sequence)
 
     def length(self):
+        """Returns the mass of the polypeptide sequence in dalton."""
         return len(self.sequence)
 
     def _reprJSON(self):
@@ -139,7 +128,6 @@ class ProteinDatabase(object):
     :ivar proteins: {proteinId:Protein(), proteinId:Protein()}, used to access :class:`ProteinSequence` elements by their id
     :ivar proteinNames: {proteinName:Protein(), proteinName:Protein()}, alternative way to access :class:`ProteinSequence` elements by their names
     """
-    # A container for Protein or ProteinEvidence objects
     def __init__(self):
         self.peptides = dict()
         self.proteins = dict()
@@ -167,8 +155,8 @@ class ProteinDatabase(object):
                 self._writeContainer(openfile, compress=compress)
 
     def _writeContainer(self, filelike, compress=True):
-        writeJsonItemContainer(filelike, self.proteins, compress, 'w', 'proteins')
-        writeJsonItemContainer(filelike, self.peptides, compress, 'a', 'peptides')
+        aux.writeJsonZipfile(filelike, self.proteins, compress, 'w', 'proteins')
+        aux.writeJsonZipfile(filelike, self.peptides, compress, 'a', 'peptides')
         zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
         with zipfile.ZipFile(filelike, 'a', allowZip64=True) as containerFile:
             infodata = {key: value for key, value in viewitems(self.info) if key != 'path'}
@@ -176,7 +164,8 @@ class ProteinDatabase(object):
 
     @classmethod
     def load(cls, path, name):
-        """Import specfiles"""
+        #TODO: docstring
+        #Note: This generates a rather large file, which takes longer to import than to newly generate.
         filepath = aux.joinpath(path, name + '.proteindb')
         with zipfile.ZipFile(filepath, 'r', allowZip64=True) as containerZip:
             #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
@@ -192,7 +181,7 @@ class ProteinDatabase(object):
     def calculateCoverage(self):
         """Calcualte the sequence coverage masks for all ProteinEvidence() elements.
 
-        For detailed description see :func:`_calculateCoverageMasks`
+        For detailed description see :func:`_calculateCoverageMasks()`
         """
         self._calculateCoverageMasks(self.proteins, self.peptides)
 

@@ -17,20 +17,23 @@ from lxml import etree as ETREE
 import io
 import zlib
 
-import maspy.new.auxiliary as aux
-import maspy.new.ontology
+import maspy.auxiliary as aux
+import maspy.ontology
 
 ##############################################################
 ### maspy unrelated xml (mzml) content #######################
 ##############################################################
+#TODO: docstring
 binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i', 'MS:1000516': 'z', 'MS:1000517': 'sn',
                         'MS:1000595': 'rt', 'MS:1000617': 'lambda', 'MS:1000786': 'non-standard',
                         'MS:1000820': 'flow', 'MS:1000821': 'pressure', 'MS:1000822': 'temperature'
                         }
 
+
+#TODO: docstring
 mspath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'psi-ms.obo')
 unitpath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'unit.obo')
-oboTranslator = maspy.new.ontology.OBOOntology()
+oboTranslator = maspy.ontology.OBOOntology()
 with io.open(mspath, 'r', encoding='utf-8') as openfile:
     oboTranslator.load(openfile)
 with io.open(unitpath, 'r', encoding='utf-8') as openfile:
@@ -41,16 +44,19 @@ with io.open(unitpath, 'r', encoding='utf-8') as openfile:
 # --- general xml methods --- #
 ###############################
 def clearParsedElements(element):
+    #TODO: docstring
     element.clear()
     while element.getprevious() is not None:
         del element.getparent()[0]
 
 
 def clearTag(tag):
+    #TODO: docstring
     return tag.split('}')[-1]
 
 
 def recClearTag(element):
+    #TODO: docstring
     children = element.getchildren()
     if len(children) > 0:
         for child in children:
@@ -59,6 +65,7 @@ def recClearTag(element):
 
 
 def recRemoveTreeFormating(element):
+    #TODO: docstring
     children = element.getchildren()
     if len(children) > 0:
         for child in children:
@@ -76,6 +83,7 @@ def recRemoveTreeFormating(element):
 
 
 def recCopyElement(oldelement):
+    #TODO: docstring
     #Note: doesn't copy "text" or "tail" of xml elements
     newelement = ETREE.Element(oldelement.tag, oldelement.attrib)
     if len(oldelement.getchildren()) > 0:
@@ -134,6 +142,7 @@ def getParam(xmlelement):
 
 
 def extractParams(xmlelement):
+    #TODO: docstring
     params = list()
     children = list()
     for child in xmlelement.getchildren():
@@ -146,6 +155,7 @@ def extractParams(xmlelement):
 
 
 def xmlAddParams(xmlelement, params):
+    #TODO: docstring
     if not params:
         return None
     for param in params:
@@ -179,6 +189,7 @@ def xmlAddParams(xmlelement, params):
 # --- decode and encode function for binary data of mzml files --- #
 ####################################################################
 def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
+    #TODO: docstring
     bitEncodedData = binaryData.encode("utf-8")
     bitDecodedData = B64DEC(bitEncodedData)
 
@@ -200,6 +211,7 @@ def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
 
 
 def encodeBinaryData(dataArray, bitEncoding, compression):
+    #TODO: docstring
     arrayLength = len(dataArray)
     if bitEncoding == '64':
         floattype = 'd' # 64-bit
@@ -233,6 +245,7 @@ def findBinaryDataType(params):
 
 
 def extractBinaries(binaryDataArrayList, arrayLength):
+    #TODO: docstring
     extractedArrays = dict()
     arrayInfo = dict()
     for binaryData in binaryDataArrayList:
@@ -252,6 +265,7 @@ def extractBinaries(binaryDataArrayList, arrayLength):
 # --- Parse a mzml file --- #
 #############################
 class MzmlReader(object):
+    #TODO: docstring
     #TODO: change to work as a with method
     def __init__(self, mzmlPath):
         self.mzmlPath = mzmlPath
@@ -278,6 +292,7 @@ class MzmlReader(object):
         return self.next()
 
     def next(self):
+        #TODO: docstring
         try:
             self.event, self.element = next(self.iterator)
             self.elementTag = clearTag(self.element.tag)
@@ -287,19 +302,22 @@ class MzmlReader(object):
         return self.event, self.element, self.elementTag
 
     def loadMetadata(self):
+        #TODO: docstring
         if self._parsed:
             raise TypeError('Mzml file already parsed.')
         [None for _ in self._parseMzml()]
         self._parsed = True
 
     def parseSpectra(self):
-        #Note: needs to be iterated completely to save the metadataNode
+        #TODO: docstring
+        #Note: the spectra need to be iterated completely to save the metadataNode
         if self._parsed:
             raise TypeError('Mzml file already parsed.')
         self._parsed = True
         return self._parseMzml()
 
     def _parseMzml(self):
+        #TODO: docstring
         for event, element, elementTag in self:
             if elementTag == 'mzML':
                 metadataNode = ETREE.Element(self.elementTag, self.element.attrib)
@@ -352,8 +370,8 @@ class MzmlReader(object):
 
 
 def sublistReader(xmlelement):
-    """TODO: actually I'm not 100% sure how this function behaves
-    """
+    #TODO: docstring
+    #Note: actually I'm not 100% sure how this function behaves
     elements = list()
     params, children = extractParams(xmlelement)
     for child in children:

@@ -1,7 +1,11 @@
-#TODO: no changes yet
-from __future__ import print_function, division
+from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
+try: # python 2.7
+    from itertools import izip as zip
+except ImportError: # python 3.x series
+    pass
+###############################################################################
 import copy
 
 import pyteomics.mass
@@ -151,31 +155,3 @@ expasy_rules = {'arg-c': 'R',
                 'trypsin': '([KR](?=[^P]))|((?<=W)K(?=P))|((?<=M)R(?=P))',
                 'trypsin simple': '[KR]'
                 }
-
-#TODO: mzmlAccessions is deprictaed and can be removed
-mzmlAccessions = dict()
-""" A dictionary with accession ids of the PSI controlled vocabulary which should be
-extracted from spectra of parsed mzML files. Each entry contains a dictionary with the
-keys 'name' and 'msLevel'. The 'name' specifies the attribute name that will be used
-to store the value in the SpectrumItem. 'msLevel' can be set if an attribute should
-only be extraced for spectra of a certain ms level, default is None.
-
-For details on the PSI controlled vocabulary see:
-http://www.psidev.info/controlled-vocabularies
-http://psidev.cvs.sourceforge.net/viewvc/psidev/psi/psi-ms/mzML/controlledVocabulary/psi-ms.obo
-"""
-mzmlAccessions['MS:1000927'] = {'name':'iit', 'msLevel':None}
-mzmlAccessions['MS:1000285'] = {'name':'tic', 'msLevel':None}
-mzmlAccessions['MS:1000016'] = {'name':'rt', 'msLevel':None}
-mzmlAccessions['MS:1000827'] = {'name':'targetWindowMz', 'msLevel':2}
-mzmlAccessions['MS:1000828'] = {'name':'lowWindowOffset', 'msLevel':2}
-mzmlAccessions['MS:1000829'] = {'name':'highWindowOffset', 'msLevel':2}
-mzmlAccessions['MS:1000744'] = {'name':'obsMz', 'msLevel':2}
-mzmlAccessions['MS:1000042'] = {'name':'obsI', 'msLevel':2}
-mzmlAccessions['MS:1000041'] = {'name':'charge', 'msLevel':2}
-mzmlAccessions['MS:1000501'] = {'name':'lowWindowLimit', 'msLevel':2}
-mzmlAccessions['MS:1000500'] = {'name':'highWindowLimit', 'msLevel':2}
-mzmlAccessions['MS:1000504']  = {'name':'basePeakMz', 'msLevel':None}
-mzmlAccessions['MS:1000505']  = {'name':'basePeakI', 'msLevel':None}
-#mzmlAccessions['MS:1000512'] = {'name':'filterString', 'msLevel':None}
-

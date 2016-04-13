@@ -12,14 +12,14 @@ import sys
 sys.path.append('D:/Dropbox/python/maspy')
 sys.path.append('C:/Users/David/Dropbox/python/maspy')
 
-import maspy.new.auxiliary as aux
-import maspy.new
-import maspy.new.import_export
-import maspy.new.core
-import maspy.new.xml
+import maspy.auxiliary as aux
+import maspy.reader
+import maspy.writer
+import maspy.core
+import maspy.xml
 
 
-# --- Testing mzml related functionalities (core, import_export, xml) --- #
+# --- Testing mzml related functionalities (core, reader, writer, xml) --- #
 import io
 from lxml import etree as etree
 
@@ -61,16 +61,16 @@ def compareParams(paramList, referenceParamList):
     return True
 
 
-testfilepath = aux.joinpath(os.path.dirname(aux.__file__), 'testdata', 'spectrum.xml')
+testfilepath = aux.joinpath(os.path.dirname(aux.__file__), os.pardir, 'tests', 'testdata', 'spectrum.xml')
 with io.open(testfilepath, 'r', encoding='utf-8') as openfile:
     root = etree.XML(openfile.read())
 
 #TESTING mzml.smiFromXmlSpectrum(), mzml.extractBinaries()
 spectra = list()
 for xmlSpectrum in root.getchildren():
-    smi, binaryDataArrayList = maspy.new.import_export.smiFromXmlSpectrum(xmlSpectrum, 'test')
-    sai = maspy.new.core.Sai(smi.id, smi.specfile)
-    sai.arrays, sai.arrayInfo = maspy.new.xml.extractBinaries(binaryDataArrayList,
+    smi, binaryDataArrayList = maspy.reader.smiFromXmlSpectrum(xmlSpectrum, 'test')
+    sai = maspy.core.Sai(smi.id, smi.specfile)
+    sai.arrays, sai.arrayInfo = maspy.xml.extractBinaries(binaryDataArrayList,
                                                      smi.attributes['defaultArrayLength'])
     spectra.append({'smi': smi, 'sai': sai})
 
@@ -136,8 +136,8 @@ compareParams(selectedIon, selectedIonReferenceParams)
 
 #TESTING Si, defaultFetchSiAttrFromSmi(), fetchParentIon(), fetchScanInfo(), fetchSpectrumInfo()
 smi = spectra[1]['smi']
-si = maspy.new.core.Si(smi.id, smi.specfile)
-maspy.new.import_export.defaultFetchSiAttrFromSmi(smi, si)
+si = maspy.core.Si(smi.id, smi.specfile)
+maspy.reader.defaultFetchSiAttrFromSmi(smi, si)
 siAttrReference = {'basepeakI': 170753.84, 'basepeakMz': 251.1017004,'i': 725709.25, 'id': '5',
                    'iit': 59.999998658895,'isValid': None, 'msLevel': 2, 'mz': 410.681187454293,
                    'rt': 1.39947804, 'specfile': 'test', 'tic': 637463.25, 'charge': 2
@@ -151,7 +151,7 @@ for key, refValue in viewitems(siAttrReference):
         print(siAttrValue == refValue)
         siAttrValue == refValue
 
-parentIonAttr = maspy.new.import_export.fetchParentIon(smi)
+parentIonAttr = maspy.reader.fetchParentIon(smi)
 parentIonAttrReference = {'i': 7.2570925e05, 'mz': 410.681187454293, 'charge': 2, 'precursorId': 'controllerType=0 controllerNumber=1 scan=4'}
 for key, value in viewitems(parentIonAttr):
     try:
@@ -161,13 +161,13 @@ for key, value in viewitems(parentIonAttr):
         value == parentIonAttrReference[key]
         print(value == parentIonAttrReference[key])
 
-scanAttr = maspy.new.import_export.fetchScanInfo(smi)
+scanAttr = maspy.reader.fetchScanInfo(smi)
 scanAttrReference = {'iit': 59.999998658895, 'rt': 0.023324634*60}
 for key, value in viewitems(scanAttr):
     round(value, 6) == round(scanAttrReference[key], 6)
     print(round(value, 6) == round(scanAttrReference[key], 6))
 
-specAttr = maspy.new.import_export.fetchSpectrumInfo(smi)
+specAttr = maspy.reader.fetchSpectrumInfo(smi)
 specAttrReference = {'basepeakI': 1.7075384e05, 'basepeakMz': 251.1017004, 'msLevel': 2, 'tic': 6.3746325e05}
 for key, value in viewitems(specAttr):
     round(value, 6) == round(specAttrReference[key], 6)
@@ -209,32 +209,32 @@ specfilename = 'JD_06232014_sample1_A'
 specfiles = ['JD_06232014_sample1_A']
 
 mzmlPath = 'J:/lab/maspy_testfiles/' + specfilename + '.mzML'
-msrunContainer = maspy.new.import_export.importMzml(mzmlPath)
+msrunContainer = maspy.reader.importMzml(mzmlPath)
 
 msrunContainer.setPath('D:/maspy_test')
 msrunContainer.save()
 
-newMsrunContainer = maspy.new.core.MsrunContainer()
+newMsrunContainer = maspy.core.MsrunContainer()
 newMsrunContainer.addSpecfile(specfiles, 'D:/maspy_test')
 newMsrunContainer.load()
 
 # --- Testing writing an mzml file and reimportint it --- #
-maspy.new.import_export.writeMzml(specfilename, newMsrunContainer, 'D:/maspy_test', spectrumIds=None, chromatogramIds=None)
-newMzmlMsrunContainer = maspy.new.import_export.importMzml('D:/maspy_test/' + specfilename + '.mzML')
+maspy.writer.writeMzml(specfilename, newMsrunContainer, 'D:/maspy_test', spectrumIds=None, chromatogramIds=None)
+newMzmlMsrunContainer = maspy.reader.importMzml('D:/maspy_test/' + specfilename + '.mzML')
 
 
 # --- Testing import sii (SpectrumIdentificationItem) and SiiContainer --- #
 psmFolder = 'J:/lab/maspy_testfiles'
-siiContainer = maspy.new.core.SiiContainer()
+siiContainer = maspy.core.SiiContainer()
 for specfile in specfiles:
     print('Importing PSMs from: ', specfile)
     currSearchFolder = os.path.join(psmFolder, specfile).replace('\\','/')
     percolatorTargetOutputLocation = os.path.join(currSearchFolder, 'target_percolator_output.tsv').replace('\\','/')
-    maspy.new.import_export.importPsmResults(siiContainer, percolatorTargetOutputLocation, specfile, psmType='percolator', psmEngine='comet', qValue=0.01)
+    maspy.reader.importPsmResults(siiContainer, percolatorTargetOutputLocation, specfile, psmType='percolator', psmEngine='comet', qValue=0.01)
 siiContainer.setPath('D:/maspy_test')
 siiContainer.save()
 
-newSiiContainer = maspy.new.core.SiiContainer()
+newSiiContainer = maspy.core.SiiContainer()
 newSiiContainer.addSpecfile(specfile, 'D:/maspy_test')
 newSiiContainer.load()
 
@@ -246,21 +246,21 @@ newSiiContainer.calcMz()
 specfiles = ['JD_06232014_sample1_A']
 folder = 'C:/Users/David/Dropbox/python/maspy_workspace/maspy_testfiles'
 folder = 'J:/lab/maspy_testfiles'
-fiContainer = maspy.new.core.FiContainer()
+fiContainer = maspy.core.FiContainer()
 for specfile in specfiles:
     print('Importing Fi from: ', specfile)
     currSearchFolder = os.path.join(folder, specfile).replace('\\','/')
     filelocation = os.path.join(folder, specfile+'.featureXML').replace('\\','/')
-    maspy.new.import_export.importPeptideFeatures(fiContainer, filelocation, specfile)
+    maspy.reader.importPeptideFeatures(fiContainer, filelocation, specfile)
 fiContainer.setPath('D:/maspy_test')
 fiContainer.save()
 
-newFiContainer = maspy.new.core.FiContainer()
+newFiContainer = maspy.core.FiContainer()
 newFiContainer.addSpecfile(specfile, 'D:/maspy_test')
 newFiContainer.load()
 
 
-items = [item for item in maspy.new.core._getListItems(siiContainer.container, sort='score', reverse=True, selector=lambda item: item.isValid)]
+items = [item for item in maspy.core._getListItems(siiContainer.container, sort='score', reverse=True, selector=lambda item: item.isValid)]
 siItems = [_ for _ in newMsrunContainer.getItems(selector=lambda si: si.msLevel==2 and si.mz > 1000)]
 siArrays = newMsrunContainer.getArrays(['rt', 'mz', 'i'], selector= lambda si: si.msLevel==2)
 

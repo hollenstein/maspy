@@ -10,12 +10,12 @@ import bisect
 from collections import defaultdict as ddict
 import functools
 import io
-import operator
-import os
 from matplotlib import pyplot as plt
 import numpy
+import operator
+import os
 
-import maspy.new.auxiliary as aux
+import maspy.auxiliary as aux
 import maspy.core
 import maspy.sil
 
@@ -56,10 +56,9 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz', s
 
     if specContainer.__class__.__name__ == 'MsrunContainer':
         listKeySpecIds = 'siIds'
-        specContainerSpecfiles = [_ for _ in viewkeys(specContainer.msrunInfo)]
     else:
         listKeySpecIds = 'siiIds'
-        specContainerSpecfiles = [_ for _ in viewkeys(specContainer.info)]
+    specContainerSpecfiles = [_ for _ in viewkeys(specContainer.info)]
 
     if specfiles is not None:
         specfiles = aux.toList(specfiles)
@@ -161,7 +160,7 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz', s
                 print('Isotope error matched spectra:\t\t', isotopeErrorMatchCounter)
 
         #annotate feature with sii information (peptide, sequence, score)
-        if isinstance(specContainer, maspy.new.core.SiiContainer):
+        if isinstance(specContainer, maspy.core.SiiContainer):
             for featureId in viewkeys(featureSpecDict):
                 matches = list()
                 for specId in fiContainer.container[specfile][featureId].siiIds:

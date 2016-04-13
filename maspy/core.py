@@ -6,23 +6,20 @@ try: # python 2.7
 except ImportError: # python 3.x series
     pass
 ###############################################################################
-
 from collections import defaultdict as ddict
 import io
-from lxml import etree as ETREE
 import numpy
+from operator import itemgetter as ITEMGETTER
 import os
-
-import maspy.new.auxiliary as aux
-from maspy.new.auxiliary import lazyAttribute
-import maspy.constants
-import maspy.peptidemethods
+import warnings
 
 import json
-from operator import itemgetter as ITEMGETTER
-
+from lxml import etree as ETREE
 import zipfile
 
+import maspy.auxiliary as aux
+import maspy.constants
+import maspy.peptidemethods
 
 
 ############################################
@@ -121,6 +118,17 @@ def _getListItems(container, containerKeys=None, sort=False, reverse=False, sele
                         yield item
 
 
+def _containerSetPath(container, folderpath, specfiles):
+    """Changse the folderpath of the specified specfiles in container.info """
+    if not os.path.exists(folderpath):
+        warnings.warn('The specified directory does not exist %s' %(folderpath, ))
+    for specfile in aux.toList(specfiles):
+        if specfile in container.info:
+            container.info[specfile]['path'] = folderpath
+        else:
+            warnings.warn('Specfile not present in container %s' %(specfile, ))
+
+
 ##############################################################
 ### MsrunContainer related classes and functions #############
 ##############################################################
@@ -134,7 +142,7 @@ class MsrunContainer(object):
     :ivar saic: "spectrum array item container", see :class:`Sai`
     :ivar sic: "spectrum item container", see :class:`Si`
 
-    :ivar msrunInfo: a dictionary containing information about the imported specfiles; key = specfilename, value = {'path': str, 'status': {}}
+    :ivar info: a dictionary containing information about the imported specfiles; key = specfilename, value = {'path': str, 'status': {}}
                      "path" contains information about the filelocation used for saving and loading msrun files in
                      the maspy dataformat and "status" about which datatypes have been imported by using bool values.
     eg {"specfilename": {"path": an absolute path to a filedirectory,
@@ -147,7 +155,7 @@ class MsrunContainer(object):
         self.smic = {}
         self.saic = {}
         self.sic = {}
-        self.msrunInfo = {}
+        self.info = {}
 
     def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
         """Return a condensed array of data selected from :class:`Si` objects of :instance:`self.sic`
@@ -168,7 +176,7 @@ class MsrunContainer(object):
         """
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
-        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else aux.toList(specfiles)
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         #return _getArrays(self.sic, attr, specfiles, sort, reverse, selector, defaultValue)
 
         arrays = arrays = dict([(key, []) for key in attr])
@@ -191,7 +199,7 @@ class MsrunContainer(object):
         :param selector: a function which is called with each :class:`Si` item and returns
         True (include item) or False (discard item). If not specified all items are returned
         """
-        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else aux.toList(specfiles)
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         return _getItems(self.sic, specfiles, sort, reverse, selector)
 
     def getItem(self, specfile, identifier):
@@ -199,35 +207,30 @@ class MsrunContainer(object):
         return self.sic[specfile][identifier]
 
     def addSpecfile(self, specfiles, path):
-        """Adds a number of maspy msrun files to self.msrunInfo, but doesn't import any data yet.
-        To actually import the specfile data, call :func:`msrunContainer.load()`.
+        """Adds specfile entries to self.info, but doesn't import any data yet.
+        To actually import the MsrunContainer files, use :func:`MsrunContainer.load()`.
         """
         for specfile in aux.toList(specfiles):
-            if specfile in self.msrunInfo:
-                print('Specfile already present in msrunContainer:', specfile, self.msrunInfo[specfile]['path'])
+            if specfile not in self.info:
+                self._addSpecfile(specfile, path)
             else:
-                 self._addSpecfile(specfile, path)
+                warnings.warn('Specfile is already present in the MsrunContainer.\nname: %s \npath: %s' %(specfile, self.info[specfile]['path']))
 
     def _addSpecfile(self, specfile, path):
-        """Adds a new specfile entry to MsrunContainer.msrunInfo. """
+        """Adds a new specfile entry to MsrunContainer.info. """
         datatypeStatus = {'rm':False, 'ci':False, 'smi':False, 'sai':False, 'si':False}
-        self.msrunInfo[specfile] = {'path': path, 'status': datatypeStatus}
+        self.info[specfile] = {'path': path, 'status': datatypeStatus}
 
     def setPath(self, folderpath, specfiles=None):
         """Change the folderpath of the specified specfiles. If save is called and no container file is
-        present in the specified path, a new file is generated.
+        present in the specified path, a new file is generated, otherwise it is replaced.
         """
-        #TODO: check if folderpath exists, if not generate new folderspecfiles
-        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else specfiles
-        for specfile in aux.toList(specfiles):
-            if specfile not in self.msrunInfo:
-                #TODO: warning here?
-                continue
-            self.msrunInfo[specfile]['path'] = folderpath
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        _containerSetPath(self, folderpath, specfiles)
 
     def removeData(self, specfiles, rm=False, ci=False, smi=False, sai=False, si=False):
         """Removes the specified datatypes of the specfiles from the msrunContainer.
-        To completely remove the specfile, also from msrunInfo, use :func:`MsrunContainer.removeSpecfile`
+        To completely remove the specfile, also from info, use :func:`MsrunContainer.removeSpecfile`
         """
         datatypes = self._processDatatypes(rm, ci, smi, sai, si)
         for specfile in aux.toList(specfiles):
@@ -239,7 +242,7 @@ class MsrunContainer(object):
                 except KeyError:
                     pass
                 finally:
-                    self.msrunInfo[specfile]['status'][datatype] = False
+                    self.info[specfile]['status'][datatype] = False
 
     def removeSpecfile(self, specfiles):
         """Completely removes the specified specfiles from the msrunContainer."""
@@ -250,9 +253,10 @@ class MsrunContainer(object):
                     del dataContainer[specfile]
                 except KeyError:
                     pass
-            del self.msrunInfo[specfile]
+            del self.info[specfile]
 
     def _processDatatypes(self, rm, ci, smi, sai, si):
+        #TODO: docstring
         datatypes = list()
         for datatype, value in [('rm', rm), ('ci', ci), ('smi', smi), ('sai', sai), ('si', si)]:
             if value:
@@ -260,17 +264,18 @@ class MsrunContainer(object):
         return datatypes
 
     def save(self, specfiles=None, rm=False, ci=False, smi=False, sai=False, si=False, compress=True, path=None):
-        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else specfiles
+        #TODO: docstring
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         datatypes = self._processDatatypes(rm, ci, smi, sai, si)
         if len(datatypes) == 0:
             datatypes = ['rm', 'ci', 'smi', 'sai', 'si']
 
         for specfile in aux.toList(specfiles):
-            if specfile not in self.msrunInfo:
+            if specfile not in self.info:
                 print('Error while saving', specfile, ', not found in msrunCountainer!')
                 continue
             else:
-                msrunInfo = self.msrunInfo[specfile]
+                msrunInfo = self.info[specfile]
                 specfilePath = msrunInfo['path'] if path is None else path
 
             with aux.PartiallySafeReplace() as msr:
@@ -290,34 +295,40 @@ class MsrunContainer(object):
                            self._writeSaic(openfile, specfile, compress=compress)
 
     def _writeCic(self, filelike, specfile, compress=True):
-        writeBinaryItemContainer(filelike, self.cic[specfile], compress=compress)
+        #TODO: docstring
+        aux.writeBinaryItemContainer(filelike, self.cic[specfile], compress=compress)
 
     def _writeSaic(self, filelike, specfile, compress=True):
-        writeBinaryItemContainer(filelike, self.saic[specfile], compress=compress)
+        #TODO: docstring
+        aux.writeBinaryItemContainer(filelike, self.saic[specfile], compress=compress)
 
     def _writeSmic(self, filelike, specfile, compress=True):
-        writeJsonItemContainer(filelike, self.smic[specfile], compress=compress)
+        #TODO: docstring
+        aux.writeJsonZipfile(filelike, self.smic[specfile], compress=compress)
 
     def _writeSic(self, filelike, specfile, compress=True):
-        writeJsonItemContainer(filelike, self.sic[specfile], compress=compress)
+        #TODO: docstring
+        aux.writeJsonZipfile(filelike, self.sic[specfile], compress=compress)
 
     def _writeRmc(self, filelike, specfile, compress=True):
+        #TODO: docstring
         xmlString = ETREE.tostring(self.rmc[specfile], pretty_print=True)
         filelike.write(xmlString)
 
     def load(self, specfiles=None, rm=False, ci=False, smi=False, sai=False, si=False):
         """Import the specified datatypes from specfiles"""
-        specfiles = [_ for _ in viewkeys(self.msrunInfo)] if specfiles is None else specfiles
+        #TODO: docstring
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         datatypes = self._processDatatypes(rm, ci, smi, sai, si)
         if len(datatypes) == 0:
             datatypes = ['rm', 'ci', 'smi', 'sai', 'si']
 
         for specfile in aux.toList(specfiles):
-            if specfile not in self.msrunInfo:
-                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.msrunInfo')))
+            if specfile not in self.info:
+                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.info')))
                 continue
             else:
-                msrunInfo = self.msrunInfo[specfile]
+                msrunInfo = self.info[specfile]
                 specfilePath = msrunInfo['path']
 
             if 'rm' in datatypes:
@@ -329,7 +340,7 @@ class MsrunContainer(object):
 
             if 'ci' in datatypes:
                 ciPath = aux.joinpath(specfilePath, specfile+'.mrc_ci')
-                self.cic[specfile] = loadBinaryItemContainer(ciPath, Ci.jsonHook)
+                self.cic[specfile] = aux.loadBinaryItemContainer(ciPath, Ci.jsonHook)
                 msrunInfo['status']['ci'] = True
 
             if 'smi' in datatypes:
@@ -342,7 +353,7 @@ class MsrunContainer(object):
 
             if 'sai' in datatypes:
                 saiPath = aux.joinpath(specfilePath, specfile+'.mrc_sai')
-                self.saic[specfile] = loadBinaryItemContainer(saiPath, Sai.jsonHook)
+                self.saic[specfile] = aux.loadBinaryItemContainer(saiPath, Sai.jsonHook)
                 msrunInfo['status']['sai'] = True
 
             if 'si' in datatypes:
@@ -634,76 +645,6 @@ class MzmlPrecursor(object):
         return cls(spectrumRef, activation, isolationWindow, selectedIonList)
 
 
-class MaspyJsonEncoder(json.JSONEncoder):
-    #TODO: docstring
-    def default(self, obj):
-        if hasattr(obj, '_reprJSON'):
-            return obj._reprJSON()
-        else:
-            #Let the base class default method raise the TypeError
-            return json.JSONEncoder.default(self, obj)
-
-
-def writeBinaryItemContainer(filepath, binaryItemContainer, compress=True):
-    #TODO: docstring
-    allMetadata = dict()
-    binarydatafile = io.BytesIO()
-    #It would be possible to sort the items here
-    for index, binaryItem in enumerate(viewvalues(binaryItemContainer)):
-        allMetadata[index] = _dumpBinaryItemToFile(binarydatafile, binaryItem)
-    #Is seek here still necessary?
-    binarydatafile.seek(0)
-
-    zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
-    with zipfile.ZipFile(filepath, 'w', allowZip64=True) as containerFile:
-        containerFile.writestr('metadata', json.dumps(allMetadata, cls=MaspyJsonEncoder), zipcomp)
-        containerFile.writestr('binarydata', binarydatafile.getvalue(), zipcomp)
-
-
-def _dumpBinaryItemToFile(filelike, binaryItem):
-    #TODO: docstring
-    binaryMetadata = list()
-    for arrayType in binaryItem.arrays:
-        array = binaryItem.arrays[arrayType]
-        bytedata = array.tobytes('C')
-        start = filelike.tell()
-        end = start + len(bytedata)
-        binaryMetadata.append({'arrayType': arrayType, 'dtype': array.dtype.name, #'shape': array.shape <- deprecated as only 1d arrays are used
-                               'start': start, 'end': end, 'size': array.size
-                               })
-        filelike.write(bytedata)
-    itemMetadata = [binaryItem._reprJSON(), binaryMetadata]
-    return itemMetadata
-
-
-def loadBinaryItemContainer(containerFile, jsonHook):
-    #TODO: docstring
-    binaryItemContainer = dict()
-    with zipfile.ZipFile(containerFile, 'r') as containerZip:
-        #Convert the zipfile data into a str object, necessary since containerZip.read() returns a bytes object.
-        metadataText = io.TextIOWrapper(containerZip.open('metadata'), encoding='utf-8').read()
-        allMetadata = json.loads(metadataText, object_hook=jsonHook)
-        metadataIndex = [str(_) for _ in sorted([int(i) for i in viewkeys(allMetadata)])]
-        binarydataFile = containerZip.open('binarydata')
-        for index in metadataIndex:
-            binaryItem = allMetadata[index][0]
-            for binMetadata in allMetadata[index][1]:
-                arrayType = binMetadata['arrayType']
-                rawdata = binarydataFile.read(binMetadata['end']-binMetadata['start'])
-                array = numpy.frombuffer(rawdata, dtype=numpy.typeDict[binMetadata['dtype']])
-                #array = array.reshape(binMetadata['shape'])
-                binaryItem.arrays[arrayType] = array
-            binaryItemContainer[binaryItem.id] = binaryItem
-    return binaryItemContainer
-
-
-def writeJsonItemContainer(filepath, itemContainer, compress=True, mode='w', name='data'):
-    #TODO: docstring
-    zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
-    with zipfile.ZipFile(filepath, mode, allowZip64=True) as containerFile:
-        containerFile.writestr(name, json.dumps(itemContainer, cls=MaspyJsonEncoder), zipcomp)
-
-
 def _mzmlListAttribToTuple(oldList):
     """ Turns the list element, elements into tuples,
     Note: only intended for a list of elements that contain params, eg. mzml Node selectedIonList."""
@@ -830,14 +771,14 @@ class SiiContainer(object):
             return None
 
     def addSpecfile(self, specfiles, path):
-        """Adds a number of maspy msrun files to self.info, but doesn't import any data yet.
-        To actually import the specfile data, call :func:`msrunContainer.load()`.
+        """Adds specfile entries to self.info, but doesn't import any data yet.
+        To actually import the SiiContainer files, use :func:`siiContainer.load()`.
         """
         for specfile in aux.toList(specfiles):
-            if specfile in self.info:
-                print('Specfile already present in msrunContainer:', specfile, self.info[specfile]['path'])
+            if specfile not in self.info:
+                self._addSpecfile(specfile, path)
             else:
-                 self._addSpecfile(specfiles, path)
+                warnings.warn('Specfile is already present in the SiiContainer.\nname: %s \npath: %s' %(specfile, self.info[specfile]['path']))
 
     def _addSpecfile(self, specfile, path):
         """Adds a new specfile entry to SiiContainer.info. """
@@ -849,13 +790,8 @@ class SiiContainer(object):
         (SpectrumIdentificationItemContainer) file is present in the specified path,
         a new file is generated.
         """
-        #TODO: check if folderpath exists, if not generate new folderspecfiles
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
-        for specfile in aux.toList(specfiles):
-            if specfile not in self.info:
-                #TODO: warning here?
-                continue
-            self.info[specfile]['path'] = folderpath
+        _containerSetPath(self, folderpath, specfiles)
 
     def removeSpecfile(self, specfiles):
         """Completely removes the specified specfiles from the SiiContainer."""
@@ -864,6 +800,7 @@ class SiiContainer(object):
             del self.info[specfile]
 
     def save(self, specfiles=None, compress=True, path=None):
+        #TODO: docstring
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         for specfile in aux.toList(specfiles):
             if specfile not in self.info:
@@ -879,7 +816,8 @@ class SiiContainer(object):
                     self._writeContainer(openfile, specfile, compress=compress)
 
     def _writeContainer(self, filelike, specfile, compress=True):
-        writeJsonItemContainer(filelike, self.container[specfile], compress=compress)
+        #TODO: docstring
+        aux.writeJsonZipfile(filelike, self.container[specfile], compress=compress)
         zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
         with zipfile.ZipFile(filelike, 'a', allowZip64=True) as containerFile:
             infodata = {key: value for key, value in viewitems(self.info[specfile]) if key != 'path'}
@@ -887,10 +825,11 @@ class SiiContainer(object):
 
     def load(self, specfiles=None):
         """Import specfiles"""
+        #TODO: docstring
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         for specfile in aux.toList(specfiles):
             if specfile not in self.info:
-                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.msrunInfo')))
+                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.info')))
                 continue
             else:
                 siiPath = aux.joinpath(self.info[specfile]['path'], specfile+'.siic')
@@ -912,7 +851,7 @@ class SiiContainer(object):
         for specfile in specfiles:
             if specfile not in self.info:
                 print(specfile, 'not present in siiContainer.')
-            elif specfile not in msrunContainer.msrunInfo:
+            elif specfile not in msrunContainer.info:
                 print(specfile, 'not present in msrunContainer.')
             else:
                 for identifier in self.container[specfile]:
@@ -922,6 +861,7 @@ class SiiContainer(object):
                             setattr(sii, attribute, getattr(si, attribute, None))
 
     def calcMz(self, specfiles=None, guessCharge=True, obsMzKey='mz'):
+        #TODO: docstring
         # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         tempPeptideMasses = dict()
@@ -948,14 +888,9 @@ class SiiContainer(object):
         del(tempPeptideMasses)
 
 
-
-
-
-
-
-
-
-
+###########################################################
+### FeatureItem related classes and functions #############
+###########################################################
 class Fi(object):
     """FeatureItem (Fi), representation of a peptide LC-MS feature.
 
@@ -1006,11 +941,9 @@ class Fi(object):
 
 
 class FiContainer(object):
-    """ItemContainer for peptide elution features :class`FeatureItem`.
+    """ItemContainer for peptide elution features :class`Fi` (FeatureItem).
 
-    for parameter and method description see :class:`ItemContainer`
-    see also :class:`SiContainer` (Spectrum Item Container) which contains spectrum data.
-    see also :class:`SiiContainer` (Spectrum Identification Item Container) which contains sequence data.
+    #TODO: docstring
     """
     def __init__(self):
         self.container = dict()
@@ -1018,7 +951,7 @@ class FiContainer(object):
 
     def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False,
                   selector=lambda fi: fi.isValid, defaultValue=None):
-        """Return a condensed array of data selected from :class:`Sii` objects of :instance:`self.container`
+        """Return a condensed array of data selected from :class:`Fi` objects of :instance:`self.container`
         for fast and convenient data processing.
 
         :param attr: list of :class:`Fi` item attributes that should be added to the returned array.
@@ -1063,14 +996,14 @@ class FiContainer(object):
         return _getItems(self.container, specfiles, sort, reverse, selector)
 
     def addSpecfile(self, specfiles, path):
-        """Adds a number of maspy msrun files to self.info, but doesn't import any data yet.
-        To actually import the specfile data, call :func:`msrunContainer.load()`.
+        """Adds specfile entries to self.info, but doesn't import any data yet.
+        To actually import the FiContainer files, use :func:`msrunContainer.load()`.
         """
         for specfile in aux.toList(specfiles):
-            if specfile in self.info:
-                print('Specfile already present in msrunContainer:', specfile, self.info[specfile]['path'])
+            if specfile not in self.info:
+                self._addSpecfile(specfile, path)
             else:
-                 self._addSpecfile(specfiles, path)
+                warnings.warn('Specfile is already present in the FiContainer.\nname: %s \npath: %s' %(specfile, self.info[specfile]['path']))
 
     def _addSpecfile(self, specfile, path):
         """Adds a new specfile entry to FiContainer.info. """
@@ -1081,13 +1014,8 @@ class FiContainer(object):
         """Change the folderpath of the specified specfiles. If save is called and no "fic"
         (FeatureItemContainer) file is present in the specified path, a new file is generated.
         """
-        #TODO: check if folderpath exists, if not generate new folderspecfiles
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
-        for specfile in aux.toList(specfiles):
-            if specfile not in self.info:
-                #TODO: warning here?
-                continue
-            self.info[specfile]['path'] = folderpath
+        _containerSetPath(self, folderpath, specfiles)
 
     def removeSpecfile(self, specfiles):
         """Completely removes the specified specfiles from the SiiContainer."""
@@ -1096,6 +1024,7 @@ class FiContainer(object):
             del self.info[specfile]
 
     def save(self, specfiles=None, compress=True, path=None):
+        #TODO: docstring
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         for specfile in aux.toList(specfiles):
             if specfile not in self.info:
@@ -1111,7 +1040,7 @@ class FiContainer(object):
                     self._writeContainer(openfile, specfile, compress=compress)
 
     def _writeContainer(self, filelike, specfile, compress=True):
-        writeJsonItemContainer(filelike, self.container[specfile], compress=compress)
+        aux.writeJsonZipfile(filelike, self.container[specfile], compress=compress)
         #zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
         #with zipfile.ZipFile(filelike, 'a', allowZip64=True) as containerFile:
         #    infodata = {key: value for key, value in viewitems(self.info[specfile]) if key != 'path'}
@@ -1122,7 +1051,7 @@ class FiContainer(object):
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         for specfile in aux.toList(specfiles):
             if specfile not in self.info:
-                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.msrunInfo')))
+                print(''.join(('Error while loading "', specfile, '", not present in msrunCountainer.info')))
                 continue
             else:
                 fiPath = aux.joinpath(self.info[specfile]['path'], specfile+'.fic')

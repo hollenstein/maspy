@@ -6,14 +6,15 @@ try: # python 2.7
 except ImportError: # python 3.x series
     pass
 ###############################################################################
-from lxml import etree as ETREE
 import io
 import numpy
 import os
 
-import maspy.new.auxiliary as aux
-import maspy.new.xml
-import maspy.new.core
+from lxml import etree as ETREE
+
+import maspy.auxiliary as aux
+import maspy.xml
+import maspy.core
 import maspy.peptidemethods
 
 
@@ -27,7 +28,7 @@ def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=N
     """
     siAttrFromSmi = defaultFetchSiAttrFromSmi if siAttrFromSmi is None else siAttrFromSmi
     if msrunContainer is None:
-        msrunContainer = maspy.new.core.MsrunContainer()
+        msrunContainer = maspy.core.MsrunContainer()
 
     basename = os.path.basename(filepath)
     dirname = os.path.dirname(filepath)
@@ -38,24 +39,24 @@ def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=N
         raise IOError('File does not exist: %s' % filepath)
     elif extension.lower() != '.mzml':
         raise IOError('Filetype is not "mzml": %s' % filepath)
-    elif filename in msrunContainer.msrunInfo:
+    elif filename in msrunContainer.info:
         print(filename, 'already present in the msrunContainer, aborting import.')
         return None
 
     specfilename = basename if specfilename is None else specfilename
-    mzmlReader = maspy.new.xml.MzmlReader(filepath)
+    mzmlReader = maspy.xml.MzmlReader(filepath)
     masterContainer = {'rm': str(), 'ci': {}, 'si': {}, 'sai': {}, 'smi': {}}
     for xmlSpectrum in mzmlReader.parseSpectra():
         smi, binaryDataArrayList = smiFromXmlSpectrum(xmlSpectrum, basename)
         #Generate SpectrumItem
-        si = maspy.new.core.Si(smi.id, smi.specfile)
+        si = maspy.core.Si(smi.id, smi.specfile)
         si.isValid = True
         siAttrFromSmi(smi, si)
         if si.msLevel > 1:
             si.precursorId = si.precursorId.split('scan=')[1] #TODO: change to use regex to extract from known vendor format
         #Generate SpectrumArrayItem
-        sai = maspy.new.core.Sai(smi.id, smi.specfile)
-        sai.arrays, sai.arrayInfo = maspy.new.xml.extractBinaries(binaryDataArrayList,
+        sai = maspy.core.Sai(smi.id, smi.specfile)
+        sai.arrays, sai.arrayInfo = maspy.xml.extractBinaries(binaryDataArrayList,
                                                          smi.attributes['defaultArrayLength'])
         #Store all items in the appropriate containers
         masterContainer['smi'][smi.id] = smi
@@ -69,15 +70,15 @@ def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=N
 
     msrunContainer._addSpecfile(filename, dirname)
     msrunContainer.rmc[filename] = masterContainer['rm']
-    msrunContainer.msrunInfo[filename]['status']['rm'] = True
+    msrunContainer.info[filename]['status']['rm'] = True
     msrunContainer.smic[filename] = masterContainer['smi']
-    msrunContainer.msrunInfo[filename]['status']['smi'] = True
+    msrunContainer.info[filename]['status']['smi'] = True
     msrunContainer.sic[filename] = masterContainer['si']
-    msrunContainer.msrunInfo[filename]['status']['si'] = True
+    msrunContainer.info[filename]['status']['si'] = True
     msrunContainer.saic[filename] = masterContainer['sai']
-    msrunContainer.msrunInfo[filename]['status']['sai'] = True
+    msrunContainer.info[filename]['status']['sai'] = True
     msrunContainer.cic[filename] = masterContainer['ci']
-    msrunContainer.msrunInfo[filename]['status']['ci'] = True
+    msrunContainer.info[filename]['status']['ci'] = True
 
     return msrunContainer
 
@@ -133,7 +134,7 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
                     #TODO: proper container format instead of msrunContainer
                     smi = msrunContainer.smic[specfile][key]
                     sai = msrunContainer.saic[specfile][key]
-                    xmlSpectrum = maspy.new.import_export.xmlSpectrumFromSmi(index, smi, sai)
+                    xmlSpectrum = xmlSpectrumFromSmi(index, smi, sai)
                     xmlWriter.write(xmlSpectrum, pretty_print=True)
                 xmlSpectrumList.__exit__(None, None, None)
                 xmlWriter.write('\n')
@@ -148,7 +149,7 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
                 for index, key in enumerate(chromatogramIds):
                     #TODO: proper container format instead of msrunContainer
                     ci = msrunContainer.cic[specfile][key]
-                    xmlChromatogram = maspy.new.import_export.xmlChromatogramFromCi(index, ci)
+                    xmlChromatogram = xmlChromatogramFromCi(index, ci)
                     xmlWriter.write(xmlChromatogram, pretty_print=True)
                 xmlChromatogramList.__exit__(None, None, None)
                 xmlWriter.write('\n')
@@ -156,7 +157,7 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
             xmlRun.__exit__(None, None, None)
             xmlWriter.write('\n')
         else:
-            xmlWriter.write(maspy.new.xml.recCopyElement(metadataNode), pretty_print=True)
+            xmlWriter.write(maspy.xml.recCopyElement(metadataNode), pretty_print=True)
     # close
     xmlRoot.__exit__(None, None, None)
     xmlFile.__exit__(None, None, None)
@@ -170,16 +171,16 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
 # --- generate python objects from mzML xml elements --- #
 ##########################################################
 def ciFromXml(xmlelement):
-    ci = maspy.new.core.Ci()
+    ci = maspy.core.Ci()
     for key in ['id', 'dataProcessingRef']:
         if key in xmlelement.attrib:
             setattr(ci, key, xmlelement.attrib[key])
-    ci.params, children = maspy.new.xml.extractParams(xmlelement)
+    ci.params, children = maspy.xml.extractParams(xmlelement)
     arrayLength = xmlelement.attrib['defaultArrayLength']
 
     for child in children:
-        childElements, childParams = maspy.new.xml.sublistReader(child)
-        childTag = maspy.new.xml.clearTag(child.tag)
+        childElements, childParams = maspy.xml.sublistReader(child)
+        childTag = maspy.xml.clearTag(child.tag)
         if childTag == 'precursor':
             #TODO: THIS HAS TO BE ADAPTED
             newElement = MzmlPrecursor(**element)
@@ -188,34 +189,34 @@ def ciFromXml(xmlelement):
             newElement = MzmlProduct(**element)
         elif childTag == 'binaryDataArrayList':
             for childElement in childElements:
-                dataType, dataTypeParam = maspy.new.xml.findBinaryDataType(childElement['params'])
+                dataType, dataTypeParam = maspy.xml.findBinaryDataType(childElement['params'])
                 ci.arrayInfo[dataType] = {'dataProcessingRef': None, 'params': childElement['params']}
                 if 'dataProcessingRef' in childElement:
                     ci.arrayInfo[dataType]['dataProcessingRef'] = childElement['dataProcessingRef']
-            ci.arrays, ci.arrayInfo = maspy.new.xml.extractBinaries(childElements, arrayLength)
+            ci.arrays, ci.arrayInfo = maspy.xml.extractBinaries(childElements, arrayLength)
     return ci
 
 
 def smiFromXmlSpectrum(xmlelement, specfile):
     scanId = xmlelement.attrib['id'].split('scan=')[1] #TODO: change to use regex to extract from known vendor format
-    smi = maspy.new.core.Smi(scanId, specfile)
-    smi.params, spectrumChildren = maspy.new.xml.extractParams(xmlelement)
+    smi = maspy.core.Smi(scanId, specfile)
+    smi.params, spectrumChildren = maspy.xml.extractParams(xmlelement)
     smi.attributes.update(xmlelement.attrib)
     binaryDataArrayList = list()
 
     for spectrumChild in spectrumChildren:
-        spectrumChildTag = maspy.new.xml.clearTag(spectrumChild.tag)
-        elements, params = maspy.new.xml.sublistReader(spectrumChild)
+        spectrumChildTag = maspy.xml.clearTag(spectrumChild.tag)
+        elements, params = maspy.xml.sublistReader(spectrumChild)
         if params:
             #Define scanListParams here
             setattr(smi, spectrumChildTag+'Params', params)
         for element in elements:
             if spectrumChildTag == 'scanList':
-                newElement = maspy.new.core.MzmlScan(**element)
+                newElement = maspy.core.MzmlScan(**element)
             elif spectrumChildTag == 'precursorList':
-                newElement = maspy.new.core.MzmlPrecursor(**element)
+                newElement = maspy.core.MzmlPrecursor(**element)
             elif spectrumChildTag == 'productList':
-                newElement = maspy.new.core.MzmlProduct(**element)
+                newElement = maspy.core.MzmlProduct(**element)
             elif spectrumChildTag == 'binaryDataArrayList':
                 binaryDataArrayList.append(element)
                 continue
@@ -235,7 +236,7 @@ def fetchSpectrumInfo(smi):
                                   ('basepeakMz', 'MS:1000504', float),
                                   ('basepeakI', 'MS:1000505', float)
                                   ]:
-        param = maspy.new.xml.findParam(smi.params, accession)
+        param = maspy.xml.findParam(smi.params, accession)
         if param is not None:
             attributes[key] = dtype(param[1])
         else:
@@ -250,7 +251,7 @@ def fetchScanInfo(smi):
         for key, accession, dtype in [('rt', 'MS:1000016', float),
                                       ('iit', 'MS:1000927', float),
                                       ]:
-            param = maspy.new.xml.findParam(smi.scanList[0]['params'], accession)
+            param = maspy.xml.findParam(smi.scanList[0]['params'], accession)
             if param is not None:
                 attributes[key] = dtype(param[1])
                 #TODO: raise a warning if time is neither in minutes nor in seconds
@@ -273,7 +274,7 @@ def fetchParentIon(smi):
                                       ('i', 'MS:1000042', float),
                                       ('charge', 'MS:1000041', int)
                                       ]:
-            param = maspy.new.xml.findParam(selectedIon, accession)
+            param = maspy.xml.findParam(selectedIon, accession)
             if param is not None:
                 attributes[key] = dtype(param[1])
             else:
@@ -301,11 +302,11 @@ def defaultFetchSiAttrFromSmi(smi, si):
 def xmlGenScanList(scanList, scanListParams):
     numEntries = len(scanList)
     xmlScanList = ETREE.Element('scanList', {'count': str(numEntries)})
-    maspy.new.xml.xmlAddParams(xmlScanList, scanListParams)
+    maspy.xml.xmlAddParams(xmlScanList, scanListParams)
     for scan in scanList:
         #Note: no attributes supported
         xmlScan = ETREE.Element('scan', {})
-        maspy.new.xml.xmlAddParams(xmlScan, scan['params'])
+        maspy.xml.xmlAddParams(xmlScan, scan['params'])
 
         #Generate the scanWindowList entry
         numScanWindows = len(scan['scanWindowList'])
@@ -313,7 +314,7 @@ def xmlGenScanList(scanList, scanListParams):
             xmlScanWindowList = ETREE.Element('scanWindowList', {'count': str(numScanWindows)})
             for scanWindow in scan['scanWindowList']:
                 xmlScanWindow = ETREE.Element('scanWindow')
-                maspy.new.xml.xmlAddParams(xmlScanWindow, scanWindow)
+                maspy.xml.xmlAddParams(xmlScanWindow, scanWindow)
                 xmlScanWindowList.append(xmlScanWindow)
             xmlScan.append(xmlScanWindowList)
 
@@ -332,12 +333,12 @@ def xmlGenPrecursorList(precursorList):
         xmlPrecursor = ETREE.Element('precursor', precursorAttrib)
 
         xmlActivation = ETREE.Element('activation')
-        maspy.new.xml.xmlAddParams(xmlActivation, precursor['activation'])
+        maspy.xml.xmlAddParams(xmlActivation, precursor['activation'])
         xmlPrecursor.append(xmlActivation)
 
         if precursor['isolationWindow'] is not None:
             xmlIsolationWindow = ETREE.Element('isolationWindow')
-            maspy.new.xml.xmlAddParams(xmlIsolationWindow, precursor['isolationWindow'])
+            maspy.xml.xmlAddParams(xmlIsolationWindow, precursor['isolationWindow'])
             xmlPrecursor.append(xmlIsolationWindow)
 
         #Generate the selectedIonList entry
@@ -346,7 +347,7 @@ def xmlGenPrecursorList(precursorList):
             xmlSelectedIonList = ETREE.Element('selectedIonList', {'count': str(numSelectedIons)})
             for selectedIon in precursor['selectedIonList']:
                 xmlSelectedIon = ETREE.Element('selectedIon')
-                maspy.new.xml.xmlAddParams(xmlSelectedIon, selectedIon)
+                maspy.xml.xmlAddParams(xmlSelectedIon, selectedIon)
                 xmlSelectedIonList.append(xmlSelectedIon)
             xmlPrecursor.append(xmlSelectedIonList)
 
@@ -366,10 +367,10 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib'
     numEntries = len(binaryDataInfo)
     xmlBinaryDataArrayList = ETREE.Element('binaryDataArrayList', {'count': str(numEntries)})
     for arrayType in arrayTypes:
-        _, dataTypeParam = maspy.new.xml.findBinaryDataType(binaryDataInfo[arrayType]['params'])
+        _, dataTypeParam = maspy.xml.findBinaryDataType(binaryDataInfo[arrayType]['params'])
         binaryData = binaryDataDict[arrayType]
         bitEncoding = '64' if binaryData.dtype.str == '<f8' else '32'
-        binaryData, arrayLength = maspy.new.xml.encodeBinaryData(binaryData, bitEncoding, compression)
+        binaryData, arrayLength = maspy.xml.encodeBinaryData(binaryData, bitEncoding, compression)
 
         # --- define binaryDataArray parameters --- #
         params = list()
@@ -392,7 +393,7 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib'
             if binaryDataInfo[arrayType][attr] is not None:
                 binaryDataArrayAttrib[attr] = binaryDataInfo[arrayType][attr]
         xmlBinaryDataArray = ETREE.Element('binaryDataArray', binaryDataArrayAttrib)
-        maspy.new.xml.xmlAddParams(xmlBinaryDataArray, params)
+        maspy.xml.xmlAddParams(xmlBinaryDataArray, params)
 
         xmlBinary = ETREE.Element('binary')
         xmlBinary.text = binaryData
@@ -420,7 +421,7 @@ def xmlSpectrumFromSmi(index, smi, sai=None, compression='zlib'):
                       'defaultArrayLength': str(arrayLength)}
 
     xmlSpectrum = ETREE.Element('spectrum', **spectrumAttrib)
-    maspy.new.xml.xmlAddParams(xmlSpectrum, smi.params)
+    maspy.xml.xmlAddParams(xmlSpectrum, smi.params)
     #Add the scanList
     if len(smi.scanList) > 0:
         xmlSpectrum.append(xmlGenScanList(smi.scanList, smi.scanListParams))
@@ -449,7 +450,7 @@ def xmlChromatogramFromCi(index, ci, compression='zlib'):
         chromatogramAttrib.update({'dataProcessingRef': dataProcessingRef})
 
     xmlChromatogram = ETREE.Element('chromatogram', **chromatogramAttrib)
-    maspy.new.xml.xmlAddParams(xmlChromatogram, ci.params)
+    maspy.xml.xmlAddParams(xmlChromatogram, ci.params)
     #TODO: add appropriate functions for precursor and product
     if ci.product is not None:
         pass
@@ -583,7 +584,7 @@ def _importFromPercolatorArrays(siiContainer, psmArrays, specfile, qValueCutOff=
         psmId = psmArrays['PSMId'][currPosition]
         pep = psmArrays['posterior_error_prob'][currPosition]
 
-        sii = maspy.new.core.Sii(scanNr, specfile)
+        sii = maspy.core.Sii(scanNr, specfile)
         sii.peptide = peptide
         sii.sequence = sequence
         sii.qValue = qValue
@@ -633,7 +634,7 @@ def importPeptideFeatures(fiContainer, filelocation, specfile):
                 for convexHullEntry in featureEntryDict['convexHullDict']['0']:
                     rtArea.update([convexHullEntry[0]])
 
-                fi = maspy.new.core.Fi(featureId, specfile)
+                fi = maspy.core.Fi(featureId, specfile)
                 fi.rt = featureEntryDict['rt']
                 fi.rtArea = max(rtArea) - min(rtArea)
                 fi.rtLow = min(rtArea)

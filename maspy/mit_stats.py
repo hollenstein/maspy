@@ -1,3 +1,12 @@
+from __future__ import print_function, division, unicode_literals
+from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+
+try: # python 2.7
+    from itertools import izip as zip
+except ImportError: # python 3.x series
+    pass
+###############################################################################
+
 #TODO: limit MIT to this document
 """
 The MIT License (MIT)
