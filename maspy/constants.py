@@ -50,7 +50,8 @@ aaMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in vie
 
 aaModComp = dict()
 """ A dictionary with elemental compositions of the peptide modifications.
-    Modifications present at "www.unimod.org" should be written as "u:X", where X = unimod accession number.
+    Modifications present at "www.unimod.org" should be written as "u:X",
+    where X is the unimod accession number.
     If a modification is not present an text abbriviation should be used.
     This concept was inherited from pyteomics.mass.std_aa_comp
 """

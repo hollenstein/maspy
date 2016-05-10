@@ -13,6 +13,7 @@ import pyteomics.mass
 
 import maspy.constants
 
+
 def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, removeNtermM=True, minLength=5, maxLength=40):
     """Returns a list of peptide sequences and digestion information derived from an in silico digest of a polypeptide.
 
@@ -144,6 +145,7 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
     :return: {modificationName:[position1, position2, ...], ...}
 
     #TODO: adapt removeModString to the new unimod ids in maspy.constants.aaModComp ("UNIMOD:X" -> "u:X")
+           -> also change the unit tests...
     """
     unidmodPositionDict = dict()
     while peptide.find('[') != -1:
@@ -155,7 +157,7 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
 
         peptide = peptide.replace('['+currModification+']', '', 1)
 
-        if isinstance(removeModString, str):
+        if removeModString:
             currModification = currModification.replace(removeModString, '')
         unidmodPositionDict.setdefault(currModification,list())
         unidmodPositionDict[currModification].append(currPosition)

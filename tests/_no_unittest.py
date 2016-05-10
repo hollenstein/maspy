@@ -65,6 +65,7 @@ testfilepath = aux.joinpath(os.path.dirname(aux.__file__), os.pardir, 'tests', '
 with io.open(testfilepath, 'r', encoding='utf-8') as openfile:
     root = etree.XML(openfile.read())
 
+
 #TESTING mzml.smiFromXmlSpectrum(), mzml.extractBinaries()
 spectra = list()
 for xmlSpectrum in root.getchildren():
@@ -202,6 +203,12 @@ for key, value in viewitems(sai.arrays):
 
 #TODO: ciFromXml
 #TODO: xmlGenScanList, xmlGenPrecursorList, xmlGenProductList, xmlGenBinaryDataArrayList, xmlSpectrumFromSmi, xmlChromatogramFromCi
+
+
+
+#msrunContainer = maspy.reader.importMzml('C:/Users/David/Dropbox/python/maspy/maspy/new/metadata.mzML')
+#msrunContainer = maspy.reader.importMzml('D:/Dropbox/python/maspy/tests/testdata/metadata.mzML')
+#mzmlReader = maspy.xml.MzmlReader('D:/Dropbox/python/maspy/tests/testdata/metadata.mzML')
 
 
 # --- Testing import / load / save MsrunContainer --- #

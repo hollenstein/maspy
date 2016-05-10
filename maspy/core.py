@@ -26,7 +26,8 @@ import maspy.peptidemethods
 ### Common container functions #############
 ############################################
 def _getArrays(container, attr=None, containerKeys=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
-    """Return a condensed array of data selected items from the "container" for fast and convenient data processing.
+    """Return a condensed array of data from selected items of the "container"
+    for fast and convenient data processing.
 
     :param attr: list of item attributes that should be added to the returned array.
     If an attribute is not present the "defaultValue" is added instead.
@@ -228,10 +229,12 @@ class MsrunContainer(object):
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         _containerSetPath(self, folderpath, specfiles)
 
-    def removeData(self, specfiles, rm=False, ci=False, smi=False, sai=False, si=False):
+    def removeData(self, specfiles=None, rm=False, ci=False, smi=False, sai=False, si=False):
         """Removes the specified datatypes of the specfiles from the msrunContainer.
         To completely remove the specfile, also from info, use :func:`MsrunContainer.removeSpecfile`
         """
+        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
+        #TODO: add check if specfiles are present in the container
         datatypes = self._processDatatypes(rm, ci, smi, sai, si)
         for specfile in aux.toList(specfiles):
             for datatype in datatypes:
@@ -653,6 +656,24 @@ def _mzmlListAttribToTuple(oldList):
         newEntry = [tuple(param) for param in oldEntry]
         newList.append(newEntry)
     return newList
+
+
+def addMsrunContainers(mainContainer, subContainer):
+    #TODO: docstrings
+    #Note: does not generate new items, all items of the merged container still point to the inital memory location
+    for specfile in subContainer.info:
+        if specfile in mainContainer.info:
+            continue
+
+        mainContainer.addSpecfile(specfile, subContainer.info[specfile]['path'])
+        for datatype, status in listitems(subContainer.info[specfile]['status']):
+            if not status:
+                continue
+            datatypeContainer = datatype+'c'
+            dataTypeContainer = getattr(mainContainer, datatypeContainer)
+            subContainerData = getattr(subContainer, datatypeContainer)[specfile]
+            dataTypeContainer[specfile] = subContainerData
+            mainContainer.info[specfile]['status'][datatype] = True
 
 
 ##########################################################################

@@ -287,7 +287,7 @@ def _arrayFromBytes(dataBytes, metadata):
 
 # --- not yet named section --- #
 def searchFileLocation(targetFileName, targetFileExtension, rootDirectory, recursive=True):
-    """Search for file with specified file extension in all subfolders of specified rootDirectory, returns first matching instance.
+    """Search for files with specified file extension in all subfolders of specified rootDirectory, returns first matching instance.
 
     :type targetFileName: str
     :type rootDirectory: str
@@ -348,6 +348,33 @@ def matchingFilePaths(targetfilename, directory, targetFileExtension=None, selec
     return targetFilePaths
 
 
+def listFiletypes(targetfilename, directory):
+    """Looks for all occurences of a specified filename in a directory
+    and returns a list of all present file extensions of this filename.
+
+    :param targetfilename: a filename without any extensions
+    :param directory: only files present in this directory are compared
+    to the targetfilename
+
+    An extension is everything from the first dot to the end.
+    In this case the filename is everything before the first dot.
+
+    Only the first dot of the extension is omitted. eg "txt" but "txt.zip"
+
+    :returns: a list of extensions
+    """
+    targetextensions = list()
+    for filename in os.listdir(directory):
+        if not os.path.isfile(joinpath(directory, filename)):
+            continue
+        splitname = filename.split('.')
+        basename = splitname[0]
+        extension = '.'.join(splitname[1:])
+        if basename == targetfilename:
+            targetextensions.append(extension)
+    return targetextensions
+
+
 def findAllSubstrings(string, substring):
     """ Returns a list of all substring starting positions in string
     or an empty list if substring is not present in string."""
@@ -390,10 +417,15 @@ class Memoize(object):
     def __init__(self, function):
         self.function = function
         self.memo = {}
-    def __call__(self, *args):
-        if not args in self.memo:
-            self.memo[args] = self.function(*args)
-        return self.memo[args]
+    def __call__(self, arg):
+        if not arg in self.memo:
+            self.memo[arg] = self.function(arg)
+        return self.memo[arg]
+    #For multiple arguments use instead:
+    #def __call__(self, *args):
+    #    if not args in self.memo:
+    #        self.memo[args] = self.function(*args)
+    #    return self.memo[args]
 
 
 factorial = Memoize(lambda n: math.factorial(int(n)))
@@ -463,7 +495,7 @@ def averagingData(array, windowSize=None, averagingType='median'):
     if averagingType == 'median':
         averagedData = runningMedian(array, windowSize)
     elif averagingType == 'mean':
-        averagedData = runningMean(array, None, windowSize)
+        averagedData = runningMean(array, len(array), windowSize)
     return averagedData
 
 
@@ -518,6 +550,7 @@ def returnSplineList(dependentVar, independentVar, subsetPercentage=0.4, cycles=
 
 def tolerantArrayMatching(referenceArray, matchArray, matchTolerance=20, matchUnit='ppm'):
     #TODO: Docstring
+    #TODO: change matchUnit to "absoulte", "relative" and remove the "*1e-6"
     """arrays must be sorted"""
     if matchUnit == 'ppm':
         lowerLimitMatchArray = matchArray * (1 - matchTolerance*1e-6)

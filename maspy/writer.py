@@ -13,8 +13,6 @@ import os
 
 import maspy.auxiliary as aux
 import maspy.xml
-import maspy.core
-import maspy.peptidemethods
 
 
 ##########################################################

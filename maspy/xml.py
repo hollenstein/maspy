@@ -23,7 +23,10 @@ import maspy.ontology
 ##############################################################
 ### maspy unrelated xml (mzml) content #######################
 ##############################################################
-#TODO: docstring
+""" A dictionary with the psi-ms.obo ids of various binary data array types (derived from id: MS:1000513)
+    used to describe a data array of either a mzml spectrum or mzml chromatogram.
+"""
+#TODO: check exact term of spectrum or chromatogram in mzml context
 binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i', 'MS:1000516': 'z', 'MS:1000517': 'sn',
                         'MS:1000595': 'rt', 'MS:1000617': 'lambda', 'MS:1000786': 'non-standard',
                         'MS:1000820': 'flow', 'MS:1000821': 'pressure', 'MS:1000822': 'temperature'
@@ -31,12 +34,13 @@ binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i', 'MS:1000516': 'z'
 
 
 #TODO: docstring
-mspath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'psi-ms.obo')
-unitpath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'unit.obo')
+#Note: duplicate values have to be removed from the ".obo" files, to prevent errors in maspy.ontology.OBOOntology()
+msOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'psi-ms.obo')
+unitOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'unit.obo')
 oboTranslator = maspy.ontology.OBOOntology()
-with io.open(mspath, 'r', encoding='utf-8') as openfile:
+with io.open(msOntologyPath, 'r', encoding='utf-8') as openfile:
     oboTranslator.load(openfile)
-with io.open(unitpath, 'r', encoding='utf-8') as openfile:
+with io.open(unitOntologyPath, 'r', encoding='utf-8') as openfile:
     oboTranslator.load(openfile)
 
 
@@ -44,19 +48,28 @@ with io.open(unitpath, 'r', encoding='utf-8') as openfile:
 # --- general xml methods --- #
 ###############################
 def clearParsedElements(element):
-    #TODO: docstring
+    """Deletes an element and all linked parent elements.
+
+    This function is used to save memory while iteratively parsing
+    an xml file by removing already processed elements.
+    """
     element.clear()
     while element.getprevious() is not None:
         del element.getparent()[0]
 
 
 def clearTag(tag):
+    #eg "{http://psi.hupo.org/ms/mzml}mzML" returns "mzML"
     #TODO: docstring
     return tag.split('}')[-1]
 
 
 def recClearTag(element):
-    #TODO: docstring
+    """Applies maspy.xml.clearTag() to the tag attribute of the "element"
+    and recursively to all child elements.
+
+    :param element: an :instance:`xml.etree.Element`
+    """
     children = element.getchildren()
     if len(children) > 0:
         for child in children:
@@ -65,7 +78,14 @@ def recClearTag(element):
 
 
 def recRemoveTreeFormating(element):
-    #TODO: docstring
+    """Removes whitespace characters, which are leftovers from previous
+    xml formatting.
+
+    :param element: an instance of lxml.etree._Element
+
+    str.strip() is applied to the "text" and the "tail" attribute of the
+    element and recursively to all child elements.
+    """
     children = element.getchildren()
     if len(children) > 0:
         for child in children:
@@ -83,8 +103,14 @@ def recRemoveTreeFormating(element):
 
 
 def recCopyElement(oldelement):
-    #TODO: docstring
+    """Generates a copy of an xml element and recursively of all
+    child elements.
+
+    :param oldelement: an instance of lxml.etree._Element
+    :return newelement: a copy of the "oldelement"
+
     #Note: doesn't copy "text" or "tail" of xml elements
+    """
     newelement = ETREE.Element(oldelement.tag, oldelement.attrib)
     if len(oldelement.getchildren()) > 0:
         for childelement in oldelement.getchildren():
@@ -154,8 +180,14 @@ def extractParams(xmlelement):
     return params, children
 
 
-def xmlAddParams(xmlelement, params):
-    #TODO: docstring
+def xmlAddParams(parentelement, params):
+    """Generates new mzML parameter xml elements and adds them to the 'parentelement'
+    as xml children elements.
+
+    :param parentelement: an :instance:`xml.etree.Element`
+    :param params: a list of mzML parameter tuples
+        can be a mzML 'cvParam', 'userParam' or 'referencableParamGroup'
+    """
     if not params:
         return None
     for param in params:
@@ -182,14 +214,24 @@ def xmlAddParams(xmlelement, params):
         elif param[0] == 'ref':
             refAttrib = {'ref': param[1]}
             paramElement = ETREE.Element('referenceableParamGroupRef', **refAttrib)
-        xmlelement.append(paramElement)
+        parentelement.append(paramElement)
 
 
 ####################################################################
 # --- decode and encode function for binary data of mzml files --- #
 ####################################################################
 def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
+    """Function to decode a mzML byte array into a numpy array.
+
+    :param binaryData:
+    :param arrayLength:
+    :param binEncoding:
+    :param compression:
+
+    concept from the python module pymzml (pymzml.spec.Spectrum._decode)
+    """
     #TODO: docstring
+    #Note: should raise an error if a wrong compression is specified
     bitEncodedData = binaryData.encode("utf-8")
     bitDecodedData = B64DEC(bitEncodedData)
 
@@ -211,7 +253,14 @@ def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
 
 
 def encodeBinaryData(dataArray, bitEncoding, compression):
+    """Function to encode a numpy array into a mzML byte array.
+
+    :param dataArray:
+    :param bitEncoding:
+    :param compression:
+    """
     #TODO: docstring
+    #Note: should raise an error if a wrong compression is specified
     arrayLength = len(dataArray)
     if bitEncoding == '64':
         floattype = 'd' # 64-bit
@@ -303,6 +352,7 @@ class MzmlReader(object):
 
     def loadMetadata(self):
         #TODO: docstring
+        #TODO: change that spectra dont have to be iterated to extract metadata node
         if self._parsed:
             raise TypeError('Mzml file already parsed.')
         [None for _ in self._parseMzml()]

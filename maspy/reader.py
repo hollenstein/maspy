@@ -6,6 +6,7 @@ try: # python 2.7
 except ImportError: # python 3.x series
     pass
 ###############################################################################
+from collections import defaultdict as ddict
 import io
 from lxml import etree as ETREE
 import numpy
@@ -33,52 +34,65 @@ def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=N
     basename = os.path.basename(filepath)
     dirname = os.path.dirname(filepath)
     filename, extension = os.path.splitext(basename)
+    specfilename = filename if specfilename is None else specfilename
 
     #Check if the specified file is valid for an import
     if not os.path.isfile(filepath):
         raise IOError('File does not exist: %s' % filepath)
     elif extension.lower() != '.mzml':
         raise IOError('Filetype is not "mzml": %s' % filepath)
-    elif filename in msrunContainer.info:
-        print(filename, 'already present in the msrunContainer, aborting import.')
+    elif specfilename in msrunContainer.info:
+        print(specfilename, 'already present in the msrunContainer, aborting import.')
         return None
 
-    specfilename = basename if specfilename is None else specfilename
     mzmlReader = maspy.xml.MzmlReader(filepath)
     masterContainer = {'rm': str(), 'ci': {}, 'si': {}, 'sai': {}, 'smi': {}}
+    #Dictionary recording which MS2 scans follow a MS1 scan
+    ms1Record = ddict(list)
+
     for xmlSpectrum in mzmlReader.parseSpectra():
-        smi, binaryDataArrayList = smiFromXmlSpectrum(xmlSpectrum, basename)
+        smi, binaryDataArrayList = smiFromXmlSpectrum(xmlSpectrum, specfilename)
         #Generate SpectrumItem
         si = maspy.core.Si(smi.id, smi.specfile)
         si.isValid = True
         siAttrFromSmi(smi, si)
         if si.msLevel > 1:
             si.precursorId = si.precursorId.split('scan=')[1] #TODO: change to use regex to extract from known vendor format
+            ms1Record[si.precursorId].append(si.id)
+        else:
+            ms1Record[si.id] #Touch the ddict to add the MS1 id, if it is not already present
         #Generate SpectrumArrayItem
         sai = maspy.core.Sai(smi.id, smi.specfile)
         sai.arrays, sai.arrayInfo = maspy.xml.extractBinaries(binaryDataArrayList,
-                                                         smi.attributes['defaultArrayLength'])
+                                                              smi.attributes['defaultArrayLength'])
         #Store all items in the appropriate containers
         masterContainer['smi'][smi.id] = smi
         masterContainer['si'][smi.id] = si
         masterContainer['sai'][smi.id] = sai
+
+    for siId, msnIdList in viewitems(ms1Record):
+        #Ignore KeyError if the spectrum is not present in the mzML file for whatever reason
+        try:
+            setattr(masterContainer['si'][siId], 'msnIdList', msnIdList)
+        except KeyError:
+            pass
 
     for xmlChromatogram in mzmlReader.chromatogramList:
         ci = ciFromXml(xmlChromatogram)
         masterContainer['ci'][ci.id] = ci
     masterContainer['rm'] = mzmlReader.metadataNode
 
-    msrunContainer._addSpecfile(filename, dirname)
-    msrunContainer.rmc[filename] = masterContainer['rm']
-    msrunContainer.info[filename]['status']['rm'] = True
-    msrunContainer.smic[filename] = masterContainer['smi']
-    msrunContainer.info[filename]['status']['smi'] = True
-    msrunContainer.sic[filename] = masterContainer['si']
-    msrunContainer.info[filename]['status']['si'] = True
-    msrunContainer.saic[filename] = masterContainer['sai']
-    msrunContainer.info[filename]['status']['sai'] = True
-    msrunContainer.cic[filename] = masterContainer['ci']
-    msrunContainer.info[filename]['status']['ci'] = True
+    msrunContainer._addSpecfile(specfilename, dirname)
+    msrunContainer.rmc[specfilename] = masterContainer['rm']
+    msrunContainer.info[specfilename]['status']['rm'] = True
+    msrunContainer.smic[specfilename] = masterContainer['smi']
+    msrunContainer.info[specfilename]['status']['smi'] = True
+    msrunContainer.sic[specfilename] = masterContainer['si']
+    msrunContainer.info[specfilename]['status']['si'] = True
+    msrunContainer.saic[specfilename] = masterContainer['sai']
+    msrunContainer.info[specfilename]['status']['sai'] = True
+    msrunContainer.cic[specfilename] = masterContainer['ci']
+    msrunContainer.info[specfilename]['status']['ci'] = True
 
     return msrunContainer
 
@@ -211,6 +225,19 @@ def defaultFetchSiAttrFromSmi(smi, si):
     if si.msLevel > 1:
         for key, value in viewitems(fetchParentIon(smi)):
             setattr(si, key, value)
+
+
+def convertMzml(mzmlPath, outputDirectory=None):
+    """Imports an mzml file and converts it to a MsrunContainer file
+
+    :param mzmlPath: path of the mzml file
+    :param outputDirectory: directory where the MsrunContainer file should be written
+    if it is not specified, the output directory is set to the mzml files directory.
+    """
+    outputDirectory = outputDirectory if outputDirectory is not None else os.path.dirname(mzmlPath)
+    msrunContainer = importMzml(mzmlPath)
+    msrunContainer.setPath(outputDirectory)
+    msrunContainer.save()
 
 
 #####################################################################

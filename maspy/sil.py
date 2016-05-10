@@ -7,6 +7,8 @@ except ImportError: # python 3.x series
     pass
 ###############################################################################
 #TODO: review for compatibility to maspy 1.0
+import itertools
+
 import maspy.auxiliary as aux
 import maspy.constants
 import maspy.peptidemethods
