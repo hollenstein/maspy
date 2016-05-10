@@ -25,24 +25,18 @@ import maspy.peptidemethods
 ############################################
 ### Common container functions #############
 ############################################
-def _getArrays(container, attr=None, containerKeys=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
-    """Return a condensed array of data from selected items of the "container"
+def _getArrays(items, attr, defaultValue):
+    """Return arrays with equal size of item attributes from a list of sorted "items"
     for fast and convenient data processing.
 
     :param attr: list of item attributes that should be added to the returned array.
-    If an attribute is not present the "defaultValue" is added instead.
-    :param containerKeys: valid keys of the "container", if None all keys are considered
-    :type containerKeys: a single dictionary key or a list of keys
-    :param sort: if "sort" is specified the returned list of items is sorted according to the item
-    attribute specified by "sort", if the attribute is not present the item is skipped.
-    :param reverse: boolean to reverse sort order
-    :param selector: a function which is called with each item and returns
-    True (include item) or False (discard item). If not specified all items are returned
+    :param defaultValue: if an item is missing an attribute, the "defaultValue" is
+        added to the array instead.
 
-    return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+    return {'attribute1': numpy.array(), 'attribute2': numpy.array(), ...}
     """
     arrays = dict([(key, []) for key in attr])
-    for item in _getItems(container, containerKeys, sort, reverse, selector):
+    for item in items:
         for key in attr:
             arrays[key].append(getattr(item, key, defaultValue))
     for key in [_ for _ in viewkeys(arrays)]:
@@ -57,10 +51,10 @@ def _getItems(container, containerKeys=None, sort=False, reverse=False, selector
     :param containerKeys: valid keys of the "container", if None all keys are considered
     :type containerKeys: a single dictionary key or a list of keys
     :param sort: if "sort" is specified the returned list of items is sorted according to the item
-    attribute specified by "sort", if the attribute is not present the item is skipped.
+        attribute specified by "sort", if the attribute is not present the item is skipped.
     :param reverse: boolean to reverse sort order
     :param selector: a function which is called with each item and returns
-    True (include item) or False (discard item). If not specified all items are returned
+        True (include item) or False (discard item). If not specified all items are returned
     """
     containerKeys = [_ for _ in viewkeys(container)] if containerKeys is None else aux.toList(containerKeys)
 
@@ -163,31 +157,23 @@ class MsrunContainer(object):
         for fast and convenient data processing.
 
         :param attr: list of :class:`Si` item attributes that should be added to the returned array.
-        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
-        are always included, in combination they serve as a unique id.
+            The attributes "id" and "specfile" are always included, in combination they serve as a unique id.
+        :param defaultValue: if an item is missing an attribute, the "defaultValue" is
+            added to the array instead.
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
         :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
+            attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
         :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned
+            True (include item) or False (discard item). If not specified all items are returned
 
         return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
         """
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
-        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
-        #return _getArrays(self.sic, attr, specfiles, sort, reverse, selector, defaultValue)
-
-        arrays = arrays = dict([(key, []) for key in attr])
-        for item in _getItems(self.sic, specfiles, sort, reverse, selector):
-            for key in attr:
-                arrays[key].append(getattr(item, key, defaultValue))
-        for key in [_ for _ in viewkeys(arrays)]:
-            arrays[key] = numpy.array(arrays[key])
-
-        return arrays
+        items = self.getItems(specfiles, sort, reverse, selector)
+        return _getArrays(items, attr, defaultValue)
 
     def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda si: True):
         """Generator that yields filtered and/or sorted :class:`Si` objects from :instance:`self.sic`
@@ -195,10 +181,10 @@ class MsrunContainer(object):
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
         :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
+            attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
         :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned
+            True (include item) or False (discard item). If not specified all items are returned
         """
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         return _getItems(self.sic, specfiles, sort, reverse, selector)
@@ -681,7 +667,7 @@ def addMsrunContainers(mainContainer, subContainer):
 ##########################################################################
 class Sii(object):
     """Sii (SpectrumIdentificationItem),
-    representation of a fragment spectrum annotation (Peptide Spectrum Match).
+    representation of a ion fragment spectrum annotation (Peptide Spectrum Match).
 
     :ivar identifier: The unique id of this spectrum, typically the scan number.
         Is used together with "specfile" as a key to access this element in its container
@@ -742,31 +728,24 @@ class SiiContainer(object):
         for fast and convenient data processing.
 
         :param attr: list of :class:`Sii` item attributes that should be added to the returned array.
-        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
-        are always included, in combination they serve as a unique id.
+            The attributes "id" and "specfile" are always included, in combination they serve as a unique id.
+        :param defaultValue: if an item is missing an attribute, the "defaultValue" is
+            added to the array instead.
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
         :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
+            attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
         :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned.
-        By default only items with "isValid" == True are returned.
+            True (include item) or False (discard item). If not specified all items are returned.
+            By default only items with "isValid" == True are returned.
 
         return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
         """
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
-        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
-
-        arrays = dict([(key, []) for key in attr])
-        for item in _getListItems(self.container, specfiles, sort, reverse, selector):
-            for key in attr:
-                arrays[key].append(getattr(item, key, defaultValue))
-        for key in [_ for _ in viewkeys(arrays)]:
-            arrays[key] = numpy.array(arrays[key])
-
-        return arrays
+        items = self.getItems(specfiles, sort, reverse, selector)
+        return _getArrays(items, attr, defaultValue)
 
     def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda sii: sii.isValid):
         """Generator that yields filtered and/or sorted :class:`Sii` objects from :instance:`self.container`
@@ -976,31 +955,24 @@ class FiContainer(object):
         for fast and convenient data processing.
 
         :param attr: list of :class:`Fi` item attributes that should be added to the returned array.
-        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
-        are always included, in combination they serve as a unique id.
+            The attributes "id" and "specfile" are always included, in combination they serve as a unique id.
+        :param defaultValue: if an item is missing an attribute, the "defaultValue" is
+            added to the array instead.
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
         :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
+            attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
         :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned.
-        By default only items with "isValid" == True are returned.
+            True (include item) or False (discard item). If not specified all items are returned.
+            By default only items with "isValid" == True are returned.
 
         return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
         """
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
-        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
-
-        arrays = dict([(key, []) for key in attr])
-        for item in _getItems(self.container, specfiles, sort, reverse, selector):
-            for key in attr:
-                arrays[key].append(getattr(item, key, defaultValue))
-        for key in [_ for _ in viewkeys(arrays)]:
-            arrays[key] = numpy.array(arrays[key])
-
-        return arrays
+        items = self.getItems(specfiles, sort, reverse, selector)
+        return _getArrays(items, attr, defaultValue)
 
     def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda fi: fi.isValid):
         """Generator that yields filtered and/or sorted :class:`Fi` objects from :instance:`self.container`
@@ -1008,10 +980,10 @@ class FiContainer(object):
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
         :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Fi`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
+            attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
         :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned
+            True (include item) or False (discard item). If not specified all items are returned
         """
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         return _getItems(self.container, specfiles, sort, reverse, selector)
