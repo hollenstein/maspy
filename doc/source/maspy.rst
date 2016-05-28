@@ -92,6 +92,14 @@ maspy.sil module
     :undoc-members:
     :show-inheritance:
 
+maspy.xml module
+----------------
+
+.. automodule:: maspy.xml
+    :members:
+    :undoc-members:
+    :show-inheritance:
+       
 
 Module contents
 ---------------
