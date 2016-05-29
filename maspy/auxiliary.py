@@ -460,6 +460,47 @@ log10factorial = Memoize(lambda n: math.log10(math.factorial(int(n))))
 calculated numbers are stores in log10factorial.memo """
 
 
+# --- some convenience functions to work with arrays and others... --- #
+def calcDeviationLimits(value, tolerance, mode):
+    """Returns the upper and lower deviation limits for a value
+    and a given tolerance, either as relative or a absolute difference.
+
+    :param value: can be a single value or a list of values
+    if a list of values is given, the minimal value will be used
+    to calculate the lower limit and the maximum value to calculate
+    the upper limit
+    :param tolerance: a number used to calculate the limits
+    :param mode: either absolute or relative, specifies how the
+    tolerance should be applied to the value
+    """
+    values = aux.toList(value)
+    if mode == 'relative':
+        lowerLimit = min(values) * (1 - tolerance)
+        upperLimit = max(values) * (1 + tolerance)
+    elif mode == 'absolute':
+        lowerLimit = min(values) - tolerance
+        upperLimit = max(values) + tolerance
+    else:
+        raise Exception('mode %s not specified' %(filepath, ))
+    return lowerLimit, upperLimit
+
+
+def returnArrayFilters(arr1, arr2, limitsArr1, limitsArr2):
+    #TODO: docstring
+    posL = bisect.bisect_left(arr1, limitsArr1[0])
+    posR = bisect.bisect_right(arr1, limitsArr1[1])
+    matchMask = ((arr2[posL:posR] <= limitsArr2[1]) &
+                 (arr2[posL:posR] >= limitsArr2[0])
+                 )
+    return posL, posR, matchMask
+
+
+def applyArrayFilters(array, posL, posR, matchMask):
+    #TODO: docstring
+    return numpy.compress(matchMask, array[posL:posR], axis=0)
+
+
+# --- data fitting section --- #
 class DataFit(object):
     def __init__(self, dependentVarInput, independentVarInput):
         self.dependentVarInput = dependentVarInput

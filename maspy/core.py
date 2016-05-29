@@ -1,6 +1,4 @@
-"""
-Hallo ich bin der Core Module Docstring.
-"""
+""" Modul docstring """
 
 from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
