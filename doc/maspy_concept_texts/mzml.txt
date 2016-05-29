@@ -1,0 +1,39 @@
+"""
+Introduction:
+spectra are the most basic results produced by any mass spectrometry experiment
+-> start of the tutorial / introduction
+
+- what is mzML ?
+    eg from pyteomics: mzML is an XML-based format for experimental data obtained on MS/MS or LC-MS setups.
+    or from http://www.psidev.info/mzml: format for encoding raw spectrometer output
+- how to convert vendor format files to mzML?
+    - use msConvert from proteoWizard suite
+    - also allows peak picking to obtain centroided data
+- what exactly is the problem of mzML files?
+    - modern mass spectrometers can generate tens of thousands spectra per hour
+      resulting in huge mzML files because of spectral information
+    - parsing takes a lot of time even tough sometimes only part of the data
+      has to be accessed
+
+Maspy implementation:
+- maspy features an own internal representation of mzML files
+    - contains all information present in the mzML file, split into four groups
+    - run metadata, spectrum item metadata, spectrum array item, chromatogram item
+    - explain all of them ...
+    - explain what spectrum items are, and what their purpose is
+- after conversion, each group is saved seperately and can therefore be imported individually
+    - run metadata in xml, arrays as binary data, all other data as JSON
+    - smaller file size
+    - faster data access
+- maspy allows writing a new mzML file from the msrunContainer (the internal mzMl represenation)
+    - allows to modify mzML within maspy and pass the changed mzML file to external software
+    - note: indexing not yet supported
+
+
+The mzML format is an open, XML-based format for mass spectrometer output
+files, developed with the full participation of vendors and researchers in
+order to create a single open format that would be supported by all software.
+from: Mass Spectrometer Output File Format mzML
+http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3073315/
+"""
+
