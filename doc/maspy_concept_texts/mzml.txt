@@ -9,6 +9,7 @@ spectra are the most basic results produced by any mass spectrometry experiment
 - how to convert vendor format files to mzML?
     - use msConvert from proteoWizard suite
     - also allows peak picking to obtain centroided data
+
 - what exactly is the problem of mzML files?
     - modern mass spectrometers can generate tens of thousands spectra per hour
       resulting in huge mzML files because of spectral information
@@ -30,10 +31,58 @@ Maspy implementation:
     - note: indexing not yet supported
 
 
+--- ad peak picking ---
+What is the difference between Profile and Centroid MS data?
+
+MS data collected off an instrument is presented as either profile or centroid mode. Shown below are two mass spectra illustrating an ion cluster for profile data and a centroid mass spectrum created from the profile data.
+
+In profile mode, a peak is represented by a collection of signals over several scans. The advantage of profile data is it is easier to classify a signal as a true peak from noise off the instrument.
+
+In centroid mode, the signals are displayed as discrete m/z with zero line widths. The advantage of centroid data is the file size is significantly smaller as there is less information describing a signal.
+--- ad peak picking ---
+
+
+
+
+#- What is mzml -#
 The mzML format is an open, XML-based format for mass spectrometer output
 files, developed with the full participation of vendors and researchers in
 order to create a single open format that would be supported by all software.
 from: Mass Spectrometer Output File Format mzML
 http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3073315/
+
+Refer to psidev.info (http://www.psidev.info/index.php?q=node/257)
+for details on the XML schema definition and mzML file specifications.
+
+#- why use mzml -#
+Use for archiving, sharing, and processing -> much easier for software development
+
+#- how to convert vendor format to mzml -#
+Detailed protocol how to use msConvert
+http://www.ncbi.nlm.nih.gov/pmc/articles/PMC4113728/
+
+#- peak picking -#
+
+#- draw backs of the mzml format -#
+- what exactly is the problem of mzML files?
+    - modern mass spectrometers can generate tens of thousands spectra per hour
+      resulting in huge mzML files because of spectral information
+    - opening and parsing takes a lot of time even tough sometimes only part of the data
+      has to be accessed
+
+#- maspy implementation of mzml -#
+- maspy features an own internal representation of mzML files
+    - contains all information present in the mzML file, split into four groups
+    - run metadata, spectrum item metadata, spectrum array item, chromatogram item
+    - explain all of them ...
+    - explain what spectrum items are, and what their purpose is
+- after conversion, each group is saved seperately and can therefore be imported individually
+    - run metadata in xml, arrays as binary data, all other data as JSON
+    - smaller file size
+    - faster data access
+- maspy allows writing a new mzML file from the msrunContainer (the internal mzMl represenation)
+    - allows to modify mzML within maspy and pass the changed mzML file to external software
+    - note: indexing not yet supported
+
 """
 
