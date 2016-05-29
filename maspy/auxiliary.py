@@ -35,7 +35,21 @@ from maspy.mit_stats import runningMedian as runningMedian
 
 
 class PartiallySafeReplace(object):
-    #TODO: Docstring missing
+    """Indirectly overwrite files by writing to temporary files and replacing them at once.
+
+    This is a context manager. When the context is entered,
+    subsequently opened files will actually open temporary files.
+
+    Each time the same file-path is opened, the same temporary file
+    will be used.
+
+    When the context is closed, it will attempt to replace the
+    original files with the content of the temporary files.
+
+    Thus, several files can be prepared with less risk of data loss.
+    Data loss is still possible if the replacement-operation fails
+    (due to locking, not handled yet) or is interrupted.
+    """
     def __init__(self):
         pass
 
@@ -45,22 +59,28 @@ class PartiallySafeReplace(object):
 
     @contextlib.contextmanager
     def open(self, filepath, mode='w+b'):
-        #TODO: check if file already in self._files
-        #Check if the filepath can be accessed and is writable before creating the tempfile
+        """Opens a file - will actually return a temporary file but replace
+        the original file when the context is closed.
+        """
+        # Check if the filepath can be accessed and is writable before creating the tempfile
         if not _isFileAccessible(filepath):
-            raise IOError('File %s is not writtable' %(filepath, ))
+            raise IOError('File %s is not writable' % (filepath,))
 
-        tempfilepath = None
-        with tempfile.NamedTemporaryFile(delete=False, mode=mode) as tmpf:
-            tempfilepath = tmpf.name
-            yield tmpf
-        self._files[filepath] = tempfilepath
+        if filepath in self._files:
+            with open(self._files[filepath], mode=mode) as tmpf:
+                yield tmpf
+        else:
+            tempfilepath = None
+            with tempfile.NamedTemporaryFile(delete=False, mode=mode) as tmpf:
+                tempfilepath = tmpf.name
+                yield tmpf
+            self._files[filepath] = tempfilepath
 
     def __exit__(self, x, y, z):
-        #Check if all filepaths can be accessed and are writable before moving the tempfiles
+        # Check if all filepaths can be accessed and are writable before moving the tempfiles
         for filepath in self._files:
             if not _isFileAccessible(filepath):
-                raise IOError('File %s is not writtable' %(filepath, ))
+                raise IOError('File %s is not writable' % (filepath, ))
         for filepath, tempfilepath in viewitems(self._files):
             #Note: here unhandled exceptions may still occur because of race conditions, messing things up.
             shutil.move(tempfilepath, filepath)
@@ -68,18 +88,20 @@ class PartiallySafeReplace(object):
 
 @contextlib.contextmanager
 def openSafeReplace(filepath, mode='w+b'):
-    #TODO: Docstring missing
+    """Context manager to open a temporary file and replace the original
+    file on closing.
+    """
     tempfileName = None
-    #Check if the filepath can be accessed and is writable before creating the tempfile
+    # Check if the filepath can be accessed and is writable before creating the tempfile
     if not _isFileAccessible(filepath):
-        raise IOError('File %s is not writtable' %(filepath, ))
+        raise IOError('File %s is not writtable' % (filepath, ))
     with tempfile.NamedTemporaryFile(delete=False, mode=mode) as tmpf:
         tempfileName = tmpf.name
         yield tmpf
-    #Check if the filepath can be accessed and is writable before moving the tempfile
+    # Check if the filepath can be accessed and is writable before moving the tempfile
     if not _isFileAccessible(filepath):
-        raise IOError('File %s is not writtable' %(filepath, ))
-    #Note: here unhandled exceptions may still occur because of race conditions, messing things up.
+        raise IOError('File %s is not writtable' % (filepath, ))
+    # Note: here unhandled exceptions may still occur because of race conditions, messing things up.
     shutil.move(tempfileName, filepath)
 
 

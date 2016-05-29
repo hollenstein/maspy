@@ -1,3 +1,7 @@
+"""
+Hallo ich bin der Core Module Docstring.
+"""
+
 from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 
@@ -131,6 +135,7 @@ class MsrunContainer(object):
     """Container for mass spectrometry data (eg MS1 and MS2 spectra), provides full support for mzml files.
 
     The structure of the following containers is: {"specfilename": {"itemId": item, ...}}
+
     :ivar rmc: "run metadata container", contains mzml metadata xml strings, as imported from the mzML file
     :ivar cic: "chromatogram item container", see :class:`Ci`
     :ivar smic: "spectrum metadata item container", see :class:`Smi`
@@ -153,7 +158,7 @@ class MsrunContainer(object):
         self.info = {}
 
     def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
-        """Return a condensed array of data selected from :class:`Si` objects of :instance:`self.sic`
+        """Return a condensed array of data selected from :class:`Si` objects from ``self.sic``
         for fast and convenient data processing.
 
         :param attr: list of :class:`Si` item attributes that should be added to the returned array.
@@ -168,7 +173,7 @@ class MsrunContainer(object):
         :param selector: a function which is called with each :class:`Si` item and returns
             True (include item) or False (discard item). If not specified all items are returned
 
-        return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+        :returns: {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
         """
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
@@ -176,7 +181,7 @@ class MsrunContainer(object):
         return _getArrays(items, attr, defaultValue)
 
     def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda si: True):
-        """Generator that yields filtered and/or sorted :class:`Si` objects from :instance:`self.sic`
+        """Generator that yields filtered and/or sorted :class:`Si` objects from ``self.sic``
 
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
@@ -363,7 +368,7 @@ class Ci(object):
     product: The method of product ion selection and activation in a precursor ion scan, from mzML
     params: A list of parameter tuple, TODO: as described elsewhere
     arrays: dictionary of nummpy arrays containing the chromatogram data points. Keys are derived from the
-        specified cvParam, see func:`findBinaryDataType`.
+        specified cvParam, see :func:`maspy.xml.findBinaryDataType`.
     arrayInfo: dictionary describing the data from binaryData.
         {dataType: {'dataProcessingRef': None or a reference to a dataProcessing entry, 'params': a list of param tuple}, ...}
     """
