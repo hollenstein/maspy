@@ -204,7 +204,7 @@ def fetchParentIon(smi):
         attributes = dict()
         attributes['precursorId'] = smi.precursorList[0].spectrumRef
         selectedIon = smi.precursorList[0]['selectedIonList'][0]
-        for key, accession, dtype in [('mz', 'MS:1000744', float),
+        for key, accession, dtype in [('obsMz', 'MS:1000744', float),
                                       ('i', 'MS:1000042', float),
                                       ('charge', 'MS:1000041', int)
                                       ]:
@@ -315,17 +315,16 @@ def applySiiRanking(siiContainer, specfile):
     attr = siiContainer.info[specfile]['rankAttr']
     reverse = siiContainer.info[specfile]['rankLargerBetter']
     for itemList in listvalues(siiContainer.container[specfile]):
-        if len(itemList) > 1:
-            sortList = [(getattr(sii, attr), sii) for sii in itemList]
-            itemList = [sii for score, sii in sorted(sortList, reverse=reverse)]
+        sortList = [(getattr(sii, attr), sii) for sii in itemList]
+        itemList = [sii for score, sii in sorted(sortList, reverse=reverse)]
 
-            #Rank Sii according to their position
-            lastValue = None
-            for itemPosition, item in enumerate(itemList, 1):
-                if getattr(item, attr) != lastValue:
-                    rank = itemPosition
-                item.rank = rank
-                lastValue = getattr(item, attr)
+        #Rank Sii according to their position
+        lastValue = None
+        for itemPosition, item in enumerate(itemList, 1):
+            if getattr(item, attr) != lastValue:
+                rank = itemPosition
+            item.rank = rank
+            lastValue = getattr(item, attr)
 
 
 def applySiiQcValidation(siiContainer, specfile):
@@ -399,6 +398,8 @@ def readPercolatorResults(specfile, filelocation, psmEngine):
         peptide = fields[headerDict['peptide']]
         if peptide.find('.') != -1:
             peptide = peptide.split('.')[1]
+        #Change to the new unimod syntax
+        peptide = peptide.replace('[UNIMOD:', '[u:')
         sequence = maspy.peptidemethods.removeModifications(peptide)
 
         qValue = fields[headerDict['q-value']]

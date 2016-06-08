@@ -1,0 +1,289 @@
+Spectrum identificaions in MasPy - basics
+-----------------------------------------
+
+*Outline*
+
+* Typical MS/MS experimental setup: MS1 detection -> isolation -> fragmentation
+* Identification of MS/MS spectra -> assigning a peptide which generated the fragmentation spectrum
+
+    This process can be described as peptide spectrum matching and is done by three major methods:
+
+    - Comparison of theoretical spectra derived by an in silico digestion of a protein database
+    - Comparison of observed spectra with spectra of known peptide origin (spectral library search)
+    - De novo sequencing by comparing the mass differences of the observed ions to the actual
+      mass differences of the peptide bulding blocks, amino acids and modified amino acids.
+* How well does the assigned peptide explain the spectrum, described by an arbitrary score or a probability that the match is wrong
+* What is the official format to record this identification information, mzIdentML. Not yet supported in MasPy
+* Represenation of PSMs in MasPy (How to depict amino acid modifications in maspy)
+* How are Sii stored in MasPy (SiiContainer), how to access Sii
+* Importing PSM results into Maspy - minimal requirements (peptide, scanId, score), a function to translate modifications.
+
+
+Tandem MS experiments
+^^^^^^^^^^^^^^^^^^^^^
+
+*From thermo homepage*
+
+Tandem mass spectrometry (MS/MS) offers additional information about specific
+ions. In this approach, distinct ions of interest are selected based on their
+m/z from the first round of MS and are fragmented by a number of methods of
+dissociation. One such method involves colliding the ions with a stream of inert
+gas, which is known as collision-induced dissociation (CID) or higher energy
+collision dissociation (HCD). Other methods of ion fragmentation include
+electron-transfer dissociation (ETD) and electron-capture dissociation (ECD).
+
+*From abc and xyz* (`link <http://www.nature.com/nrm/journal/v5/n9/full/nrm1468.html>`_)
+
+Having determined the m/z values and the intensities of all the peaks in the
+spectrum, the mass spectrometer then proceeds to obtain primary structure
+(sequence) information about these peptides. This is called tandem MS, because
+it couples two stages of MS. In tandem MS, a particular peptide ion is isolated,
+energy is imparted by collisions with an inert gas (such as nitrogen molecules,
+or argon or helium atoms), and this energy causes the peptide to break apart. A
+mass spectrum of the resulting fragments — the tandem MS (also called MS/MS or
+MS2) spectrum — is then generated (Fig. 3c). In MS jargon, the species that is
+fragmented is called the 'precursor ion' and the ions in the tandem-MS spectrum
+are called 'product ions' (more endearingly, but less politically correct, they
+used to be described as parent and daughter ions). Note that the MS2 spectrum is
+the result of an ensemble of one particular precursor ion fragmenting at
+different amide bonds. Throughout the chromatographic run, the instrument will
+cycle through a sequence that consists of obtaining a mass spectrum followed by
+obtaining tandem mass spectra of the most abundant peaks that were found in this
+spectrum.
+
+
+mzIdentML
+^^^^^^^^^
+
+
+Representation of spectrum identifications in MasPy
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Elements describing the identification of a poly peptide from a fragmentation
+spectrum are called spectrum identification items (:class:`Sii
+<maspy.core.Sii>`) in MasPy. The term ``Sii`` is interchangeable with the more
+commonly used term peptide spectrum match (PSM). However, we choose ``Sii``
+since it is in analogy to the mzIdentML format which we are planning to support
+in the future.
+
+The ``Sii`` class has a very simple structure with all its variables being
+directly stored as attributes of the class. The attributes ``.id`` and
+``.specfile`` are mandatory and used to unambiguously link the ``Sii`` to a
+``Si`` element of an ``MsrunContainer``. The ``Sii.id`` is typically the scan
+number of a spectrum and should be equal to the ``Si.id`` entry, the
+``Si.specfile`` refers to the specfile name which is used to identify a single
+ms-run. Other attributes can be manipulated without restrictions and new
+attributes can simply be added.
+
+Further attributes which can be necessary for a reasonable utilization of
+``Sii`` and their naming convention in MasPy:
+
+    - ``.peptide`` the peptide sequence containing amino acid modifications in
+      the MasPy format, see below.
+
+    - ``.sequence`` the plain amino acid sequence of the spectrum
+      identification, does not contain modifications.
+
+    - ``.score`` or any other score attribute name which is used to rank the
+      quality of a spectrum identifications. The name of this attribute and
+      wheter a large or a small number indicates a higher confidence is
+      specified in :class:`SiiContainer.info <maspy.core.SiiContainer>`.
+
+    - ``.isValid`` this attribute can be used to flag if a Sii has passed a
+      given quality threshold or been validated as correct.
+
+    - ``.rank`` the rank of this Sii compared to others for the same MSn
+      spectrum. The rank is based on the specified score attribute.
+
+    - ``.charge`` the charge state of the identified precursor ion.
+
+    - ``.rt`` the retention time in seconds of the corresponding spectrum.
+
+    - ``.obsMz`` the experimentally observed mass to charge ratio of the
+      precursor ion (Dalton / charge). Normally the monoisotopic ion.
+
+    - ``.obsMh`` the experimentally observed mass to charge ratio of the
+      precursor ion, calculated for the mono protonated ion (Dalton / charge).
+      Normally the monoisotopic ion.
+
+    - ``.obsMass`` the experimentally observed not protonated mass of precursor
+      ion, calculated by using the mz and charge values (Dalton / charge).
+      Normally the monoisotopic ion.
+
+    - ``.excMz`` the exact calculated mass to charge ratio of the peptide
+      (Dalton / charge). Normally the monoisotopic ion.
+
+    - ``.excMh`` the exact calculated mass to charge ratio of the peptide,
+      calculated for the mono protonated peptide (Dalton / charge). Normally the
+      monoisotopic mass.
+
+    - ``.excMass`` the exact calculated mass of the not protonated peptide
+      (Dalton / charge). Normally the monoisotopic mass.
+
+.. note::
+
+    The amino acid sequence itself is commonly written in the single letter
+    code. However, there is no common style how to depict amino acid
+    modifications in a linear string. Very often each modification is
+    represented by a single symbol or a short string specifically highlighted
+    for example by using brackets. This modification represenation is then
+    written next to the modified amino acid residue, ie on the right side.
+
+    In MasPy we decided to highlight modifications by using square brackets
+    positioned next to the modified amino acid. It is allowed to add multiple
+    modifications to one single residue by writing multiple bracket pairs, eg
+    ``PEP[mod1][mod2]TIDE``. This format allows simple parsing of peptide
+    strings to retrieve modifications and their position in the amino acid
+    sequence. In addition every character, except square brackets, could be used
+    as a symbol for an additional amino acid.
+
+    `Unimod <www.unimod.org>`_ provides a comprehensive database of protein
+    modifications and is to our knowledge widely-used in the field of mass
+    spectrometry based proteomics. Therefore we decided to refer to the unimod
+    accession number whenever a modification is present in the database. Such
+    modifications are then written in the form of ``[u:X]``, where X is the
+    unimod accession number. Modifications not present in the database should be
+    represented by a short acronym, for example ``[DSS]``. Such additional
+    modifications have to be added to the MasPy modification database. (at the
+    moment this is only a dictionary :data:`maspy.constants.aaModComp`)
+
+
+The spectrum identification item container (SiiContainer)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :class:`SiiContainer <maspy.core.SiiContainer>` is used to store spectrum
+identification results of one or multiple specfiles. The container allows saving
+and loading of imported results and provides methods for convenient access to
+the data.
+
+**Importing peptide spectrum matching results**
+
+During the import all PSMs have to be converted to ``Sii`` and added to
+``SiiContainer.container``. Since for one spectrum multiple ``Sii`` can exist,
+they have to be ranked according to how well they can explain the observed
+fragmentation ions, typically described by a score or the q-value. All ``Sii``
+of the same spectrum are put into a list, ranked and sorted according to a user
+defined score. This sorted list is then stored in ``.container``, for details
+see below. Only the ``Sii`` at the first position of this list gets the
+attribute ``.isValid`` set to ``True``, this is even the case if multiple
+``Sii`` with ``.rank == 1`` exist. Afterwards all valid ``Sii`` are additional
+evaluated if they surpass a user defined quality threshold, typically this
+threshold is a false discovery rate (FDR) of 1%.
+
+The import routines currently provided by MasPy are not very extensive, covering
+only the import from percolator .tsv files of certain PSM search engines.
+However, adjusting the existing methods to any .tsv file should be possible
+within minutes. Two things are important to consider when doing this:
+
+    - The spectrum identifier (scan number) is not always present in a separate
+      field. It is very often part of a so called scan header string, which
+      also contains the specfilename and sometimtes the precursor charge state.
+      Thus it is necessary to provide a function which extracts the scan number.
+
+    - For the import it is necessary to provide a function which translates a
+      modification containing peptide string into the aforementioned MasPy
+      representation. In most cases this can be achieved by a simple mapping
+      function::
+
+        >>> def translatePeptide(peptide, modificationMapping):
+        >>>     for oldMod, maspyMod in modificationMapping:
+        >>>         peptide = peptide.replace(oldMod, '[' + maspyMod + ']')
+        >>>     return peptide
+
+        >>> modificationMapping = [('#', 'u:21'), ('*', 'u:35')]
+        >>> translatePeptide('S#PEPM*K', modificationMapping)
+        u'S[u:21]PEPM[u:35]K'
+
+.. note::
+
+    It might be necessary for the function that translates a modified peptide
+    string into the MasPy format to be able to deal with modification strings
+    which are a substring of another modification string, for example "ox" and
+    "diox" in PoxEPdioxTIDE. In such a case if "ox" is simply converted both
+    instances would be affected and the "di" would remain untreated. For most
+    cases this can be solved by replacing the modifications which are a
+    substring of another modification after the others.
+
+The minimal information that should be imported from peptide spectrum matching
+results are the **scan identifier**, **modified peptide sequence** and a
+**score**, which can be used to apply a quality cut off. Other parameters can
+either be generated from the modified peptide sequence (calculated mass, plain
+amino acid sequence) or transferred from the ``MsrunContainer``
+
+
+Basic code examples
+^^^^^^^^^^^^^^^^^^^
+
+A percolator .tsv file can be imported by using the function
+:func:`maspy.reader.importPercolatorResults()`, the imported ``Sii`` elements
+are then added to the ``SiiContainer`` instance passed to the function. ::
+
+    import maspy.core
+    import maspy.reader
+
+    siiContainer = maspy.core.SiiContainer()
+    maspy.reader.importPercolatorResults(siiContainer, 'specfile_name_1',
+                                         'filelocation/out.tsv', 'psmEngine')
+
+If necessary, spectrum attributes can be added from the ``MsrunContainer`` by
+using the function :func:`SiiContainer.addSiInfo
+<maspy.core.SiiContainer.addSiInfo()>`. This adds the selected attributes to
+all ``Sii`` elements of the specified specfiles. ::
+
+    import maspy.core
+    import maspy.reader
+
+    mzmlfilepath = 'filedirectory/specfile_name_1.mzML'
+    msrunContainer = maspy.core.MsrunContainer()
+    maspy.reader.importMzml(mzmlfilepath, msrunContainer)
+
+    siiContainer.addSiInfo(msrunContainer, specfiles='specfile_name_1',
+                           attributes=['obsMz', 'rt', 'charge']
+                           )
+
+It is also possible to calculate the exact mass for all ``Sii`` elements of the
+specified specfiles by using the function :func:`SiContainer.calcMz()
+<maspy.core.SiiContainer.calcMz()>`. The calculated mass to charge ratio is
+written to the attribute ``.excMz``. ::
+
+    siiContainer.calcMz(specfiles='specfile_name_1')
+
+
+**Accessing data stored in SiiContainer**
+
+There are multiple ways how to access single ``Sii`` elements stored in a
+``SiiContainer``. The method :func:`SiiContainer.getValidItem()
+<maspy.reader.SiiContainer.getValidItem()>` can be used to directly access
+``Sii`` which ``.isValid`` argument is ``True`` by using its specfile and
+identifier. If no such ``Sii`` exists for the specified identifier ``None`` is
+returned. In this example there is a valid entry for the identifier '10', but
+not for '11'.::
+
+    >>> sii = siiContainer.getValidItem('specfile_name_1', '10')
+    >>> sii.isValid
+    True
+    >>> sii == None
+    False
+    >>> sii = siiContainer.getValidItem('specfile_name_1', '11')
+    >>> sii == None
+    True
+
+It is possible to access all ``Sii`` elements of a given identifier by directly
+accessing the container :class:`SiiContainer.container
+<maspy.core.SiiContainer>`. In this example, there are multiple ``Sii`` elements
+present for the same spectrum, but only one is valid. ::
+
+    >>> siiContainer.container['specfile_name_1']['10']
+    [<maspy.core.Sii at 0x17c67d30>]
+    >>> for sii in siiContainer.container['specfile_name_1']['10']:
+    >>>     print(sii.id, sii.isValid, sii.rank)
+    10 True 1
+    10 False 2
+    10 False 3
+
+By using the function :class:`SiiContainer.getItems()
+<maspy.core.SiiContainer.getItems()>` it is possible to iterate over all ``Sii``
+elements present in the ``SiiContainer``. Multiple arguments can be passed to
+the function that allow selecting only a specific subset of items but also to
+return the items in a sorted order. For details consult the docstring.
+

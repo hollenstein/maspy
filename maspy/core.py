@@ -782,12 +782,37 @@ class SiiContainer(object):
     """ItemContainer for MSn spectrum identifications (Peptide Spectrum Matches),
     SiiContainer = Spectrum Identification Item Container.
 
-    :ivar container: Access :class:`ContainerItem` storage list via a specfile keyword: {specfile:[ContainerItem(), ContainerItem(), ...]}
-    :ivar info: a dictionary containing information about the imported specfiles;
-        key = specfilename, value = {"scoreAttr": str, "largerBetter": bool, "path": str}
-        "scoreAttr" describes which :class:`Sii` attribute should be used for ranking.
-        "largerBetter" specifies wheter a larger score signifies a better match.
-        "path" contains a directory path used for saving and loading
+    :ivar container: contains the stored :class:`Sii <maspy.core.Sii>`
+        elements. ::
+
+            {specfilename: {'Sii identifier': [Sii, ...], ...}
+
+    :ivar info: a dictionary containing information about imported specfiles. ::
+
+            {specfilename: {'path': str, 'qcAttr': str, 'qcLargerBetter': bool,
+                            'qcCutOff': float, 'rankAttr': str,
+                            'rankLargerBetter': bool
+                            },
+             ...
+             }
+
+        **path**: folder location used by the ``SiiContainer`` to save and load
+        data to the hard disk.
+
+        **qcAttr**: name of the parameter to define a quality cut off. Typically
+        this is some sort of a global false positive estimator (eg FDR)
+
+        **qcLargerBetter**: bool, True if a large value for the ``.qcAttr`` means
+        a higher confidence.
+
+        **qcCutOff**: float, the quality threshold for the specifed ``.qcAttr``
+
+        **rankAttr**: name of the parameter used for ranking ``Sii`` according
+        to how well they match to a fragment ion spectrum, in the case when
+        their are multiple ``Sii`` present for the same spectrum.
+
+        **rankLargerBetter**: bool, True if a large value for the ``.rankAttr``
+        means a better match to the fragment ion spectrum
 
     #Note: In the future this container may be integrated in an evidence or mzIdentML like container.
     """
@@ -938,7 +963,7 @@ class SiiContainer(object):
                         for attribute in attributes:
                             setattr(sii, attribute, getattr(si, attribute, None))
 
-    def calcMz(self, specfiles=None, guessCharge=True, obsMzKey='mz'):
+    def calcMz(self, specfiles=None, guessCharge=True, obsMzKey='obsMz'):
         #TODO: docstring
         # Guess charge uses the calculated mass and the observed m/z value to calculate the charge
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
@@ -958,10 +983,10 @@ class SiiContainer(object):
                             tempPeptideMasses[peptide] = maspy.peptidemethods.calcPeptideMass(peptide)
                     peptideMass = tempPeptideMasses[peptide]
                     if charge is not None:
-                        sii.calcMz = maspy.peptidemethods.calcMzFromMass(peptideMass, charge)
+                        sii.excMz = maspy.peptidemethods.calcMzFromMass(peptideMass, charge)
                     elif guessCharge:
                         guessedCharge = round(peptideMass / (getattr(sii, obsMzKey) - maspy.constants.atomicMassProton), 0)
-                        sii.calcMz = maspy.peptidemethods.calcMzFromMass(peptideMass, guessedCharge)
+                        sii.excMz = maspy.peptidemethods.calcMzFromMass(peptideMass, guessedCharge)
                         sii.charge = guessedCharge
         del(tempPeptideMasses)
 
