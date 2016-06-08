@@ -13,7 +13,7 @@ Contents:
 .. toctree::
    :maxdepth: 4
 
-   tutorial
+   introduction_maspy
    maspy
 
 

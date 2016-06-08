@@ -132,20 +132,43 @@ def _containerSetPath(container, folderpath, specfiles):
 class MsrunContainer(object):
     """Container for mass spectrometry data (eg MS1 and MS2 spectra), provides full support for mzml files.
 
-    The structure of the following containers is: {"specfilename": {"itemId": item, ...}}
-
     :ivar rmc: "run metadata container", contains mzml metadata xml strings, as imported from the mzML file
     :ivar cic: "chromatogram item container", see :class:`Ci`
     :ivar smic: "spectrum metadata item container", see :class:`Smi`
     :ivar saic: "spectrum array item container", see :class:`Sai`
     :ivar sic: "spectrum item container", see :class:`Si`
+    :ivar info: contains information about the imported specfiles. ::
 
-    :ivar info: a dictionary containing information about the imported specfiles; key = specfilename, value = {'path': str, 'status': {}}
-                     "path" contains information about the filelocation used for saving and loading msrun files in
-                     the maspy dataformat and "status" about which datatypes have been imported by using bool values.
-    eg {"specfilename": {"path": an absolute path to a filedirectory,
-                         "status": {"ci": bool, "rm": bool, "sai": bool, "si": bool, "smi": bool}
-                         }}
+            {specfilename: {'path': str,
+                            'status': {u'ci': bool, u'rm': bool, u'sai': bool,
+                                       u'si': bool, u'smi': bool}
+                            },
+             ...
+             }
+
+        ``path`` contains information about the filelocation used for saving and
+        loading msrun files in the maspy dataformat. ``status`` describes which
+        datatypes are curerently imported.
+
+        code example::
+
+            {u'JD_06232014_sample1_A': {u'path': u'C:/filedirectory',
+                                        u'status': {u'ci': True,
+                                                    u'rm': True,
+                                                    u'sai': True,
+                                                    u'si': True,
+                                                    u'smi': True
+                                                    }
+                                        }
+             }
+
+    .. note::
+        The structure for the containers ``rmc``, ``cic``, ``smic``, ``saic``
+        and ``sic`` is::
+
+            {"specfilename": {"itemId": item, ...}, ...}
+
+
     """
     def __init__(self):
         self.rmc = {}
@@ -155,7 +178,7 @@ class MsrunContainer(object):
         self.sic = {}
         self.info = {}
 
-    def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
+    def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False, selector=None, defaultValue=None):
         """Return a condensed array of data selected from :class:`Si` objects from ``self.sic``
         for fast and convenient data processing.
 
@@ -168,18 +191,20 @@ class MsrunContainer(object):
         :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
             attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
-        :param selector: a function which is called with each :class:`Si` item and returns
-            True (include item) or False (discard item). If not specified all items are returned
+        :param selector: a function which is called with each :class:`Si` item and has to return
+            True (include item) or False (discard item). Default function is: ``lambda si: True``
 
         :returns: {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
         """
+        selector = lambda si: True if selector is None else selector
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
         items = self.getItems(specfiles, sort, reverse, selector)
         return _getArrays(items, attr, defaultValue)
 
-    def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda si: True):
-        """Generator that yields filtered and/or sorted :class:`Si` objects from ``self.sic``
+    def getItems(self, specfiles=None, sort=False, reverse=False, selector=None):
+        """Generator that yields filtered and/or sorted :class:`Si` instances
+        from :class:`self.sic <maspy.core.MsrunContainer>`.
 
         :param specfiles: filenames of msrun files - if specified return only items from those files
         :type specfiles: str or [str, str, ...]
@@ -187,13 +212,15 @@ class MsrunContainer(object):
             attribute specified by "sort", if the attribute is not present the item is skipped.
         :param reverse: boolean to reverse sort order
         :param selector: a function which is called with each :class:`Si` item and returns
-            True (include item) or False (discard item). If not specified all items are returned
+            True (include item) or False (discard item). Default function is: ``lambda si: True``
         """
+        selector = lambda si: True if selector is None else selector
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
         return _getItems(self.sic, specfiles, sort, reverse, selector)
 
     def getItem(self, specfile, identifier):
-        """Returns a :class:`Si` instance (SpectrumItem) from :instance:`self.sic` (SpectrumItemContainer)."""
+        """Returns a :class:`Si` instance from
+        :class:`self.sic <maspy.core.MsrunContainer>`."""
         return self.sic[specfile][identifier]
 
     def addSpecfile(self, specfiles, path):
@@ -256,6 +283,17 @@ class MsrunContainer(object):
         return datatypes
 
     def save(self, specfiles=None, rm=False, ci=False, smi=False, sai=False, si=False, compress=True, path=None):
+        """
+
+        :param specfiles:
+        :param rm:
+        :param ci:
+        :param smi:
+        :param sai:
+        :param si:
+        :param compress:
+        :param path:
+        """
         #TODO: docstring
         specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else specfiles
         datatypes = self._processDatatypes(rm, ci, smi, sai, si)
@@ -360,15 +398,40 @@ class MsrunContainer(object):
 class Ci(object):
     """Chromatogram item (Ci), representation of a mzML chromatogram.
 
-    identifier: The unique id of this chromatogram. Typically descriptive for the chromatogram, eg. "TIC".
-    dataProcessingRef: This attribute can optionally reference the 'id' of the appropriate dataProcessing, from mzML
-    precursor: The method of precursor ion selection and activation, from mzML
-    product: The method of product ion selection and activation in a precursor ion scan, from mzML
-    params: A list of parameter tuple, TODO: as described elsewhere
-    arrays: dictionary of nummpy arrays containing the chromatogram data points. Keys are derived from the
-        specified cvParam, see :func:`maspy.xml.findBinaryDataType`.
-    arrayInfo: dictionary describing the data from binaryData.
-        {dataType: {'dataProcessingRef': None or a reference to a dataProcessing entry, 'params': a list of param tuple}, ...}
+    :ivar id: The unique id of this chromatogram. Typically descriptive
+        for the chromatogram, eg. "TIC".
+    :ivar dataProcessingRef: This attribute can optionally reference the 'id' of
+        the appropriate dataProcessing, from mzML.
+    :ivar precursor: The method of precursor ion selection and activation, from
+        mzML.
+    :ivar product: The method of product ion selection and activation in a
+        precursor ion scan, from mzML.
+    :ivar params: A list of parameter tuple, TODO: as described elsewhere
+    :ivar arrays: dictionary of nummpy arrays containing the chromatogram data
+        points. Keys are derived from the specified cvParam, see
+        :func:`maspy.xml.findBinaryDataType`.
+    :ivar arrayInfo: dictionary describing each dataType present in ``.arrays``. ::
+
+            {dataType: {'dataProcessingRef': str,
+                        'params': [paramTuple, paramTuple, ...]
+                        }
+             }
+
+        code example::
+
+            {u'i': {u'dataProcessingRef': None,
+                    u'params': [('MS:1000521', '', None),
+                                ('MS:1000574', '', None),
+                                ('MS:1000515', '', 'MS:1000131')
+                                ]
+                    },
+             u'rt': {u'dataProcessingRef': None,
+                     u'params': [('MS:1000523', '', None),
+                                 ('MS:1000574', '', None),
+                                 ('MS:1000595', '', 'UO:0000031')
+                                 ]
+                     }
+             }
     """
     __slots__ = ['id', 'dataProcessingRef', 'precursor', 'product', 'params', 'attrib', 'arrays', 'arrayInfo']
 
@@ -422,9 +485,10 @@ class Sai(object):
     """Spectrum array item (Sai)
     Includes all spectrum information provided by a mzML file, excluding the actual data arrays.
 
-    identifier: The unique id of this spectrum, typically the scan number.
-        Is used together with "specfile" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
-        Should be derived from the spectrums nativeID format (MS:1000767)
+    :ivar id: The unique id of this spectrum, typically the scan number. Is used
+        together with "specfile" as a key to access the spectrum in its container
+        :class:`maspy.core.SaiContainer`. Should be derived from the spectrums
+        nativeID format (MS:1000767)
 
     specfile: An id representing a group of spectra, typically of the same mzML file.
         Is used together with "identifier" as a key to access the spectrum in its container :class:`maspy.core.SiContainer`
@@ -669,21 +733,27 @@ def addMsrunContainers(mainContainer, subContainer):
 ### SpectrumIdentificationItem related classes and functions #############
 ##########################################################################
 class Sii(object):
-    """Sii (SpectrumIdentificationItem),
-    representation of a ion fragment spectrum annotation (Peptide Spectrum Match).
+    """Sii (SpectrumIdentificationItem)
+    Representation of an ion fragment spectrum annotation, also referred to as
+    peptide spectrum match (PSM).
 
     :ivar identifier: The unique id of this spectrum, typically the scan number.
-        Is used together with "specfile" as a key to access this element in its container
-        or the corresponding spectrum in an :class:`maspy.core.SiContainer` container.
+        Is used together with "specfile" as a key to access this element in a
+        :class:`maspy.core.SiiContainer` or the corresponding spectrum in a
+        :class:`maspy.core.SiContainer`.
 
-    :ivar specfile: An id representing a group of spectra, typically of the same mzML file.
-        Is used together with "identifier" as a unique key.
+    :ivar specfile: An id representing a group of spectra, typically of the same
+        mzML file. Is used together with "identifier" as a unique key.
 
-    :ivar rank: The rank of this Sii compared to others for the same MSN spectrum.
-    The rank is based on a score defined in the SiiContainer
+    :ivar rank: The rank of this Sii compared to others for the same MSn
+        spectrum. The rank is based on a score defined in the SiiContainer. If
+        multiple Sii have the same top score, they should all be assigned
+        rank=1.
 
-    :ivar isValid: this attribute can be used to filter data.
-        Should be set to True or False, None if unspecified
+    :ivar isValid: bool or None if not specified
+        this attribute can be used to flag if a Sii has passed a given quality
+        threshold or been validated as correct. Is used to filter valid elements
+        of :class:`maspy.core.SiContainer`.
     """
     def __init__(self, identifier, specfile):
         self.id = identifier
@@ -709,15 +779,15 @@ class Sii(object):
 
 
 class SiiContainer(object):
-    """ItemContainer for msn spectrum identifications (Peptide Spectrum Matches),
+    """ItemContainer for MSn spectrum identifications (Peptide Spectrum Matches),
     SiiContainer = Spectrum Identification Item Container.
 
     :ivar container: Access :class:`ContainerItem` storage list via a specfile keyword: {specfile:[ContainerItem(), ContainerItem(), ...]}
     :ivar info: a dictionary containing information about the imported specfiles;
-                key = specfilename, value = {"scoreAttr": str, "largerBetter": bool, "path": str}
-                "scoreAttr" describes which :class:`Sii` attribute should be used for ranking.
-                "largerBetter" specifies wheter a larger score signifies a better match.
-                "path" contains a directory path used for saving and loading
+        key = specfilename, value = {"scoreAttr": str, "largerBetter": bool, "path": str}
+        "scoreAttr" describes which :class:`Sii` attribute should be used for ranking.
+        "largerBetter" specifies wheter a larger score signifies a better match.
+        "path" contains a directory path used for saving and loading
 
     #Note: In the future this container may be integrated in an evidence or mzIdentML like container.
     """

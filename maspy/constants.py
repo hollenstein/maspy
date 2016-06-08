@@ -50,10 +50,15 @@ aaMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in vie
 
 aaModComp = dict()
 """ A dictionary with elemental compositions of the peptide modifications.
-    Modifications present at "www.unimod.org" should be written as "u:X",
-    where X is the unimod accession number.
-    If a modification is not present an text abbriviation should be used.
-    This concept was inherited from pyteomics.mass.std_aa_comp
+    Modifications present at "www.unimod.org" should be written as "u:X", where
+    X is the unimod accession number. If a modification is not present an text
+    abbriviation should be used. This concept was inherited from
+    ``pyteomics.mass.std_aa_comp``.
+
+    TODO: in the future this table should be imported from two external files.
+    The first is directly obtained from www.unimod.org, the second contains
+    user specified entries. It is also possible to specify a modification folder
+    where multiple user specified files can be deposited for importing.
 """
 aaModComp.update({'u:1':COMPOSITION({'C': 2, 'H': 2, 'O': 1}),
                   'u:3':COMPOSITION({'C': 10, 'H': 14, 'N': 2, 'O': 2, 'S': 1}),
@@ -115,10 +120,12 @@ xTandemMassToUniModDict[1] = 42.01057
 xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in viewitems(xTandemMassToUniModDict)])
 """
 
-"""
-The dictionary expasy_rules contains regular expressions for cleavage rules of the most popular proteolytic enzymes.
-The rules were copied from pyteomics http://pythonhosted.org/pyteomics/ and initially taken from
-`PeptideCutter tool <http://ca.expasy.org/tools/peptidecutter/peptidecutter_enzymes.html>`_ at Expasy.
+expasy_rules = dict()
+""" The dictionary expasy_rules contains regular expressions for cleavage rules
+    of the most popular proteolytic enzymes. The rules were copied from
+    `Pyteomics <http://pythonhosted.org/pyteomics/>`_ and initially taken from
+    the PeptideCutter tool at `Expasy
+    <http://ca.expasy.org/tools/peptidecutter/peptidecutter_enzymes.html>`_
 """
 expasy_rules = {'arg-c': 'R',
                 'asp-n': '\\w(?=D)',

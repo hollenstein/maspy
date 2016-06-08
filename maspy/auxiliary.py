@@ -309,7 +309,7 @@ def _arrayFromBytes(dataBytes, metadata):
 
 # --- not yet named section --- #
 def searchFileLocation(targetFileName, targetFileExtension, rootDirectory, recursive=True):
-    """Search for files with specified file extension in all subfolders of specified rootDirectory, returns first matching instance.
+    """Search for a filename with a specified file extension in all subfolders of specified rootDirectory, returns first matching instance.
 
     :type targetFileName: str
     :type rootDirectory: str
@@ -341,7 +341,8 @@ def searchFileLocation(targetFileName, targetFileExtension, rootDirectory, recur
 
 def matchingFilePaths(targetfilename, directory, targetFileExtension=None, selector=None):
     """Search for files in all subfolders of specified directory, return filepaths of all matching instances.
-    :param targetfilename: filename to search for, only the string before the last '.' is used for filename matching
+    :param targetfilename: filename to search for, only the string before the last '.' is used for filename matching.
+        Ignored if a selector function is specified.
     :param directory: search directory, including all subdirectories
     :param targetFileExtension: string after the last '.' in the filename, has to be identical if specified.
                                 '.' in targetFileExtension are ignored, thus '.txt' is equal to 'txt'.

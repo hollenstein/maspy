@@ -25,7 +25,9 @@ import maspy.xml
 def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=None):
     """Performs a complete import of a mzml file into a maspy MsrunContainer.
 
-    siAttrFromSmi: allow here to specify a custom function that extracts params a from spectrumMetadataItem
+    :paramsiAttrFromSmi: allow here to specify a custom function that extracts params a from spectrumMetadataItem
+    :param specfilename: by default the filename will be used as the specfilename in the MsrunContainer and all
+        mzML item instances, specify here an alternative specfilename to override the default one
     """
     #TODO: docstring
     siAttrFromSmi = defaultFetchSiAttrFromSmi if siAttrFromSmi is None else siAttrFromSmi
