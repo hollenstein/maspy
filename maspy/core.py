@@ -851,11 +851,16 @@ class SiiContainer(object):
             if specfile not in self.info:
                 self._addSpecfile(specfile, path)
             else:
-                warnings.warn('Specfile is already present in the SiiContainer.\nname: %s \npath: %s' %(specfile, self.info[specfile]['path']))
+                warnings.warn('''Specfile is already present in the
+                              SiiContainer.\nname: %s \npath: %s'''
+                              %(specfile, self.info[specfile]['path']))
 
     def _addSpecfile(self, specfile, path):
         """Adds a new specfile entry to SiiContainer.info. """
-        self.info[specfile] = {'scoreAttr': None, 'largerBetter': None, 'path': path}
+        self.info[specfile] = {'path': path, 'qcAttr': None, 'qcCutOff': None,
+                               'qcLargerBetter': None, 'rankAttr': None,
+                               'ranklargerBetter': None
+                               }
         self.container[specfile] = dict()
 
     def setPath(self, folderpath, specfiles=None):
