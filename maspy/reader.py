@@ -81,7 +81,7 @@ def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=N
             pass
 
     for xmlChromatogram in mzmlReader.chromatogramList:
-        ci = ciFromXml(xmlChromatogram)
+        ci = ciFromXml(xmlChromatogram, specfilename)
         masterContainer['ci'][ci.id] = ci
     masterContainer['rm'] = mzmlReader.metadataNode
 
@@ -101,10 +101,11 @@ def importMzml(filepath, msrunContainer=None, siAttrFromSmi=None, specfilename=N
 
 
 # --- generate python objects from mzML xml elements --- #
-def ciFromXml(xmlelement):
+def ciFromXml(xmlelement, specfile):
     #TODO: docstring
-    ci = maspy.core.Ci()
-    for key in ['id', 'dataProcessingRef']:
+    ciId = xmlelement.attrib['id']
+    ci = maspy.core.Ci(ciId, specfile)
+    for key in ['dataProcessingRef']:
         if key in xmlelement.attrib:
             setattr(ci, key, xmlelement.attrib[key])
     ci.params, children = maspy.xml.extractParams(xmlelement)

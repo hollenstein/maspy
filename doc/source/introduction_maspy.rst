@@ -8,3 +8,4 @@ Contents:
 
    mzml
    psms
+   feature

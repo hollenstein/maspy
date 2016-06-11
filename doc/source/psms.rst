@@ -90,7 +90,7 @@ Further attributes which can be necessary for a reasonable utilization of
       specified in :class:`SiiContainer.info <maspy.core.SiiContainer>`.
 
     - ``.isValid`` this attribute can be used to flag if a Sii has passed a
-      given quality threshold or been validated as correct.
+      given quality threshold or has been validated as correct.
 
     - ``.rank`` the rank of this Sii compared to others for the same MSn
       spectrum. The rank is based on the specified score attribute.
@@ -286,4 +286,5 @@ By using the function :class:`SiiContainer.getItems()
 elements present in the ``SiiContainer``. Multiple arguments can be passed to
 the function that allow selecting only a specific subset of items but also to
 return the items in a sorted order. For details consult the docstring.
+
 

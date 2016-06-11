@@ -215,9 +215,11 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib'
 
 def xmlSpectrumFromSmi(index, smi, sai=None, compression='zlib'):
     """
-    index: The zero-based, consecutive index of the spectrum in the SpectrumList. (mzML specification)
-    smi: a SpectrumMetadataItem instance
-    sai: a SpectrumArrayItem instance, if None no binaryDataArrayList is written
+    :param index: The zero-based, consecutive index of the spectrum in the
+        SpectrumList. (mzML specification)
+    :param smi: a SpectrumMetadataItem instance
+    :param sai: a SpectrumArrayItem instance, if none is specified no
+        binaryDataArrayList is written
     """
     if sai is not None:
         arrayLength = [array.size for array in viewvalues(sai.arrays)]

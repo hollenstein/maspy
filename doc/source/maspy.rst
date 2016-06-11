@@ -52,14 +52,6 @@ maspy.mit_stats module
     :undoc-members:
     :show-inheritance:
 
-maspy.mzml module
------------------
-
-.. automodule:: maspy.mzml
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 maspy.peptidemethods module
 ---------------------------
 
@@ -84,6 +76,15 @@ maspy.reader module
     :undoc-members:
     :show-inheritance:
 
+maspy.writer module
+-------------------
+
+.. automodule:: maspy.writer
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+
 maspy.sil module
 ----------------
 
@@ -99,7 +100,7 @@ maspy.xml module
     :members:
     :undoc-members:
     :show-inheritance:
-       
+
 
 Module contents
 ---------------

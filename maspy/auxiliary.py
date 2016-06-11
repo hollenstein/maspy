@@ -142,16 +142,18 @@ class MaspyJsonEncoder(json.JSONEncoder):
 
 
 def writeJsonZipfile(filelike, data, compress=True, mode='w', name='data'):
-    """ Serializes the objects contained in data to a JSON formated string and writes
-    it to a zipfile.
+    """Serializes the objects contained in data to a JSON formated string and
+    writes it to a zipfile.
 
-    :param filelike: can be either a path to a file (a string) or a file-like object
+    :param filelike: path to a file (str) or a file-like object
     :param data: object that should be converted to a JSON formated string
-    objects and types in data must be supported by the json.JSONEncoder or
-    have the method _reprJSON() defined.
-    :param compress: boolean, True if the zipfile should be compressed
-    :param mode: 'w' to truncate and write a new file, or 'a' to append to an existing file
-    :param name: the file name that will be given to the JSON output in the archive
+        objects and types in data must be supported by the json.JSONEncoder or
+        have the method ``._reprJSON()`` defined.
+    :param compress: bool, True to use zip file compression
+    :param mode: 'w' to truncate and write a new file, or 'a' to append to an
+        existing file
+    :param name: the file name that will be given to the JSON output in the
+        archive
     """
     zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
     with zipfile.ZipFile(filelike, mode, allowZip64=True) as containerFile:
@@ -159,27 +161,28 @@ def writeJsonZipfile(filelike, data, compress=True, mode='w', name='data'):
 
 
 def writeBinaryItemContainer(filelike, binaryItemContainer, compress=True):
-    """Serializes the binaryItems contained in binaryItemContainer and writes them
-    into a zipfile archive.
+    """Serializes the binaryItems contained in binaryItemContainer and writes
+    them into a zipfile archive.
 
-    Examples of binaryItem classes are maspy.core.Ci() and maspy.core.Sai()
-
-    A binaryItem class has to define the function _reprJSON() which returns
-    a JSON formated string representation of the class instance. In addition
-    it has to contain an attribute :attr:`arrays`, a dictionary which values
-    are numpy arrays. These numpy arrays are serialized to bytes and written
-    to the "binarydata" file in the archive. see :func:`_dumpArrayDictToFile`
+    Examples of binaryItem classes are :class:`maspy.core.Ci` and
+    :class:`maspy.core.Sai`. A binaryItem class has to define the function
+    ``_reprJSON()`` which returns a JSON formated string representation of the
+    class instance. In addition it has to contain an attribute ``.arrays``, a
+    dictionary which values are numpy arrays. These numpy arrays are serialized
+    to bytes and written to the ``binarydata`` file of the zip archive. See
+    :func:`_dumpArrayDictToFile()`
 
     The JSON formated string representation of the binaryItems, together with
     the metadata, necessary to restore serialized numpy arrays, is written
-    to the "metadata" file in the archive:
-    [[serialized binaryItem, [metadata of a numpy array, ...]], ... ]
+    to the ``metadata`` file of the archive in this form:
+    ``[[serialized binaryItem, [metadata of a numpy array, ...]], ...]``
 
     Use the method :func:`loadBinaryItemContainer()` to restore a
     binaryItemContainer from a zipfile.
 
-    :param filelike: can be either a path to a file (a string) or a file-like object
-    :param binaryItemContainer: a dictionary containing binaryItems.
+    :param filelike: path to a file (str) or a file-like object
+    :param binaryItemContainer: a dictionary containing binaryItems
+    :param compress: bool, True to use zip file compression
     """
     allMetadata = dict()
     binarydatafile = io.BytesIO()
@@ -193,7 +196,10 @@ def writeBinaryItemContainer(filelike, binaryItemContainer, compress=True):
 
     zipcomp = zipfile.ZIP_DEFLATED if compress else zipfile.ZIP_STORED
     with zipfile.ZipFile(filelike, 'w', allowZip64=True) as containerFile:
-        containerFile.writestr('metadata', json.dumps(allMetadata, cls=MaspyJsonEncoder), zipcomp)
+        containerFile.writestr('metadata',
+                               json.dumps(allMetadata, cls=MaspyJsonEncoder),
+                               zipcomp
+                               )
         containerFile.writestr('binarydata', binarydatafile.getvalue(), zipcomp)
 
 
