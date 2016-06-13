@@ -11,17 +11,16 @@ thereof. Therefore the file format mzML has been developed as the community
 standard for represenation of mass spectrometry results. mzML is an open, XML-
 based format that not only allows to store recorded mass spectrum information
 but also metadata of the instrument configuration, acquisition settings,
-software used for data processing and sample descriptions. (see also `Mass
-Spectrometer Output File Format mzML
-<http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3073315>`_)
+software used for data processing and sample descriptions. Ultimately it is
+desirable to universally use mzML for archiving, sharing, and processing of mass
+spectrometry data and thus for all software to support and use the mzML format.
 
 .. note::
     Refer to `www.psidev.info <http://www.psidev.info/index.php?q=node/257>`_
-    for details on the XML schema definition and mzML file specifications.
+    for details on the XML schema definition and mzML file specifications, see
+    also the publication `Mass Spectrometer Output File Format mzML
+    <http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3073315>`_)
 
-Ultimately, it is desirable to use mzML for archiving, sharing, and processing
-of mass spectrometry data and thus for all software to support and use the mzML
-format.
 
 .. note::
     We recommend using ProteoWizard for conversion of vendor format files to
@@ -43,18 +42,19 @@ format.
 MsrunContainer
 ^^^^^^^^^^^^^^
 
-Modern mass spectrometers can generate tens of thousands spectra per hour
-resulting in huge mzML files. Opening and parsing of such large xml files takes
-a lot of time. If only some of the spectra have to be accessed at a certain
-time, this can be solved partly by using an indexed mzML file.
+Modern mass spectrometers can generate tens of thousands of spectra per hour
+resulting in huge mzML files. Opening and parsing such large XML files takes a
+lot of time. If only some of the spectra have to be accessed at a certain time,
+this can be solved by using an indexed mzML file, which allows directly reading
+specific spectra without parsing the whole file first.
 
-In MasPy we decided to go one step further and split the information that is
-present in mzML files into four different groups; run metadata, spectrum
+In MasPy we decided to go one step further and to split the information that is
+contained in mzML files into four different data groups; run metadata, spectrum
 metadata items, spectrum array items and chromatogram items. Each of these data
 groups is stored separately in MasPy and has its own file type, thus it can be
 accessed, saved and loaded independently of the others. This allows convenient
-and very fast reading if only a certain part of the data needs to be accessed.
-We call this represenation of an mzML file in MasPy an :class:`MsrunContainer
+and fast reading if only a certain part of the data needs to be accessed. We
+call this represenation of an mzML file in MasPy an :class:`MsrunContainer
 <maspy.core.MsrunContainer>`. Altough the data is split into multiple parts, all
 information originally contained in an mzML file is still present. This allows
 the conversion from MsrunContainer to mzML at any given time (altough the
@@ -62,9 +62,9 @@ generation of indexed mzML files is not yet implemented and we rely on
 ProteoWizard to add an index for now).
 
 See tutorial/docstrings xxx for details on the MsrunContainer file
-format.
+format. #TODO:
 
-Fig.: MsrunContainer
+Fig.: MsrunContainer #TODO: make figure
 
 * run metadata
 * spectrum metadata items
@@ -73,45 +73,50 @@ Fig.: MsrunContainer
 * spectrum items
 
 
-Run metadata (rm)
+Run metadata (Rm)
 ^^^^^^^^^^^^^^^^^
 
 The run metadata element contains all metadata information of the mzML file,
-which is not part of the aquired spectra and chromatograms. These mzML metadata
-elements are stored as (xml nodes in) a ``lxml.etree.Element``. The MasPy run
-metadata element thus holds an exact copy of the respective mzML elements.
+which are not directly part of the acquired spectra and chromatograms. This
+covers a description of the instrument configuration, a list of software used
+for data processing and a list of applied data processing steps. In addition it
+is possible to add contact information and a description of the analyzed samples
+to the mzML file. In MasPy all of these mzML elements are converted to an
+``lxml.etree.Element`` and stored in ``MsrunContainer.rmc`` (Rm container).
 
 .. note::
     Software which is used to process data of an mzML file should be listed in
-    the mzML element "softwareList", and the applied data processing steps
+    the mzML element "softwareList", and all applied data processing steps
     should be documented in the "dataProcessingList" element.
 
 
 Spectrum array item (:class:`Sai <maspy.core.Sai>`), spectrum metadata item (:class:`Smi <maspy.core.Smi>`)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-An mzML spectrum element contains all information of an aquired MS spectrum,
+An mzML spectrum element contains all information of an acquired MS spectrum,
 including numerical arrays containing at least recorded m/z and intensity values
-of the observed ions but also plenty of metadata data describing for example
-details of the aquisition like base peak m/z and intensity, scan start time, ms
-level, or precursor information of MS2 scans. In MasPy this information is split
-into metadata and spectrum array information and put in two separate
-elements(objects better?); spectrum metadata item (:class:`Smi<maspy.core.Smi>`)
-and spectraum array item (:class:`Sai<maspy.core.Sai>`), respectively. ``Smi``
-elements are stored in ``MsrunContainer.smic`` (Smi container) and ``Sai``
-elements in ``MsrunContainer.saic`` (Sai container). In order to generate an
-mzML style spectrum xml element the information of both MasPy elements (``Smi``
-and ``Sai``) is required.
+of the observed ions but also plenty of metadata describing for example details
+of the acquisition like base peak m/z and intensity, scan start time, ms level,
+or precursor information of MS2 scans. In MasPy this information is split into a
+metadata containing part and the spectrum array data and put into two separate
+data structures; spectrum metadata item (``Smi``) and spectrum array item
+(``Sai``), respectively. ``Smi`` elements are stored in ``MsrunContainer.smic``
+(Smi container) and ``Sai`` elements in ``MsrunContainer.saic`` (Sai container).
+In order to recreate an mzML spectrum element the information of both MasPy data
+types (``Smi`` and ``Sai``) is necessary.
 
 
 Chromatogram item (:class:`maspy.core.Ci`)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Am mzML chromatogram element is similar to a spectrum element, containing
-metadata and numerical arrays, in which one dimension is typically a time
-series. In the current MasPy implemenatation chromatogram elements are not split
-but the metadata and chromatogram array information are put in one single
-element called chromatogram item (:class:`maspy.core.Ci`), which is stored in
+An mzML chromatogram element is similar to a spectrum element, containing
+metadata and numerical arrays. Common chromatogram types are ``total ion current
+chromatogram``, ``selected ion current chromatogram`` and ``basepeak
+chromatogram``. All of them contain time and intensity data points, however,
+other chromatogram types can also contain absorption or emission values instead
+of intensities. In the current MasPy implementation chromatogram elements are
+not split into two data types but the metadata and array information is put into
+one single data structure called chromatogram item (``Ci``), which is stored in
 ``MsrunContainer.cic`` (Ci container).
 
 
@@ -120,37 +125,56 @@ Spectrum item (:class:`maspy.core.Si`)
 
 The mzML file  serves as a data container for active data processing but also
 for data sharing and archiving. Thus the spectrum elements contain a lot of
-metadata information not needed for most data analysis application. In addition
+metadata information not needed for most data analysis applications. In addition
 all information stored in spectrum elements have to be in accordance with the
 mzML xml scheme definition and the Controlled Vocabularies (CV's) of the
-Proteomic Standard Initiative (`link <http://www.psidev.info/groups /controlled-
-vocabularies>`_). Altough in principle this standardization is a good thing and
+Proteomic Standard Initiative, `see <http://www.psidev.info/groups /controlled-
+vocabularies>`_. Altough in principle this standardization is a good thing and
 perfectly reasonable, when actively working with the data this can be
 unnecessary and make things quite complicated.
 
 To circumvent this problem MasPy provides a simplier data type for working with
-spectrum metdata, called spectrum item (:class:`Si <maspy.core.Si>`). The ``Si``
-class has a flat structure, meaning that attributes are not nested inside other
-elements but are stored directly as attributes of the class. ``Si`` attributes
-can be manipulated without restrictions and new attributes can simply be added.
-Specific functions can be used to selectively extract information from ``Smi``.
-This allows to only import the currently needed spectrum metadata attributes,
-thereby making the ``Si`` more memory efficient. In order to make lasting
-changes to the mzML file data ``Si`` attributes have to be translated to the
-respective ``Smi``. These changes however have to strictly follow the mzML
-specifications and syntax. Thus it is recommend to use existing functions or
-implement new ones which make changes to ``Smi`` elements in a controlled way.
+spectrum metadata, called spectrum item (:class:`Si <maspy.core.Si>`). The
+``Si`` class has a flat structure, meaning that attributes are not nested inside
+other elements but are stored directly as attributes of the class. ``Si``
+attributes can be manipulated without restrictions and new attributes can simply
+be added. Specific functions can be used to selectively extract information from
+``Smi``. This allows to only import the currently needed spectrum metadata
+attributes, thereby making the ``Si`` more memory efficient. In order to make
+lasting changes to the mzML file ``Si`` attributes have to be translated to the
+respective ``Smi`` elements. These changes however have to strictly follow the
+mzML specifications and syntax. Thus it is recommend to use existing functions
+or implement new ones which make changes to ``Smi`` elements in a controlled
+way.
 
 Each spectrum present in an mzML file is therefore represented threefold in
 MasPy. First the ``Smi`` contains a complete representation of all metadata
-information present in an mzML spectrum element. Second the ``Sai`` contains the
-actual ion information recorded by the mass spectrometer. And third the ``Si``,
-which can be considered as the spectrum metadata workspace in MasPy, allowing
-convinient access to metadata and simple processing of this data without
-directly altering the original mzML information.
+information present in an mzML spectrum element. However, this data type is not
+intended to be used for standard data analysis. Therefore it will normally only
+be accessed to make lasting, documented changes to spectrum metadata and for
+generating new mzML files. Second the ``Sai`` contains the actual ion
+information recorded by the mass spectrometer. This data type will be used
+whenever the ion spectra have to be analyzed or manipulated. In addition it is
+also required for generating new mzML files. And third the ``Si``, which can be
+considered as the spectrum metadata workspace in MasPy, allowing convinient
+access to metadata and simple processing of this data without directly altering
+the original mzML information. This data type will be used for most data
+processing and analysis steps in MasPy.
 
-*MsrunContainer.info -> which specfiles are present, what is to current path
+
+MsrunContainer.info
+^^^^^^^^^^^^^^^^^^^
+
+*MsrunContainer.info -> which specfiles are present, what is the current path
 (used for loading or saving) , which data types are currently imported*
+
+
+MasPy file formats
+^^^^^^^^^^^^^^^^^^
+
+*This section will contain information about how the data contained in an
+MsrunContainer is written to the hard drive. (one file type per data type:
+mrc_rm, mrc_si, mrc_sai, mrc_smi, mrc_ci)*
 
 
 Basic code examples
@@ -261,8 +285,9 @@ Deleting data from an MsrunContainer
 If specific data types are not needed anymore, they can be removed to free
 memory. This can be done by using :func:`.removeData()
 <maspy.core.MsrunContainer.removeData>` and parsing arguments to specify
-specfiles and which data types to remove. It is recommended to use this method
-to remove data as it automatically updates the ``.info`` attribute of the
+specfiles and which data types to remove. It is recommended to always use this
+method to remove data instead of manually deleting container entries, because
+using ``.removeData`` automatically updates the ``.info`` attribute of the
 ``MsrunContainer``. The following command removes the ``Sai`` and ``Smi`` items
 of the specfile "specfile_name_1". ::
 
@@ -314,59 +339,5 @@ except for ``Si`` have to be present in the ``MsrunContainer``. ::
 Accessing data from an MsrunContainer
 """""""""""""""""""""""""""""""""""""
 
+*examples of .getItem, .getArrays, ... *
 
-
-
-NOT PART OF THE TUTORIAL
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-Introduction:
-
-spectra are the most basic results produced by any mass spectrometry experiment
--> start of the tutorial / introduction
-
-- what is mzML ?
-    eg from pyteomics: mzML is an XML-based format for experimental data obtained on MS/MS or LC-MS setups.
-    or from http://www.psidev.info/mzml: format for encoding raw spectrometer output
-- how to convert vendor format files to mzML?
-    - use msConvert from proteoWizard suite
-    - also allows peak picking to obtain centroided data
-
-- what exactly is the problem of mzML files?
-    - modern mass spectrometers can generate tens of thousands spectra per hour
-      resulting in huge mzML files because of spectral information
-    - parsing takes a lot of time even tough sometimes only part of the data
-      has to be accessed
-
-Maspy implementation:
-- maspy features an own internal representation of mzML files
-    - contains all information present in the mzML file, split into four groups
-    - run metadata, spectrum item metadata, spectrum array item, chromatogram item
-    - explain all of them ...
-    - explain what spectrum items are, and what their purpose is
-- after conversion, each group is saved seperately and can therefore be imported individually
-    - run metadata in xml, arrays as binary data, all other data as JSON
-    - smaller file size
-    - faster data access
-- maspy allows writing a new mzML file from the msrunContainer (the internal mzMl represenation)
-    - allows to modify mzML within maspy and pass the changed mzML file to external software
-    - note: indexing not yet supported
-
-
-
---- ad peak picking, from the internet ---
-What is the difference between Profile and Centroid MS data?
-
-MS data collected off an instrument is presented as either profile or
-centroid mode. Shown below are two mass spectra illustrating an ion
-cluster for profile data and a centroid mass spectrum created from the
-profile data.
-
-In profile mode, a peak is represented by a collection of signals over
-several scans. The advantage of profile data is it is easier to
-classify a signal as a true peak from noise off the instrument.
-
-In centroid mode, the signals are displayed as discrete m/z with zero
-line widths. The advantage of centroid data is the file size is
-significantly smaller as there is less information describing a
-signal.  --- ad peak picking ---

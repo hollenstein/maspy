@@ -14,37 +14,52 @@ import pyteomics.mass
 import maspy.constants
 
 
-def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, removeNtermM=True, minLength=5, maxLength=40):
-    """Returns a list of peptide sequences and digestion information derived from an in silico digest of a polypeptide.
+def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavage=0,
+                   removeNtermM=True, minLength=5, maxLength=55):
+    """Returns a list of peptide sequences and cleavage information derived
+    from an in silico digestion of a polypeptide.
 
-    :param proteinSequence: amino acid sequence of the protein to be digested
-    :param cleavageRule: TODO add description
-    :param missedCleavages: number of allowed missed cleavage sites
-    :param removeNtermM: If True, consider peptides with the n-terminal methionine of the protein removed
-    :param minLength: only yield peptides with length >= minLength
-    :param maxLength: only yield peptides with length <= maxLength
+    :param proteinSequence: amino acid sequence of the poly peptide to be
+        digested
+    :param cleavageRule: cleavage rule expressed in a regular expression, see
+        :attr:`maspy.constants.expasy_rules`
+    :param missedCleavage: number of allowed missed cleavage sites
+    :param removeNtermM: booo, True to consider also peptides with the
+        N-terminal methionine of the protein removed
+    :param minLength: int, only yield peptides with length >= minLength
+    :param maxLength: int, only yield peptides with length <= maxLength
 
-    return [(aa sequence, {'startPos': int, 'endPos': int, 'missedCleavage': int}), ...]
+    :returns: a list of resulting peptide enries. Protein positions start with
+        ``1`` and end with ``len(proteinSequence``. ::
 
-    Note: An example for specifying N-terminal cleavage at Lysine sites: \\w(?=[K])
+            [(peptide amino acid sequence,
+              {'startPos': int, 'endPos': int, 'missedCleavage': int}
+              ), ...
+             ]
+
+    .. note::
+        This is a regex example for specifying N-terminal cleavage at lysine
+        sites ``\\w(?=[K])``
     """
-    # Return in silico digested peptides, peptide start position, peptide end position
-    # Peptide position start at 1 and end at len(proteinSequence)
-    passFilter = lambda startPos, endPos: (endPos - startPos >= minLength and endPos - startPos <= maxLength)
+    passFilter = lambda startPos, endPos: (endPos - startPos >= minLength and
+                                           endPos - startPos <= maxLength
+                                           )
+    _regexCleave = re.finditer(cleavageRule, proteinSequence)
 
-    cleavagePosList = set(itertools.chain(map(lambda x: x.end(), re.finditer(cleavageRule, proteinSequence))))
+    cleavagePosList = set(itertools.chain(map(lambda x: x.end(), _regexCleave)))
     cleavagePosList.add(len(proteinSequence))
     cleavagePosList = sorted(list(cleavagePosList))
-    # Add end of protein as cleavage site if protein doesn't end with specififed cleavage positions
+    #Add end of protein as cleavage site if protein doesn't end with specififed
+    #cleavage positions
     numCleavageSites = len(cleavagePosList)
 
-    if missedCleavages >= numCleavageSites:
-        missedCleavages = numCleavageSites -1
+    if missedCleavage >= numCleavageSites:
+        missedCleavage = numCleavageSites -1
 
     digestionresults = list()
     #Generate protein n-terminal peptides after methionine removal
     if removeNtermM and proteinSequence[0] == 'M':
-        for cleavagePos in range(0, missedCleavages+1):
+        for cleavagePos in range(0, missedCleavage+1):
             startPos = 1
             endPos = cleavagePosList[cleavagePos]
             if passFilter(startPos, endPos):
@@ -57,7 +72,7 @@ def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, remo
 
     #Generate protein n-terminal peptides
     if cleavagePosList[0] != 0:
-        for cleavagePos in range(0, missedCleavages+1):
+        for cleavagePos in range(0, missedCleavage+1):
             startPos = 0
             endPos = cleavagePosList[cleavagePos]
             if passFilter(startPos, endPos):
@@ -71,7 +86,7 @@ def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, remo
     #Generate all remaining peptides, including the c-terminal peptides
     lastCleavagePos = 0
     while lastCleavagePos < numCleavageSites:
-        for missedCleavage in range(0, missedCleavages+1):
+        for missedCleavage in range(0, missedCleavage+1):
             nextCleavagePos = lastCleavagePos + missedCleavage + 1
             if nextCleavagePos < numCleavageSites:
                 startPos = cleavagePosList[lastCleavagePos]
@@ -92,14 +107,18 @@ def digestInSilico(proteinSequence, cleavageRule='[KR]', missedCleavages=0, remo
 def calcPeptideMass(peptide, **kwargs):
     """Calculate the mass of a peptide.
 
-    :ivar aaMass: A dictionary with the monoisotopic masses of amino acid residues,
-    by default maspy.constants.aaMass
-    :ivar aaModMass: A dictionary with the monoisotopic mass changes of modications,
-    by default maspy.constants.aaModMass
-    :ivar elementMass: A dictionary with the masses of chemical elements,
-    by default pyteomics.mass.nist_mass
-    :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationId]"
-    and "modificationId" has to be present in maspy.constants.aaModMass
+    :param aaMass: A dictionary with the monoisotopic masses of amino acid
+        residues, by default :attr:`maspy.constants.aaMass`
+    :param aaModMass: A dictionary with the monoisotopic mass changes of
+        modications, by default :attr:`maspy.constants.aaModMass`
+    :param elementMass: A dictionary with the masses of chemical elements, by
+        default ``pyteomics.mass.nist_mass``
+    :param peptide: peptide sequence, modifications have to be written in the
+        format "[modificationId]" and "modificationId" has to be present in
+        :attr:`maspy.constants.aaModMass`
+
+    #TODO: change to a more efficient way of calculating the modified mass, by
+    first extracting all present modifications and then looking up their masses.
     """
     aaMass = kwargs.get('aaMass', maspy.constants.aaMass)
     aaModMass = kwargs.get('aaModMass', maspy.constants.aaModMass)
@@ -116,7 +135,9 @@ def calcPeptideMass(peptide, **kwargs):
 
     if unmodPeptide.find('[') != -1:
         print(unmodPeptide)
-        raise Exception('The peptide contains modification, not present in maspy.constants.aaModMass')
+        raise Exception('The peptide contains modification, ' +
+                        'not present in maspy.constants.aaModMass'
+                        )
 
     unmodPeptideMass = sum(aaMass[i] for i in unmodPeptide)
     unmodPeptideMass += elementMass['H'][0][0]*2 + elementMass['O'][0][0]
@@ -125,10 +146,14 @@ def calcPeptideMass(peptide, **kwargs):
 
 
 def removeModifications(peptide):
-    """Removes all modifications from a peptide string
+    """Removes all modifications from a peptide string and return the plain
+    amino acid sequence.
 
-    :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationName]"
-    :type peptide: str
+    :param peptide: peptide sequence, modifications have to be written in the
+        format "[modificationName]"
+    :param peptide: str
+
+    :returns: amino acid sequence of ``peptide`` without any modifications
     """
     while peptide.find('[') != -1:
         peptide = peptide.split('[', 1)[0] + peptide.split(']', 1)[1]
@@ -138,14 +163,16 @@ def removeModifications(peptide):
 def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
     """Determines the amino acid positions of all present modifications.
 
-    :ivar peptide: peptide sequence, modifications have to be written in the format "[modificationName]"
-    :ivar indexStart: returned amino acids positions of the peptide start with this number (1st amino acid position = indexStart)
-    :ivar removeModString: string to remove from the returned modification name
+    :param peptide: peptide sequence, modifications have to be written in the
+        format "[modificationName]"
+    :param indexStart: returned amino acids positions of the peptide start with
+        this number (first amino acid position = indexStart)
+    :param removeModString: string to remove from the returned modification name
 
     :return: {modificationName:[position1, position2, ...], ...}
 
-    #TODO: adapt removeModString to the new unimod ids in maspy.constants.aaModComp ("UNIMOD:X" -> "u:X")
-           -> also change the unit tests...
+    #TODO: adapt removeModString to the new unimod ids in
+    #maspy.constants.aaModComp ("UNIMOD:X" -> "u:X") -> also change unit tests.
     """
     unidmodPositionDict = dict()
     while peptide.find('[') != -1:
@@ -168,8 +195,10 @@ def returnModPositions(peptide, indexStart=1, removeModString='UNIMOD:'):
 def calcMhFromMz(mz, charge):
     """Calculate the MH+ value from mz and charge.
 
-    :type mz: float
-    :type charge: int
+    :param mz: float, mass to charge ratio (Dalton / charge)
+    :param charge: int, charge state
+
+    :returns: mass to charge ratio of the mono protonated ion (charge = 1)
     """
     mh = (mz * charge) - (maspy.constants.atomicMassProton * (charge-1) )
     return mh
@@ -178,8 +207,11 @@ def calcMhFromMz(mz, charge):
 def calcMzFromMh(mh, charge):
     """Calculate the mz value from MH+ and charge.
 
-    :type mz: float
-    :type charge: int
+    :param mh: float, mass to charge ratio (Dalton / charge) of the mono
+        protonated ion
+    :param charge: int, charge state
+
+    :returns: mass to charge ratio of the specified charge state
     """
     mz = (mh + (maspy.constants.atomicMassProton * (charge-1))) / charge
     return mz
@@ -188,8 +220,10 @@ def calcMzFromMh(mh, charge):
 def calcMzFromMass(mass, charge):
     """Calculate the mz value of a peptide from its mass and charge.
 
-    :type mass: float
-    :type charge: int
+    :param mass: float, exact non protonated mass
+    :param charge: int, charge state
+
+    :returns: mass to charge ratio of the specified charge state
     """
     mz = (mass + (maspy.constants.atomicMassProton * charge)) / charge
     return mz
@@ -198,8 +232,10 @@ def calcMzFromMass(mass, charge):
 def calcMassFromMz(mz, charge):
     """Calculate the mass of a peptide from its mz and charge.
 
-    :type mz: float
-    :type charge: int
+    :param mz: float, mass to charge ratio (Dalton / charge)
+    :param charge: int, charge state
+
+    :returns: non protonated mass (charge = 0)
     """
     mass = (mz - maspy.constants.atomicMassProton) * charge
     return mass

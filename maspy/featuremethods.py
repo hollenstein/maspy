@@ -5,7 +5,7 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 import bisect
 from collections import defaultdict as ddict
 import functools
@@ -21,37 +21,59 @@ import maspy.sil
 
 
 # --- Functions to work with FeatureItems --- #
-def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz', sMassKey='obsMz', isotopeErrorList=(0),
-                    precursorTolerance=5, toleranceUnit='ppm', rtExpansionUp=0.10, rtExpansionDown=0.05, matchCharge=True,
+def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz',
+                    sMassKey='obsMz', isotopeErrorList=(0),
+                    precursorTolerance=5, toleranceUnit='ppm',
+                    rtExpansionUp=0.10, rtExpansionDown=0.05, matchCharge=True,
                     scoreKey='pep', largerBetter=False):
-    """Annotate :class:`Fi` (FeatureItem) in :class:`FiContainer` by matching :class:`Si` (SpectrumItem) or
-    :class:`Sii` (SpectrumIdentificationItem) from the specContainer.
+    """Annotate :class:`Fi <maspy.core.Fi>` (Feature items) by matching
+    :class:`Si <maspy.core.Si>` (Spectrum items) or :class:`Sii
+    <maspy.core.Sii>` (Spectrum identification items).
 
-    :ivar fiContainer: :class:`maspy.core.FeatureItem` of this instance of :class:`maspy.core.FeatureContainer` are annotated
-    :type specContainer: :class:`maspy.core.MsrunContainer` or :class:`maspy.core.SiiContainer`
-    :ivar specfiles: Annotate only items of :attr:`FiContainer.container[specfile]`,
-    if None all specfiles present in fiContainer and specContainer are processed
+    :param fiContainer: :class:`maspy.core.FeatureContainer`, contains ``Fi``.
+    :param specContainer: :class:`maspy.core.MsrunContainer` or
+        :class:`maspy.core.SiiContainer`, contains ``Si`` or ``Sii``.
+    :param specfiles: filenames of ms-run files, if specified consider only
+        items from those files
     :type specfiles: str, list or None
-    :ivar fMassKey: mass attribute key in :attr:`Fi.__dict__`
-    :ivar sMassKey: mass attribute key in :attr:`Si.__dict__` or :attr:`Sii.__dict__` (eg 'obsMz', 'calcMz')
-    :ivar isotopeErrorList: allowed isotope errors relative to the spectrum mass. Eg. [0, 1] if no feature has been matched with isotope error 0,
-    the spectrum mass is increased by the mass difference of carbon isotopes 12 and 13 and matched again. The different isotope error values are
-    tested in the specified order therefore 0 should normally be the 1st value of the tuple
+    :param fMassKey: mass attribute key in :attr:`Fi.__dict__`
+    :param sMassKey: mass attribute key in :attr:`Si.__dict__` or
+        :attr:`Sii.__dict__` (eg 'obsMz', 'excMz')
+    :param isotopeErrorList: allowed isotope errors relative to the spectrum
+        mass, for example "0" or "1". If no feature has been matched with
+        isotope error 0, the spectrum mass is increased by the mass difference
+        of carbon isotopes 12 and 13 and matched again. The different isotope
+        error values are tested in the specified order therefore "0" should
+        normally be the first value of the list.
     :type isotopeErrorList: list or tuple of int
-    :ivar precursorTolerance: is the largest allowed mass deviation of Si or Sii to :class:`FeatureItem`
-    :ivar toleranceUnit: defines how the precursorTolerance is applied to the mass value, 'ppm' * (1 +/- tolerance*1E-6) or 'da': +/- value
-    :ivar rtExpansionUp: relative upper expansion of :class:`FeatureItem` retention time areas
-    :ivar rtExpansionDown: relative lower expansion of :class:`FeatureItem` retention time areas
-    Ad rtExpansion; lower or upper :class:`FeatureItem` retention time position is expanded with rtExpansion * rtArea
-    if Si or Sii is matched to multiple :class:`FeatureItem`, the rt expansion is removed and the matching repeated.
-    :ivar matchCharge: boolean, True if :class:`FeatureItem` and Si/Sii must have the same charge state to be matched
-    :ivar scoreKey: Sii attribute name of the PSM score
-    :ivar largerBetter: boolean, True if a larger PSM score is better
+    :param precursorTolerance: the largest allowed mass deviation of ``Si`` or
+        ``Sii`` relative to ``Fi``
+    :param toleranceUnit: defines how the ``precursorTolerance`` is applied to
+        the mass value of ``Fi``. ``"ppm": mass * (1 +/- tolerance*1E-6)`` or
+        ``"da": mass +/- value``
+    :param rtExpansionUp: relative upper expansion of ``Fi`` retention time
+        area. ``limitHigh = Fi.rtHigh + (Fi.rtHigh - Fi.rtLow) * rtExpansionUp``
+    :param rtExpansionDown: relative lower expansion of ``Fi`` retention time
+        area. ``limitLow = Fi.rtLow - (Fi.rtHigh - Fi.rtLow) * rtExpansionDown``
+    :param matchCharge: bool, True if ``Fi`` and ``Si`` or ``Sii`` must have the
+        same ``charge`` state to be matched.
+    :param scoreKey: ``Sii`` attribute name used for scoring the identification
+        reliability
+    :param largerBetter: bool, True if higher score value means a better
+        identification reliability
 
-    If specContainer is :class:`SiiContainer` then matched features are annotated with :attr:`Sii.peptide`,
-    if multiple class:`Sii` are matched to the same :class:`Fi` the one with the best score is used
+    .. note:
+        Concerning the feature retention area expansion. If ``Si`` or ``Sii`` is
+        matched to multiple ``Fi`` the rt expansion is removed and the matching
+        is repeated.
+
+    .. note:
+        If the ``specContainer`` is a ``SiiContainer`` then matched ``Fi`` are
+        annotated with :attr:`Sii.peptide`, if multiple ``Sii`` are matched to
+        ``Fi`` the one with the best score is used.
+
+    #TODO: this function is nested pretty badly and should maybe be rewritten
     """
-    #TODO: this function is nested and should maybe be rewritten
     isotopeErrorList = aux.toList(isotopeErrorList)
 
     if specContainer.__class__.__name__ == 'MsrunContainer':
@@ -69,12 +91,24 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz', s
     for specfile in specfiles:
         multiMatchCounter = int()
         isotopeErrorMatchCounter = int()
-        specArrays = specContainer.getArrays([sMassKey, 'rt', 'charge', 'msLevel'], specfiles=specfile)
-        featureArrays = fiContainer.getArrays(['rtHigh', 'rtLow', 'charge', fMassKey],
-                                                   specfiles=specfile, sort=fMassKey
-                                                   )
-        featureArrays['rtHighExpanded'] = featureArrays['rtHigh'] + (featureArrays['rtHigh'] - featureArrays['rtLow']) * rtExpansionUp
-        featureArrays['rtLowExpanded'] = featureArrays['rtLow'] - (featureArrays['rtHigh'] - featureArrays['rtLow']) * rtExpansionDown
+        specArrays = specContainer.getArrays([sMassKey, 'rt', 'charge',
+                                              'msLevel'
+                                              ], specfiles=specfile
+                                              )
+        featureArrays = fiContainer.getArrays(['rtHigh', 'rtLow', 'charge',
+                                               fMassKey], specfiles=specfile,
+                                               sort=fMassKey
+                                              )
+        featureArrays['rtHighExpanded'] = (featureArrays['rtHigh'] +
+                                           (featureArrays['rtHigh'] -
+                                            featureArrays['rtLow']) *
+                                           rtExpansionUp
+                                           )
+        featureArrays['rtLowExpanded'] = (featureArrays['rtLow'] -
+                                          (featureArrays['rtHigh'] -
+                                           featureArrays['rtLow']) *
+                                          rtExpansionDown
+                                          )
 
         specFeatureDict = dict() ## key = scanNr, value = set(featureKeys)
         featureSpecDict = dict() ## key = featureKey, value = set(scanNrs)
@@ -94,21 +128,36 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz', s
 
                 # calculate mass limits for each isotope error
                 if toleranceUnit.lower() == 'ppm':
-                    specMassHigh = (specMass + isotopeError * 1.003355 / specZ) * (1 + precursorTolerance*1E-6)
-                    specMassLow = (specMass + isotopeError * 1.003355 / specZ) * (1 - precursorTolerance*1E-6)
+                    specMassHigh = ((specMass + isotopeError * 1.003355 / specZ)
+                                    * (1 + precursorTolerance*1E-6)
+                                    )
+                    specMassLow = ((specMass + isotopeError * 1.003355 / specZ)
+                                   * (1 - precursorTolerance*1E-6)
+                                   )
                 elif toleranceUnit.lower() == 'da':
-                    specMassHigh = (specMass + isotopeError * 1.003355 / specZ) + precursorTolerance
-                    specMassLow  = (specMass + isotopeError * 1.003355 / specZ) - precursorTolerance
+                    specMassHigh = ((specMass + isotopeError * 1.003355 / specZ)
+                                    + precursorTolerance
+                                    )
+                    specMassLow  = ((specMass + isotopeError * 1.003355 / specZ)
+                                    - precursorTolerance
+                                    )
 
-                posL = bisect.bisect_left(featureArrays[fMassKey], specMassLow)
-                posR = bisect.bisect_right(featureArrays[fMassKey], specMassHigh)
+                posL = bisect.bisect_left(featureArrays[fMassKey],
+                                          specMassLow
+                                          )
+                posR = bisect.bisect_right(featureArrays[fMassKey],
+                                           specMassHigh
+                                           )
 
                 if matchCharge:
                     chargeMask = (featureArrays['charge'][posL:posR] == specZ)
 
                 fRtHighKey = 'rtHighExpanded'
                 fRtLowKey = 'rtLowExpanded'
-                for fRtHighKey, fRtLowKey in [('rtHighExpanded', 'rtLowExpanded'), ('rtHigh', 'rtLow')]:
+                for fRtHighKey, fRtLowKey in [('rtHighExpanded',
+                                               'rtLowExpanded'),
+                                              ('rtHigh', 'rtLow')
+                                              ]:
                     rtMask = ((featureArrays[fRtLowKey][posL:posR] <= specRt) &
                               (featureArrays[fRtHighKey][posL:posR] >= specRt)
                               )
@@ -138,7 +187,9 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz', s
 
             if matchComplete:
                 for featureId in matchedFeatureIds:
-                    getattr(fiContainer.container[specfile][featureId], listKeySpecIds).append(specId)
+                    getattr(fiContainer.container[specfile][featureId],
+                            listKeySpecIds
+                            ).append(specId)
                     fiContainer.container[specfile][featureId].isMatched = True
                     specFeatureDict[specId] = featureId
                     featureSpecDict[featureId] = specId

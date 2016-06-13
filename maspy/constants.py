@@ -5,25 +5,26 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 import copy
 
 import pyteomics.mass
-""" for details see http://pythonhosted.org/pyteomics/ """
+"""For details see http://pythonhosted.org/pyteomics/mass.html """
 
-from pyteomics.mass import Composition as COMPOSITION
-""" A Composition object stores a chemical composition of a
-    substance. Basically, it is a dict object, with the names
-    of chemical elements as keys and values equal to an integer number of
-    atoms of the corresponding element in a substance.
 
-    The main improvement over dict is that Composition objects allow
-    adding and subtraction. -> For details see pyteomics.mass.Composition
+COMPOSITION = pyteomics.mass.Composition
+"""A Composition object stores a chemical composition of a substance. Basically,
+it is a dict object, with the names of chemical elements as keys and values
+equal to an integer number of atoms of the corresponding element in a substance.
+
+The main improvement over dict is that Composition objects allow adding and
+subtraction. For details see ``pyteomics.mass.Composition``.
 """
 
+
 aaComp = dict()
-""" A dictionary with elemental compositions of the twenty standard amino acid residues.
-    This concept was inherited from pyteomics.mass.std_aa_comp
+""" A dictionary with elemental compositions of the twenty standard amino acid
+residues. This concept was inherited from ``pyteomics.mass.std_aa_comp``.
 """
 aaComp.update({'A':COMPOSITION({'H': 5, 'C': 3, 'O': 1, 'N': 1}),
                'C':COMPOSITION({'H': 5, 'C': 3, 'S': 1, 'O': 1, 'N': 1}),
@@ -46,19 +47,24 @@ aaComp.update({'A':COMPOSITION({'H': 5, 'C': 3, 'O': 1, 'N': 1}),
                'W':COMPOSITION({'C': 11, 'H': 10, 'N': 2, 'O': 1}),
                'Y':COMPOSITION({'H': 9, 'C': 9, 'O': 2, 'N': 1})
               })
-aaMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in viewitems(aaComp)])
+
+aaMass = dict([(name, comp.mass()) for name, comp in viewitems(aaComp)])
+"""A dictionary with exact monoisotopic masses of the twenty standard amino acid
+residues. This concept was inherited from ``pyteomics.mass.std_aa_comp``.
+"""
+
 
 aaModComp = dict()
-""" A dictionary with elemental compositions of the peptide modifications.
-    Modifications present at "www.unimod.org" should be written as "u:X", where
-    X is the unimod accession number. If a modification is not present an text
-    abbriviation should be used. This concept was inherited from
-    ``pyteomics.mass.std_aa_comp``.
+"""A dictionary with elemental compositions of the peptide modifications.
+Modifications present at ``www.unimod.org`` should be written as "u:X", where X
+is the unimod accession number. If a modification is not present in unimod a
+text abbriviation should be used. This concept was inherited from
+``pyteomics.mass.std_aa_comp``.
 
-    TODO: in the future this table should be imported from two external files.
-    The first is directly obtained from www.unimod.org, the second contains
-    user specified entries. It is also possible to specify a modification folder
-    where multiple user specified files can be deposited for importing.
+TODO: in the future this table should be imported from two external files. The
+first is directly obtained from www.unimod.org, the second contains user
+specified entries. It is also possible to specify a modification folder where
+multiple user specified files can be deposited for importing.
 """
 aaModComp.update({'u:1':COMPOSITION({'C': 2, 'H': 2, 'O': 1}),
                   'u:3':COMPOSITION({'C': 10, 'H': 14, 'N': 2, 'O': 2, 'S': 1}),
@@ -80,52 +86,27 @@ aaModComp.update({'u:1':COMPOSITION({'C': 2, 'H': 2, 'O': 1}),
                   'DSS':COMPOSITION({'C': 8, 'H': 10, 'O': 2}),
                   '*':COMPOSITION({})
                  })
-aaModMass = dict([(name, pyteomics.mass.calculate_mass(comp)) for name, comp in viewitems(aaModComp)])
+
+
+aaModMass = dict([(name, comp.mass()) for name, comp in viewitems(aaModComp)])
+"""A dictionary with exact monoisotopic masses of peptide modifications."""
 #TODO change all modification instances from "UNIMOD:X" to "u:X"
 for accession, composition in listitems(aaModMass):
     if accession.startswith('u:'):
         aaModMass[accession.replace('u:', 'UNIMOD:')] = composition
 
-# Define constants #
+
+# --- Define additional constants --- #
 atomicMassH = 1.00782504
 atomicMassProton = 1.00727646677
 
-""" TODO: Maybe this is still needed to import xtandem results and convert modification mass strings to "aaModMass" keys...
-unimodToMassDict = dict()
-unimodToMassDict['34'] = 14.015650 # Methylation
-unimodToMassDict['36'] = 28.031300 # Dimethyl light label
-unimodToMassDict['199'] = 32.056407 # Dimethyl medium label
-unimodToMassDict['4'] = 57.021464 # Carbamidomethylation
-unimodToMassDict['374'] = -1.007825 # Half of a disulfide bridge
-unimodToMassDict['7'] = 0.984016 # Deamidated
-unimodToMassDict['188'] = 6.020129 # Label:13C(6)
-unimodToMassDict['35'] = 15.994915 # Oxidation
-unimodToMassDict['21'] = 79.966331 # Phospho
-unimodToMassDict['1'] = 42.010565 # Acetyl
-unimodToMassDict['27'] = -18.010565 # Glu->pyro-Glu
-unimodToMassDict['28'] = -17.026549 # Gln->pyro-Glu
-unimodToMassDict['121'] = 114.042927 # GG, ubiquitinlyation residue
-unimodToMassDict['DSS'] = 138.068 # Xlink:DSS / BS3
-unimodToMassDict['1020'] = 156.078644 # Xlink:DSS, Water-quenched monolink of of DSS/BS3 crosslinker
-unimodToMassDict['1356'] = 212.008590 # phosphate-ribosylation: R, (D, E)
-unimodToMassDict['213'] = 541.061110 # ADP-Ribosyl, R
-unimodToMassDict['5'] = 43.005814 # Carbamyl, pep-n / K / R
-unimodToMassDict['3'] = 226.077598 # Biotin K
-unimodToMassDict['*'] = 0.0 #Place holder for the second position of a dipeptide modification like a crosslink.
-
-xTandemMassToUniModDict = copy.deepcopy(unimodToMassDict)
-xTandemMassToUniModDict[4] = 57.02147
-xTandemMassToUniModDict[374] = -1.00783
-xTandemMassToUniModDict[1] = 42.01057
-xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in viewitems(xTandemMassToUniModDict)])
-"""
 
 expasy_rules = dict()
 """ The dictionary expasy_rules contains regular expressions for cleavage rules
-    of the most popular proteolytic enzymes. The rules were copied from
-    `Pyteomics <http://pythonhosted.org/pyteomics/>`_ and initially taken from
-    the PeptideCutter tool at `Expasy
-    <http://ca.expasy.org/tools/peptidecutter/peptidecutter_enzymes.html>`_
+of the most popular proteolytic enzymes. The rules were copied from
+`Pyteomics <http://pythonhosted.org/pyteomics/>`_ and initially taken from
+the PeptideCutter tool at `Expasy
+<http://ca.expasy.org/tools/peptidecutter/peptidecutter_enzymes.html>`_.
 """
 expasy_rules = {'arg-c': 'R',
                 'asp-n': '\\w(?=D)',
@@ -141,7 +122,8 @@ expasy_rules = {'arg-c': 'R',
                 'caspase 8': '(?<=[IL]ET)D(?=[^PEDQKR])',
                 'caspase 9': '(?<=LEH)D',
                 'chymotrypsin high specificity': '([FY](?=[^P]))|(W(?=[^MP]))',
-                'chymotrypsin low specificity': '([FLY](?=[^P]))|(W(?=[^MP]))|(M(?=[^PY]))|(H(?=[^DMPW]))',
+                'chymotrypsin low specificity': '([FLY](?=[^P]))|(W(?=[^MP]))' +
+                    '|(M(?=[^PY]))|(H(?=[^DMPW]))',
                 'clostripain': 'R',
                 'cnbr': 'M',
                 'enterokinase': '(?<=[DE]{3})K',
@@ -153,13 +135,57 @@ expasy_rules = {'arg-c': 'R',
                 'iodosobenzoic acid': 'W',
                 'lysc': 'K',
                 'ntcb': '\\w(?=C)',
-                'pepsin ph1.3': '((?<=[^HKR][^P])[^R](?=[FLWY][^P]))|((?<=[^HKR][^P])[FLWY](?=\\w[^P]))',
-                'pepsin ph2.0': '((?<=[^HKR][^P])[^R](?=[FL][^P]))|((?<=[^HKR][^P])[FL](?=\\w[^P]))',
+                'pepsin ph1.3': '((?<=[^HKR][^P])[^R](?=[FLWY][^P]))|' +
+                    '((?<=[^HKR][^P])[FLWY](?=\\w[^P]))',
+                'pepsin ph2.0': '((?<=[^HKR][^P])[^R](?=[FL][^P]))|' +
+                    '((?<=[^HKR][^P])[FL](?=\\w[^P]))',
                 'proline endopeptidase': '(?<=[HKR])P(?=[^P])',
                 'proteinase k': '[AEFILTVWY]',
                 'staphylococcal peptidase i': '(?<=[^E])E',
                 'thermolysin': '[^DE](?=[AFILMV])',
-                'thrombin': '((?<=G)R(?=G))|((?<=[AFGILTVM][AFGILTVWA]P)R(?=[^DE][^DE]))',
+                'thrombin': '((?<=G)R(?=G))|((?<=[AFGILTVM][AFGILTVWA]P)' +
+                    'R(?=[^DE][^DE]))',
                 'trypsin': '([KR](?=[^P]))|((?<=W)K(?=P))|((?<=M)R(?=P))',
                 'trypsin simple': '[KR]'
                 }
+
+
+# --- Depricated --- #
+_ignore = str()
+""" TODO: Maybe this is still needed to import xtandem results and convert
+modification mass strings to "aaModMass" keys...
+
+unimodToMassDict = dict()
+unimodToMassDict['34'] = 14.015650 # Methylation
+unimodToMassDict['36'] = 28.031300 # Dimethyl light label
+unimodToMassDict['199'] = 32.056407 # Dimethyl medium label
+unimodToMassDict['4'] = 57.021464 # Carbamidomethylation
+unimodToMassDict['374'] = -1.007825 # Half of a disulfide bridge
+unimodToMassDict['7'] = 0.984016 # Deamidated
+unimodToMassDict['188'] = 6.020129 # Label:13C(6)
+unimodToMassDict['35'] = 15.994915 # Oxidation
+unimodToMassDict['21'] = 79.966331 # Phospho
+unimodToMassDict['1'] = 42.010565 # Acetyl
+unimodToMassDict['27'] = -18.010565 # Glu->pyro-Glu
+unimodToMassDict['28'] = -17.026549 # Gln->pyro-Glu
+unimodToMassDict['121'] = 114.042927 # GG, ubiquitinlyation residue
+unimodToMassDict['DSS'] = 138.068 # Xlink:DSS / BS3
+unimodToMassDict['1020'] = 156.078644
+# Xlink:DSS, Water-quenched monolink of ofDSS/BS3 crosslinker
+unimodToMassDict['1356'] = 212.008590 # phosphate-ribosylation: R, (D, E)
+unimodToMassDict['213'] = 541.061110 # ADP-Ribosyl, R
+unimodToMassDict['5'] = 43.005814 # Carbamyl, pep-n / K / R
+unimodToMassDict['3'] = 226.077598 # Biotin K
+unimodToMassDict['*'] = 0.0
+#Place holder for the second position of a dipeptide modification like a
+#crosslink.
+
+xTandemMassToUniModDict = copy.deepcopy(unimodToMassDict)
+xTandemMassToUniModDict[4] = 57.02147
+xTandemMassToUniModDict[374] = -1.00783
+xTandemMassToUniModDict[1] = 42.01057
+xTandemMassToUniModDict = dict([(round(mass, 5), unimod) for unimod, mass in
+                                viewitems(xTandemMassToUniModDict)
+                                ]
+                               )
+"""

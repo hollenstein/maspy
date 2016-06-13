@@ -9,7 +9,7 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 from collections import defaultdict as ddict
 import io
 import numpy
@@ -187,10 +187,13 @@ def _containerSetPath(container, folderpath, specfiles):
 ##############################################################
 class MsrunContainer(object):
     """Container for mass spectrometry data (eg MS1 and MS2 spectra), provides
-    full support for mzml files.
+    full support for mzML files, see `mzML schema
+    documentation <http://www.peptideatlas.org/tmp/mzML1.1.0.html>`_.
 
-    :ivar rmc: "run metadata container", contains mzml metadata xml strings,
-        as imported from the mzML file
+    :ivar rmc: "run metadata container", contains mzML metadata elements from
+        the mzML file as a ``lxml.etree.Element`` object. This comprises all
+        ``mzML`` subelements, except for the `run`` element subelements
+        ``spectrumList`` and ``chromatogramList``.
     :ivar cic: "chromatogram item container", see :class:`Ci`
     :ivar smic: "spectrum metadata item container", see :class:`Smi`
     :ivar saic: "spectrum array item container", see :class:`Sai`
@@ -825,7 +828,7 @@ class Smi(object):
     an mzML ``spectrum``, excluding the actual binary data.
 
     For details on the mzML ``spectrum`` element refer to the `documentation,
-    <http://www.peptideatlas.org/tmp/mzML1.1.0.html#spectrum>`_
+    <http://www.peptideatlas.org/tmp/mzML1.1.0.html#spectrum>`_.
 
     :ivar id: The unique id of this spectrum, typically the scan number. Is used
         together with ``self.specfile`` as a key to access the spectrum in its
@@ -1000,10 +1003,10 @@ class Si(object):
 
 
 class MzmlScan(object):
-    """MasPy representation of an mzML ``Scan`` element. `mzML schema
-    documentation <http://www.peptideatlas.org/tmp/mzML1.1.0.html#scan>`_
+    """MasPy representation of an mzML ``Scan`` element, see `mzML schema
+    documentation <http://www.peptideatlas.org/tmp/mzML1.1.0.html#scan>`_.
 
-    :ivar scanWindowList: contains mzML ``scanWindow`` elements, which are
+    :ivar scanWindowList: a list of mzML ``scanWindow`` elements, which are
         represented as a tuple of parm tuples. The mzML ``scanWindowList`` is
         describing the measurement and should not be changed.
     :ivar params: a list of parameter tuple (cvParam tuple, userParam tuple or
@@ -1055,7 +1058,7 @@ class MzmlScan(object):
 
 
 class MzmlProduct(object):
-    """MasPy representation of an mzML ``Product`` element. The `mzML schema
+    """MasPy representation of an mzML ``Product`` element, the `mzML schema
     documentation <http://www.peptideatlas.org/tmp/mzML1.1.0.html#product>`_
     does however not provide a lot of information how this element is intended
     to be used and which information can be present.
@@ -1098,8 +1101,8 @@ class MzmlProduct(object):
 
 
 class MzmlPrecursor(object):
-    """MasPy representation of an mzML ``Scan`` element. `mzML schema
-    documentation <http://www.peptideatlas.org/tmp/mzML1.1.0.html#precursor>`_
+    """MasPy representation of an mzML ``Scan`` element, see `mzML schema
+    documentation <http://www.peptideatlas.org/tmp/mzML1.1.0.html#precursor>`_.
 
     :ivar spectrumRef: native id of the spectrum corresponding to the precursor
         spectrum
@@ -1109,8 +1112,8 @@ class MzmlPrecursor(object):
     :ivar isolationWindow: the mzML ``isolationWindow`` is represented as a
         tuple of parm tuples. It is describing the measurement and should not be
         changed.
-    :ivar selectedIonList: a list of ``selectedIon`` representations, which are
-        stored as a tuple of param tuples.
+    :ivar selectedIonList: a list of mzML ``selectedIon`` elements, which are
+        represented as a tuple of param tuples.
 
     .. note:: The attributes "sourceFileRef" and "externalSpectrumID" are not
         supported by MasPy on purpose, since they are only used to refere to
@@ -1162,31 +1165,36 @@ class MzmlPrecursor(object):
 
 
 def _mzmlListAttribToTuple(oldList):
-    """ Turns the list element, elements into tuples, used in
-    :func:`MzmlScan._fromJSON()` and :func:`MzmlPrecursor._fromJSON()`.
+    """Turns the param entries of elements in a list elements into tuples, used
+    in :func:`MzmlScan._fromJSON()` and :func:`MzmlPrecursor._fromJSON()`.
 
     .. note:: only intended for a list of elements that contain params. For
-        example the mzML element ``selectedIonList``.
+        example the mzML element ``selectedIonList`` or ``scanWindowList``.
 
-    :param oldList: #TODO: docstring
+    :param oldList: [[paramList, paramList, ...], ...]
 
-    :returns: #TODO: docstring
+    :returns: [[paramTuple, paramTuple, ...], ...]
     """
     newList = list()
-    for oldEntry in oldList:
-        newEntry = [tuple(param) for param in oldEntry]
-        newList.append(newEntry)
+    for oldParamList in oldList:
+        newParamLIst = [tuple(param) for param in oldParamList]
+        newList.append(newParamLIst)
     return newList
 
 
 def addMsrunContainers(mainContainer, subContainer):
-    """ #TODO: docstring
+    """Adds the complete content of all specfile entries from the subContainer
+    to the mainContainer. However if a specfile of ``subContainer.info`` is
+    already present in ``mainContainer.info`` its contents are not added to the
+    mainContainer.
 
-    :param mainContainer: #TODO: docstring
-    :param subContainer: #TODO: docstring
+    :param mainContainer: :class:`MsrunContainer`
+    :param subContainer: :class:`MsrunContainer`
 
-    .. warning:: does not generate new items, all items of the merged container
-        still point to the same inital memory location
+    .. warning:: does not generate new items, all items added to the
+        ``mainContainer`` are still present in the ``subContainer`` and changes
+        made to elements of one container also affects the elements of the other
+        one (ie elements share same memory location).
     """
     typeToContainer = {'rm': 'rmc', 'ci': 'cic', 'smi': 'smic',
                        'sai': 'saic', 'si': 'sic'
@@ -1212,7 +1220,7 @@ def addMsrunContainers(mainContainer, subContainer):
 ### SpectrumIdentificationItem related classes and functions #############
 ##########################################################################
 class Sii(object):
-    """Spectrum identification item (Sii) - representation of an ion fragment
+    """Spectrum identification item (Sii) - representation of an MSn fragment
     spectrum annotation, also referred to as peptide spectrum match (PSM).
 
     :ivar id: The unique id of this spectrum, typically the scan number. Is used
@@ -1502,7 +1510,7 @@ class SiiContainer(object):
             containerFile.writestr('info', json.dumps(infodata, zipcomp))
 
     def load(self, specfiles=None):
-        """Import the specified datatypes from ``siic`` files on the hard disk.
+        """Imports ``siic`` files from the hard disk.
 
         :param specfiles: the name of an ms-run file or a list of names. If None
             all specfiles are selected.
@@ -1642,10 +1650,13 @@ class Fi(object):
     :ivar id: the unique identifier of a LC-MS feature, as generated by the
         software used for extracting features from MS1 spectra.
     :ivar specfile: An id representing an mzML file / ms-run filename.
-    :ivar rt: #TODO docstring
-    :ivar mz: #TODO docstring
-    :ivar charge: #TODO docstring
-    :ivar intensity: #TODO docstring
+    :ivar rt: a representative retention time value of the ``Fi`` (in seconds).
+        For example the retention time of the feature apex.
+    :ivar mz: a representative mass to charge value of the ``Fi`` (in Dalton /
+        charge). For example the average m/z value of all data points.
+    :ivar charge: the ``Fi`` charge state
+    :ivar intensity: a meassure for the ``Fi`` abundance, used for relative
+        quantification. Typically the area of the feature intensity over time.
     :ivar isValid:  bool or None if not specified
         this attribute can be used to flag if a ``Fi`` has passed a given
         quality threshold. Can be used to filter valid elements in eg
@@ -1912,7 +1923,7 @@ class FiContainer(object):
         #    containerFile.writestr('info', json.dumps(infodata, zipcomp))
 
     def load(self, specfiles=None):
-        """Import the specified datatypes from ``fic`` files on the hard disk.
+        """Imports the specified ``fic`` files from the hard disk.
 
         :param specfiles: the name of an ms-run file or a list of names. If None
             all specfiles are selected.
