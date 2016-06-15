@@ -7,20 +7,20 @@ The mzML file format
 Every vendor software produces mass spectrometer output files in a different
 proprietary format. It is a difficult and time consuming task for software
 developers to support all of these different formats and the different versions
-thereof. Therefore the file format mzML has been developed as the community
-standard for represenation of mass spectrometry results. mzML is an open, XML-
-based format that not only allows to store recorded mass spectrum information
-but also metadata of the instrument configuration, acquisition settings,
-software used for data processing and sample descriptions. Ultimately it is
-desirable to universally use mzML for archiving, sharing, and processing of mass
-spectrometry data and thus for all software to support and use the mzML format.
+thereof. Therefore the file format mzML has been developed by the Proteomics
+Standards Initiative (PSI) as the community standard for represenation of mass
+spectrometry results. mzML is an open, XML- based format that not only allows to
+store recorded mass spectrum information but also metadata of the instrument
+configuration, acquisition settings, software used for data processing and
+sample descriptions. Ultimately it is desirable to universally use mzML for
+archiving, sharing, and processing of mass spectrometry data and thus for all
+software to support and use the mzML format.
 
 .. note::
     Refer to `www.psidev.info <http://www.psidev.info/index.php?q=node/257>`_
     for details on the XML schema definition and mzML file specifications, see
     also the publication `Mass Spectrometer Output File Format mzML
     <http://www.ncbi.nlm.nih.gov/pmc/articles/PMC3073315>`_)
-
 
 .. note::
     We recommend using ProteoWizard for conversion of vendor format files to
@@ -127,11 +127,11 @@ The mzML file  serves as a data container for active data processing but also
 for data sharing and archiving. Thus the spectrum elements contain a lot of
 metadata information not needed for most data analysis applications. In addition
 all information stored in spectrum elements have to be in accordance with the
-mzML xml scheme definition and the Controlled Vocabularies (CV's) of the
-Proteomic Standard Initiative, `see <http://www.psidev.info/groups /controlled-
-vocabularies>`_. Altough in principle this standardization is a good thing and
-perfectly reasonable, when actively working with the data this can be
-unnecessary and make things quite complicated.
+mzML xml scheme definition and the Controlled Vocabularies (CV's) of the PSI,
+`see <http://www.psidev.info/groups /controlled- vocabularies>`_. Altough in
+principle this standardization is a good thing and perfectly reasonable, when
+actively working with the data this can be unnecessary and make things quite
+complicated.
 
 To circumvent this problem MasPy provides a simplier data type for working with
 spectrum metadata, called spectrum item (:class:`Si <maspy.core.Si>`). The

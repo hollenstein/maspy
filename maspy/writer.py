@@ -18,12 +18,21 @@ import maspy.xml
 ##########################################################
 ### mzml import and export methods #######################
 ##########################################################
-def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogramIds=None):
-    #TODO: docstring
+def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
+              chromatogramIds=None):
+    """ #TODO: docstring
+
+    :param specfile: #TODO docstring
+    :param msrunContainer: #TODO docstring
+    :param outputdir: #TODO docstring
+    :param spectrumIds: #TODO docstring
+    :param chromatogramIds: #TODO docstring
+    """
     #TODO: maybe change to use aux.openSafeReplace
     outputFile = io.BytesIO()
 
-    #TODO: perform check that specfile is present in msrunContainer and at least the metadatanode.
+    #TODO: perform check that specfile is present in msrunContainer and at least
+    #   the metadatanode.
     metadataTree = msrunContainer.rmc[specfile]
     #Generate a list of spectrum ids that should be written to mzML
     if spectrumIds is None and specfile in msrunContainer.smic:
@@ -39,8 +48,12 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
     xmlWriter = xmlFile.__enter__()
     xmlWriter.write_declaration()
 
-    nsmap = {None: 'http://psi.hupo.org/ms/mzml', 'xsi': 'http://www.w3.org/2001/XMLSchema-instance'}
-    xmlRoot = xmlWriter.element(metadataTree.tag, metadataTree.attrib, nsmap=nsmap)
+    nsmap = {None: 'http://psi.hupo.org/ms/mzml',
+             'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
+             }
+    xmlRoot = xmlWriter.element(metadataTree.tag, metadataTree.attrib,
+                                nsmap=nsmap
+                                )
     xmlRoot.__enter__()
     xmlWriter.write('\n')
 
@@ -61,8 +74,11 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
             #If any spectra should be written, generate the spectrumList Node
             if spectrumCounts > 0:
                 specListAttribs = {'count': str(spectrumCounts),
-                                   'defaultDataProcessingRef': specDefaultProcRef}
-                xmlSpectrumList = xmlWriter.element('spectrumList', specListAttribs)
+                                   'defaultDataProcessingRef': specDefaultProcRef
+                                   }
+                xmlSpectrumList = xmlWriter.element('spectrumList',
+                                                    specListAttribs
+                                                    )
                 xmlSpectrumList.__enter__()
                 xmlWriter.write('\n')
 
@@ -75,11 +91,15 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
                 xmlSpectrumList.__exit__(None, None, None)
                 xmlWriter.write('\n')
 
-            #If any chromatograms should be written, generate the chromatogramList Node
+            #If any chromatograms should be written, generate the
+            #   chromatogramList Node
             if chromatogramCounts > 0:
                 chromListAttribs = {'count': str(chromatogramCounts),
-                                    'defaultDataProcessingRef': chromDefaultProcRef}
-                xmlChromatogramList = xmlWriter.element('chromatogramList', chromListAttribs)
+                                    'defaultDataProcessingRef': chromDefaultProcRef
+                                    }
+                xmlChromatogramList = xmlWriter.element('chromatogramList',
+                                                        chromListAttribs
+                                                        )
                 xmlChromatogramList.__enter__()
                 xmlWriter.write('\n')
                 for index, key in enumerate(chromatogramIds):
@@ -93,8 +113,10 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
             xmlRun.__exit__(None, None, None)
             xmlWriter.write('\n')
         else:
-            xmlWriter.write(maspy.xml.recCopyElement(metadataNode), pretty_print=True)
-    # close
+            xmlWriter.write(maspy.xml.recCopyElement(metadataNode),
+                            pretty_print=True
+                            )
+    #Close the root node and the file
     xmlRoot.__exit__(None, None, None)
     xmlFile.__exit__(None, None, None)
 
@@ -105,8 +127,13 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None, chromatogra
 
 # --- generate mzml elements from maspy objects --- #
 def xmlGenScanList(scanList, scanListParams):
-    #TODO: docstring
+    """ #TODO: docstring
 
+    :params scanList: #TODO: docstring
+    :params scanListParams: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     numEntries = len(scanList)
     xmlScanList = ETREE.Element('scanList', {'count': str(numEntries)})
     maspy.xml.xmlAddParams(xmlScanList, scanListParams)
@@ -118,7 +145,9 @@ def xmlGenScanList(scanList, scanListParams):
         #Generate the scanWindowList entry
         numScanWindows = len(scan['scanWindowList'])
         if numScanWindows > 0:
-            xmlScanWindowList = ETREE.Element('scanWindowList', {'count': str(numScanWindows)})
+            xmlScanWindowList = ETREE.Element('scanWindowList',
+                                              {'count': str(numScanWindows)}
+                                              )
             for scanWindow in scan['scanWindowList']:
                 xmlScanWindow = ETREE.Element('scanWindow')
                 maspy.xml.xmlAddParams(xmlScanWindow, scanWindow)
@@ -130,10 +159,16 @@ def xmlGenScanList(scanList, scanListParams):
 
 
 def xmlGenPrecursorList(precursorList):
-    #TODO: docstring
+    """ #TODO: docstring
 
+    :params precursorList: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     numEntries = len(precursorList)
-    xmlPrecursorList = ETREE.Element('precursorList', {'count': str(numEntries)})
+    xmlPrecursorList = ETREE.Element('precursorList',
+                                     {'count': str(numEntries)}
+                                     )
     for precursor in precursorList:
         #Note: no attributes supported
         precursorAttrib = {}
@@ -147,13 +182,17 @@ def xmlGenPrecursorList(precursorList):
 
         if precursor['isolationWindow'] is not None:
             xmlIsolationWindow = ETREE.Element('isolationWindow')
-            maspy.xml.xmlAddParams(xmlIsolationWindow, precursor['isolationWindow'])
+            maspy.xml.xmlAddParams(xmlIsolationWindow,
+                                   precursor['isolationWindow']
+                                   )
             xmlPrecursor.append(xmlIsolationWindow)
 
         #Generate the selectedIonList entry
         numSelectedIons = len(precursor['selectedIonList'])
         if numSelectedIons > 0:
-            xmlSelectedIonList = ETREE.Element('selectedIonList', {'count': str(numSelectedIons)})
+            xmlSelectedIonList = ETREE.Element('selectedIonList',
+                                               {'count': str(numSelectedIons)}
+                                               )
             for selectedIon in precursor['selectedIonList']:
                 xmlSelectedIon = ETREE.Element('selectedIon')
                 maspy.xml.xmlAddParams(xmlSelectedIon, selectedIon)
@@ -165,23 +204,43 @@ def xmlGenPrecursorList(precursorList):
 
 
 def xmlGenProductList(productList):
-    #TODO: docstring
-    raise NotImplementedError('xmlGenProductList is not yet implemented')
+    """ #TODO: docstring
+
+    :params productList: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
+    raise NotImplementedError('xmlGenProductList() is not yet implemented')
 
 
-def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib', arrayTypes=None):
-    #TODO: docstring
+def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict,
+                              compression='zlib', arrayTypes=None):
+    """ #TODO: docstring
 
-    #Note: any other value for "compression" than "zlib" results in no compression
+    :params binaryDataInfo: #TODO: docstring
+    :params binaryDataDict: #TODO: docstring
+    :params compression: #TODO: docstring
+    :params arrayTypes: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
+    #Note: any other value for "compression" than "zlib" results in no
+    #   compression
     #Note: Use arrayTypes parameter to specify the order of the arrays
-    arrayTypes = [_ for _ in viewkeys(binaryDataInfo)] if arrayTypes is None else arrayTypes
+    if arrayTypes is None:
+        arrayTypes = [_ for _ in viewkeys(binaryDataInfo)]
     numEntries = len(binaryDataInfo)
-    xmlBinaryDataArrayList = ETREE.Element('binaryDataArrayList', {'count': str(numEntries)})
+    xmlBinaryDataArrayList = ETREE.Element('binaryDataArrayList',
+                                           {'count': str(numEntries)}
+                                           )
     for arrayType in arrayTypes:
         _, dataTypeParam = maspy.xml.findBinaryDataType(binaryDataInfo[arrayType]['params'])
         binaryData = binaryDataDict[arrayType]
         bitEncoding = '64' if binaryData.dtype.str == '<f8' else '32'
-        binaryData, arrayLength = maspy.xml.encodeBinaryData(binaryData, bitEncoding, compression)
+        binaryData, arrayLength = maspy.xml.encodeBinaryData(binaryData,
+                                                             bitEncoding,
+                                                             compression
+                                                             )
 
         # --- define binaryDataArray parameters --- #
         params = list()
@@ -193,7 +252,9 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib'
             params.append(('MS:1000574', None, None))
         else:
             params.append(('MS:1000576', None, None))
-        mandatoryAccessions = ['MS:1000523', 'MS:1000521', 'MS:1000574', 'MS:1000576']
+        mandatoryAccessions = ['MS:1000523', 'MS:1000521', 'MS:1000574',
+                               'MS:1000576'
+                               ]
         for param in binaryDataInfo[arrayType]['params']:
             if param[0] not in mandatoryAccessions:
                 params.append(param)
@@ -203,7 +264,9 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib'
         for attr in ['dataProcessingRef']:
             if binaryDataInfo[arrayType][attr] is not None:
                 binaryDataArrayAttrib[attr] = binaryDataInfo[arrayType][attr]
-        xmlBinaryDataArray = ETREE.Element('binaryDataArray', binaryDataArrayAttrib)
+        xmlBinaryDataArray = ETREE.Element('binaryDataArray',
+                                           binaryDataArrayAttrib
+                                           )
         maspy.xml.xmlAddParams(xmlBinaryDataArray, params)
 
         xmlBinary = ETREE.Element('binary')
@@ -214,17 +277,21 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict, compression='zlib'
 
 
 def xmlSpectrumFromSmi(index, smi, sai=None, compression='zlib'):
-    """
+    """ #TODO: docstring
+
     :param index: The zero-based, consecutive index of the spectrum in the
         SpectrumList. (mzML specification)
     :param smi: a SpectrumMetadataItem instance
     :param sai: a SpectrumArrayItem instance, if none is specified no
         binaryDataArrayList is written
+    :param compression: #TODO: docstring
+
+    :returns: #TODO: docstring
     """
     if sai is not None:
         arrayLength = [array.size for array in viewvalues(sai.arrays)]
         if len(set(arrayLength)) != 1:
-            raise Exception('Unequal array size for different entries in sai.arrays')
+            raise Exception('Unequal size for different array in sai.arrays')
         else:
             arrayLength = arrayLength[0]
     else:
@@ -251,10 +318,16 @@ def xmlSpectrumFromSmi(index, smi, sai=None, compression='zlib'):
 
 
 def xmlChromatogramFromCi(index, ci, compression='zlib'):
-    #TODO: docstring
+    """ #TODO: docstring
+    :param index: #TODO: docstring
+    :param ci: #TODO: docstring
+    :param compression: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     arrayLength = [array.size for array in viewvalues(ci.arrays)]
     if len(set(arrayLength)) != 1:
-        raise Exception('Unequal array size for different entries in sai.arrays')
+        raise Exception('Unequal size for different array in sai.arrays')
     else:
         arrayLength = arrayLength[0]
 
@@ -271,7 +344,8 @@ def xmlChromatogramFromCi(index, ci, compression='zlib'):
     if ci.precursor is not None:
         raise NotImplementedError()
 
-    #Sort the array keys, that 'rt' is always the first, necessary for the software "SeeMS" to properly display chromatograms
+    #Sort the array keys, that 'rt' is always the first, necessary for example
+    #   for the software "SeeMS" to properly display chromatograms.
     arrayTypes = set(ci.arrayInfo)
     if 'rt' in arrayTypes:
         arrayTypes.remove('rt')

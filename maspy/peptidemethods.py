@@ -5,7 +5,7 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 import itertools
 import re
 

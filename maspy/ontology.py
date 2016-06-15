@@ -5,7 +5,7 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 #http://pythonhosted.org/Orange-Bioinformatics/index.html
 #Minor changes for better compatibility with maspy
 #replaced: from six import StringIO with import StringIO, and subsequently StringIO() with StringIO.StringIO()

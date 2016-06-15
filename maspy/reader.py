@@ -5,13 +5,17 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 from collections import defaultdict as ddict
 import io
 from lxml import etree as ETREE
 import numpy
+from operator import itemgetter as ITEMGETTER
 import os
 import warnings
+
+import pyteomics.mzid
+import pyteomics.mass
 
 import maspy.auxiliary as aux
 import maspy.core
@@ -346,23 +350,28 @@ def applySiiQcValidation(siiContainer, specfile):
     attr = siiContainer.info[specfile]['qcAttr']
     cutOff = siiContainer.info[specfile]['qcCutoff']
     if siiContainer.info[specfile]['qcLargerBetter']:
-        evaluator = lambda sii: getattr(sii, attr) >= cutOff
+        evaluator = lambda sii: getattr(sii, attr) >= cutOff and sii.rank == 1
     else:
-        evaluator = lambda sii: getattr(sii, attr) <= cutOff
+        evaluator = lambda sii: getattr(sii, attr) <= cutOff and sii.rank == 1
 
     for itemList in listvalues(siiContainer.container[specfile]):
+        #Set the .isValid attribute of all Sii to False
+        for sii in itemList:
+            sii.isValid = False
+
+        #Validate the first Sii
         sii = itemList[0]
         if evaluator(sii):
             sii.isValid = True
 
 
-def readPercolatorResults(specfile, filelocation, psmEngine):
+def readPercolatorResults(filelocation, specfile, psmEngine):
     """Reads percolator PSM results from a txt file and returns a list of
     :class:`Sii <maspy.core.Sii>` elements.
 
+    :param filelocation: file path of the percolator result file
     :param specfile: unambiguous identifier of a ms-run file. Is also used as
         a reference to other MasPy file containers.
-    :param filelocation: file path of the percolator result file
     :param psmEngine: PSM PSM search engine used for peptide spectrum matching
         before percolator. This is important to specify, since the scanNr
         information is written in a different format by some engines. It might
@@ -371,7 +380,7 @@ def readPercolatorResults(specfile, filelocation, psmEngine):
 
         Possible values are 'comet', 'xtandem', 'msgf'.
 
-    :return: [sii, sii, sii, ...]
+    :returns: [sii, sii, sii, ...]
     """
     if psmEngine not in ['comet', 'msgf', 'xtandem']:
         raise Exception('PSM search engine not supported: ', psmEngine)
@@ -419,7 +428,7 @@ def readPercolatorResults(specfile, filelocation, psmEngine):
     return itemList
 
 
-def importPercolatorResults(siiContainer, specfile, filelocation, psmEngine,
+def importPercolatorResults(siiContainer, filelocation, specfile, psmEngine,
                             qcAttr='qValue', qcLargerBetter=False,
                             qcCutoff=0.01, rankAttr='score',
                             rankLargerBetter=True):
@@ -427,13 +436,13 @@ def importPercolatorResults(siiContainer, specfile, filelocation, psmEngine,
     generate :class:`Sii <maspy.core.Sii>` elements and store them in the
     specified :class:`siiContainer <maspy.core.SiiContainer>`. Imported ``Sii``
     are ranked according to a specified attribute and validated if they surpass
-    a specified qualty threshold.
+    a specified quality threshold.
 
     :param siiContainer: imported PSM results are added to this instance of
         :class:`siiContainer <maspy.core.SiiContainer>`
+    :param filelocation: file path of the percolator result file
     :param specfile: unambiguous identifier of a ms-run file. Is also used as
         a reference to other MasPy file containers.
-    :param filelocation: file path of the percolator result file
     :param psmEngine: PSM search engine used for peptide spectrum matching
         before percolator. For details see :func:`readPercolatorResults()`.
         Possible values are 'comet', 'xtandem', 'msgf'.
@@ -454,12 +463,130 @@ def importPercolatorResults(siiContainer, specfile, filelocation, psmEngine,
     """
 
     path = os.path.dirname(filelocation)
-    siiList = readPercolatorResults(specfile, filelocation, psmEngine)
+    siiList = readPercolatorResults(filelocation, specfile, psmEngine)
     prepareSiiImport(siiContainer, specfile, path, qcAttr, qcLargerBetter,
                      qcCutoff, rankAttr, rankLargerBetter)
     addSiiToContainer(siiContainer, specfile, siiList)
     applySiiRanking(siiContainer, specfile)
     applySiiQcValidation(siiContainer, specfile)
+
+
+def readMsgfMzidResults(filelocation, specfile=None):
+    """Reads MS-GF+ PSM results from a mzIdentML file and returns a list of
+    :class:`Sii <maspy.core.Sii>` elements.
+
+    :param filelocation: file path of the percolator result file
+    :param specfile: optional, unambiguous identifier of a ms-run file. Is also
+        used as a reference to other MasPy file containers. If specified all
+        the ``.specfile`` attribute of all ``Sii`` are set to this value, else
+        it is read from the mzIdentML file.
+
+    :returns: [sii, sii, sii, ...]
+    """
+    readSpecfile = True if specfile is None else False
+
+    unimod = pyteomics.mass.mass.Unimod()
+    _tempMods = dict()
+    mzid_refs = pyteomics.mzid.read(filelocation, retrieve_refs=True,
+                                    iterative=False)
+
+    siiList = list()
+    for mzidEntry in mzid_refs:
+        mzidSii = mzidEntry['SpectrumIdentificationItem'][0]
+        scanNumber = str(int(mzidEntry['scan number(s)']))
+        if readSpecfile:
+            specfile = os.path.splitext(mzidEntry['name'])[0]
+
+        sii = maspy.core.Sii(scanNumber, specfile)
+        sii.isValid = mzidSii['passThreshold']
+        sii.rank = mzidSii['rank']
+        sii.eValue = mzidSii['MS-GF:EValue']
+        sii.charge = mzidSii['chargeState']
+        sii.sequence = mzidSii['PeptideSequence']
+        sii.specEValue = mzidSii['MS-GF:SpecEValue']
+        sii.score = numpy.log10(sii.eValue)*-1
+
+        if 'Modification' in mzidSii:
+            modifications = list()
+            for modEntry in mzidSii['Modification']:
+                try:
+                    modSymbolMaspy = _tempMods[modEntry['name']]
+                except KeyError:
+                    unimodEntry = unimod.by_title(modEntry['name'])
+                    if len(unimodEntry) != 0:
+                        modSymbol = 'u:'+str(unimodEntry['record_id'])
+                    else:
+                        modSymbol = modEntry['name']
+                    modSymbolMaspy = '[' + modSymbol + ']'
+                    _tempMods[modEntry['name']] = modSymbolMaspy
+                modifications.append((modEntry['location'], modSymbolMaspy))
+            modifications.sort(key=ITEMGETTER(0))
+
+            _lastPos = 0
+            _peptide = list()
+            for pos, mod in modifications:
+                 _peptide.extend((sii.sequence[_lastPos:pos], mod))
+                 _lastPos = pos
+            _peptide.append(sii.sequence[_lastPos:])
+
+            sii.peptide = ''.join(_peptide)
+        else:
+            sii.peptide = sii.sequence
+        siiList.append(sii)
+    return siiList
+
+
+def importMsgfMzidResults(siiContainer, filelocation, specfile=None,
+                          qcAttr='eValue', qcLargerBetter=False, qcCutoff=0.01,
+                          rankAttr='score', rankLargerBetter=True):
+    """Import peptide spectrum matches (PSMs) from a MS-GF+ mzIdentML file,
+    generate :class:`Sii <maspy.core.Sii>` elements and store them in the
+    specified :class:`siiContainer <maspy.core.SiiContainer>`. Imported ``Sii``
+    are ranked according to a specified attribute and validated if they surpass
+    a specified quality threshold.
+
+    :param siiContainer: imported PSM results are added to this instance of
+        :class:`siiContainer <maspy.core.SiiContainer>`
+    :param filelocation: file path of the percolator result file
+    :param specfile: optional, unambiguous identifier of a ms-run file. Is also
+        used as a reference to other MasPy file containers. If specified the
+        attribute ``.specfile`` of all ``Sii`` is set to this value, else
+        it is read from the mzIdentML file.
+    :param qcAttr: name of the parameter to define a quality cut off. Typically
+        this is some sort of a global false positive estimator (eg FDR)
+    :param qcLargerBetter: bool, True if a large value for the ``.qcAttr`` means
+        a higher confidence.
+    :param qcCutOff: float, the quality threshold for the specifed ``.qcAttr``
+    :param rankAttr: name of the parameter used for ranking ``Sii`` according
+        to how well they match to a fragment ion spectrum, in the case when
+        their are multiple ``Sii`` present for the same spectrum.
+    :param rankLargerBetter: bool, True if a large value for the ``.rankAttr``
+        means a better match to the fragment ion spectrum
+
+    For details on ``Sii`` ranking see :func:`applySiiRanking()`
+
+    For details on ``Sii`` quality validation see :func:`applySiiQcValidation()`
+    """
+    path = os.path.dirname(filelocation)
+    siiList = readMsgfMzidResults(filelocation, specfile)
+
+    #If the mzIdentML file contains multiple specfiles, split the sii elements
+    # up according to their specified "specfile" attribute.
+    specfiles = ddict(list)
+    if specfile is None:
+        for sii in siiList:
+            specfiles[sii.specfile].append(sii)
+    else:
+        specfiles[specfile] = siiList
+
+    for specfile in specfiles:
+        _siiList = specfiles[specfile]
+
+        prepareSiiImport(siiContainer, specfile, path, qcAttr, qcLargerBetter,
+                         qcCutoff, rankAttr, rankLargerBetter)
+        addSiiToContainer(siiContainer, specfile, _siiList)
+        applySiiRanking(siiContainer, specfile)
+        applySiiQcValidation(siiContainer, specfile)
 
 
 #####################################################################
@@ -548,7 +675,7 @@ def importPeptideFeatures(fiContainer, filelocation, specfile):
 def _importFeatureXml(filelocation):
     """Reads a featureXml file.
 
-    :return: {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}
+    :returns: {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}
 
     See also :func:`importPeptideFeatures`
     """
@@ -621,7 +748,7 @@ def _importFeatureXml(filelocation):
 def _importDinosaurTsv(filelocation):
     """Reads a Dinosaur tsv file.
 
-    :return: {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}
+    :returns: {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}
 
     See also :func:`importPeptideFeatures`
     """

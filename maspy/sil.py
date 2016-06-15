@@ -5,7 +5,7 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 #TODO: review for compatibility to maspy 1.0
 import itertools
 
@@ -18,8 +18,11 @@ import maspy.peptidemethods
 class LabelDescriptor(object):
     """Describes a MS1 stable isotope label setup for quantification.
 
-    :ivar labels: Contains a dictionary with all possible label states, keys (=labelStates) are increasing integers starting from 0
-    :ivar excludingModifictions: bool, set to True if any label has specified excludingModifications
+    :ivar labels: Contains a dictionary with all possible label states, keys
+        are increasing integers starting from 0, which correspond to the
+        different label states.
+    :ivar excludingModifictions: bool, True if any label has specified
+        excludingModifications
     """
     def __init__(self):
         self.labels = dict()
@@ -29,39 +32,57 @@ class LabelDescriptor(object):
     def addLabel(self, aminoAcidLabels, excludingModifications=None):
         """Adds a new labelstate.
 
-        :ivar aminoAcidsLabels: Describes which amino acids can bear which labels
-        possible keys amino acids in one letter code and ('nTerm', 'cTerm')
-        possible values are keys from :var:`maspy.constants.aaModMass` as strings or list of strings
-        eg. {'nTerm':'u:188', 'K':['u:188', 'u:188']} for one expected label at the nterminus and two expected labels at Lysine
-        :ivar excludingModifications: Describes which modifications can prevent the addition of labels
-        keys and values have to be keys from :var:`maspy.constants.aaModMass` written as a string.
-        eg. {'u:1':'u:188'} For each modification 'u:1' that is present at an amino acid or terminus of a peptide
-        the number of expected labels at this position is reduced by one
+        :param aminoAcidsLabels: Describes which amino acids can bear which
+            labels. Possible keys are the amino acids in one letter code and
+            'nTerm', 'cTerm'. Possible values are the modifications ids from
+            :attr:`maspy.constants.aaModMass` as strings or a list of strings.
+            An example for one expected label at the n-terminus and two expected
+                labels at each Lysine:
+                ``{'nTerm': 'u:188', 'K': ['u:188', 'u:188']}``
+        :param excludingModifications: optional, A Dectionary that describes
+            which modifications can prevent the addition of labels. Keys and
+            values have to be the modifications ids from
+            :attr:`maspy.constants.aaModMass`. The key specifies the
+            modification that prevents the label modification specified by the
+            value. For example for each modification 'u:1' that is present at an
+            amino acid or terminus of a peptide the number of expected labels at
+            this position is reduced by one: ``{'u:1':'u:188'}``
+
         """
         if excludingModifications is not None:
             self.excludingModifictions = True
 
-        self.labels[self._labelCounter] = dict()
-        self.labels[self._labelCounter]['aminoAcidLabels'] = aminoAcidLabels
-        self.labels[self._labelCounter]['excludingModifications'] = excludingModifications
+        labelEntry = {'aminoAcidLabels': aminoAcidLabels,
+                      'excludingModifications': excludingModifications
+                      }
+        self.labels[self._labelCounter] = labelEntry
         self._labelCounter += 1
 
 
-def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, sequence=None):
-    """Calculates the mass difference for alternative possible label states of a given peptide.
+def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None,
+                                    sequence=None):
+    """Calculates the mass difference for alternative possible label states of a
+    given peptide. See also :class:`LabelDescriptor`, :func:`returnLabelState()`
 
-    :ivar peptide: Peptide to calculate alternative label states
-    :ivar labelDescriptor: :class:`LabelDescriptor` describes the label setup of an experiment
-    :ivar labelState: label state of the peptide, if None it is calculated by :func:`returnLabelState`
-    :ivar sequence: unmodified amino acid sequence of :var:`peptide`, if None it is calculated with :func:`removeModifications`
 
-    :return: {alternativeLabelSate: massDifference, ...} or {} if the peptide label state is -1
-    (massDifference + peptide mass = expected mass of alternatively labeled peptide)
+    :param peptide: Peptide to calculate alternative label states
+    :param labelDescriptor: :class:`LabelDescriptor` describes the label setup
+        of an experiment
+    :param labelState: label state of the peptide, if None it is calculated by
+        :func:`returnLabelState()`
+    :param sequence: unmodified amino acid sequence of the "peptide", if None
+        it is generated by :func:`maspy.peptidemethods.removeModifications()`
 
-    See also :class:`LabelDescriptor`, :func:`returnLabelState`
+    :returns: {alternativeLabelSate: massDifference, ...} or {} if the peptide
+        label state is -1.
+
+    .. note:: The massDifference plus the peptide mass is the expected mass of
+        an alternatively labeled peptide
     """
-    labelState = returnLabelState(peptide, labelDescriptor) if labelState is None else labelState
-    sequence = maspy.peptidemethods.removeModifications(peptide) if sequence is None else sequence
+    if labelState is None:
+        labelState = returnLabelState(peptide, labelDescriptor)
+    if sequence is None:
+        sequence = maspy.peptidemethods.removeModifications(peptide)
 
     if labelState < 0:
         # special case for mixed label... #
@@ -69,7 +90,10 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
 
     # define type and number of labels of the peptide
     labelModNumbers = dict()
-    for labelStateModList in viewvalues(expectedLabelPosition(peptide, labelDescriptor.labels[labelState], sequence=sequence)):
+    _positions = expectedLabelPosition(peptide,
+                                       labelDescriptor.labels[labelState],
+                                       sequence=sequence)
+    for labelStateModList in viewvalues(_positions):
         for labelMod in labelStateModList:
             labelModNumbers.setdefault(labelMod, int())
             labelModNumbers[labelMod] += 1
@@ -86,7 +110,10 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
             continue
 
         labelModNumbers = dict()
-        for labelStateModList in viewvalues(expectedLabelPosition(peptide, labelDescriptor.labels[possibleLabelState], sequence=sequence)):
+        _positions = expectedLabelPosition(peptide,
+                                           labelDescriptor.labels[possibleLabelState],
+                                           sequence=sequence)
+        for labelStateModList in viewvalues(_positions):
             for labelMod in labelStateModList:
                 labelModNumbers.setdefault(labelMod, int())
                 labelModNumbers[labelMod] += 1
@@ -100,31 +127,42 @@ def returnLabelStateMassDifferences(peptide, labelDescriptor, labelState=None, s
     return labelStateMassDifferences
 
 
-def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacids=None):
-    """Calculates the label state of a given peptide for the label setup described in labelDescriptor
+def returnLabelState(peptide, labelDescriptor, labelSymbols=None,
+                     labelAminoacids=None):
+    """Calculates the label state of a given peptide for the label setup
+    described in labelDescriptor
 
-    :ivar peptide: peptide which label state should be calcualted
-    :ivar labelDescriptor: :class:`LabelDescriptor` describes the label setup of an experiment
-    :ivar labelSymbols: modifications that show a label, calculated by :func:`modSymbolsFromLabelInfo`
-    :ivar labelAminoacids: amino acids that can bear a label, calculated by :func:`modAminoacidsFromLabelInfo`
+    :param peptide: peptide which label state should be calcualted
+    :param labelDescriptor: :class:`LabelDescriptor`, describes the label setup
+        of an experiment.
+    :param labelSymbols: modifications that show a label, as returned by
+        :func:`modSymbolsFromLabelInfo`.
+    :param labelAminoacids: amino acids that can bear a label, as returned by
+        :func:`modAminoacidsFromLabelInfo`.
 
-    :return: integer that shows the label state
-    >=0: predicted label state of the peptide
-     -1: peptide sequence can't bear any labelState modifications
-     -2: peptide modifications don't fit to any predicted labelState
-     -3: peptide modifications fit to a predicted labelState, but not all predicted labelStates are distinguishable
+    :returns: integer that shows the label state:
+        >=0: predicted label state of the peptide
+         -1: peptide sequence can't bear any labelState modifications
+         -2: peptide modifications don't fit to any predicted labelState
+         -3: peptide modifications fit to a predicted labelState, but not all
+             predicted labelStates are distinguishable
     """
-    labelSymbols = modSymbolsFromLabelInfo(labelDescriptor) if labelSymbols is None else labelSymbols
-    labelAminoacids = modAminoacidsFromLabelInfo(labelDescriptor) if labelAminoacids is None else labelAminoacids
+    if labelSymbols is None:
+        labelSymbols = modSymbolsFromLabelInfo(labelDescriptor)
+    if labelAminoacids is None:
+        labelAminoacids = modAminoacidsFromLabelInfo(labelDescriptor)
 
     sequence = maspy.peptidemethods.removeModifications(peptide)
-    modPositions = maspy.peptidemethods.returnModPositions(peptide, indexStart=0, removeModString=False)
+    modPositions = maspy.peptidemethods.returnModPositions(peptide,
+                                                           indexStart=0,
+                                                           removeModString=False)
 
     labelState = None
-
-    # No amino acids in sequence which can bear a label modification (ignores presence of excluding modifications)
-    if all([(True if sequence.find(labelAminoacid) == -1 else False) for labelAminoacid in labelAminoacids]):
-        # No terminal label modifications specified by labelDescriptor
+    #No amino acids in sequence which can bear a label modification
+    #Note: at the moment presence of excluding modifications are ignored
+    _validator = lambda seq, aa: (True if seq.find(aa) == -1 else False)
+    if all([_validator(sequence, aa) for aa in labelAminoacids]):
+        #No terminal label modifications specified by labelDescriptor
         if 'nTerm' not in labelAminoacids and 'cTerm' not in labelAminoacids:
             labelState = -1
 
@@ -137,14 +175,18 @@ def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacid
                     peptideLabelPositions.setdefault(sequencePosition, list())
                     peptideLabelPositions[sequencePosition].append(labelSymbol)
         for sequencePosition in list(viewkeys(peptideLabelPositions)):
-            peptideLabelPositions[sequencePosition] = sorted(peptideLabelPositions[sequencePosition])
+            peptideLabelPositions[sequencePosition] = \
+                sorted(peptideLabelPositions[sequencePosition])
 
         predictedLabelStates = dict()
         for predictedLabelState, labelStateInfo in viewitems(labelDescriptor.labels):
-            expectedLabelMods = expectedLabelPosition(peptide, labelStateInfo, sequence=sequence, modPositions=modPositions)
+            expectedLabelMods = expectedLabelPosition(peptide, labelStateInfo,
+                                                      sequence=sequence,
+                                                      modPositions=modPositions)
             predictedLabelStates[predictedLabelState] = expectedLabelMods
             if peptideLabelPositions == expectedLabelMods:
-                # If another expectedLabel state has already been matched, there is an ambiguity between label states...
+                #If another expectedLabel state has already been matched, then
+                #there is an ambiguity between label states ...
                 labelState = predictedLabelState
 
     if labelState is None:
@@ -152,8 +194,9 @@ def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacid
         labelState = -2
     elif labelState != -1:
         # Check if all predicted label states are distinguishable
-        for labelState1, labelState2 in set(itertools.combinations(range(len(predictedLabelStates)), 2)):
-            if predictedLabelStates[labelState1] == predictedLabelStates[labelState2]:
+        _comb = set(itertools.combinations(range(len(predictedLabelStates)), 2))
+        for state1, state2 in _comb:
+            if predictedLabelStates[state1] == predictedLabelStates[state2]:
                 labelState = -3
                 break
 
@@ -161,9 +204,13 @@ def returnLabelState(peptide, labelDescriptor, labelSymbols=None, labelAminoacid
 
 
 def modSymbolsFromLabelInfo(labelDescriptor):
-    """Returns a set of all modiciation symbols which were used in the labelDescriptor
+    """Returns a set of all modiciation symbols which were used in the
+    labelDescriptor
 
-    :ivar labelDescriptor: :class:`LabelDescriptor` describes the label setup of an experiment
+    :param labelDescriptor: :class:`LabelDescriptor` describes the label setup
+        of an experiment
+
+    :returns: #TODO: docstring
     """
     modSymbols = set()
     for labelStateEntry in viewvalues(labelDescriptor.labels):
@@ -175,9 +222,13 @@ def modSymbolsFromLabelInfo(labelDescriptor):
 
 
 def modAminoacidsFromLabelInfo(labelDescriptor):
-    """Returns a set of all amino acids and termini which can bear a label, as described in labelDescriptor
+    """Returns a set of all amino acids and termini which can bear a label, as
+    described in "labelDescriptor".
 
-    :ivar labelDescriptor: :class:`LabelDescriptor` describes the label setup of an experiment
+    :param labelDescriptor: :class:`LabelDescriptor` describes the label setup
+        of an experiment
+
+    :returns: #TODO: docstring
     """
     modAminoacids = set()
     for labelStateEntry in viewvalues(labelDescriptor.labels):
@@ -188,19 +239,30 @@ def modAminoacidsFromLabelInfo(labelDescriptor):
     return modAminoacids
 
 
-def expectedLabelPosition(peptide, labelStateInfo, sequence=None, modPositions=None):
+def expectedLabelPosition(peptide, labelStateInfo, sequence=None,
+                          modPositions=None):
     """Returns a modification description of a certain label state of a peptide.
 
-    :ivar peptide: Peptide sequence used to calculat the expected label state modifications
-    :ivar labelStateInfo: An entry of :attr:`LabelDescriptor.labels` that describes a label state
-    :ivar sequence: unmodified amino acid sequence of :var:`peptide`, if None it is calculated with :func:`removeModifications`
-    :ivar modPositions: dictionary describing the modification state of :var:`peptide`,
-    if None it is calculated with :func:`returnModPositions`
+    :param peptide: Peptide sequence used to calculat the expected label state
+        modifications
+    :param labelStateInfo: An entry of :attr:`LabelDescriptor.labels` that
+        describes a label state
+    :param sequence: unmodified amino acid sequence of :var:`peptide`, if None
+        it is generated by :func:`maspy.peptidemethods.removeModifications()`
+    :param modPositions: dictionary describing the modification state of
+        "peptide", if None it is generated by
+        :func:`maspy.peptidemethods.returnModPositions()`
 
-    :return: {sequence position: sorted list of expected label modifications on that position, ...}
+    :returns: {sequence position: sorted list of expected label modifications
+                  on that position, ...
+               }
     """
-    modPositions = maspy.peptidemethods.returnModPositions(peptide, indexStart=0) if modPositions is None else modPositions
-    sequence = maspy.peptidemethods.removeModifications(peptide) if sequence is None else sequence
+    if modPositions is None:
+        modPositions = maspy.peptidemethods.returnModPositions(peptide,
+                                                               indexStart=0
+                                                               )
+    if sequence is None:
+        sequence = maspy.peptidemethods.removeModifications(peptide)
 
     currLabelMods = dict()
     for labelPosition, labelSymbols in viewitems(labelStateInfo['aminoAcidLabels']):
@@ -211,21 +273,25 @@ def expectedLabelPosition(peptide, labelStateInfo, sequence=None, modPositions=N
             currLabelMods.setdefault(0, list())
             currLabelMods[0].extend(labelSymbols)
         else:
-            for sequencePosition in aux.findAllSubstrings(sequence, labelPosition):
+            for sequencePosition in aux.findAllSubstrings(sequence,
+                                                          labelPosition):
                 currLabelMods.setdefault(sequencePosition, list())
                 currLabelMods[sequencePosition].extend(labelSymbols)
 
     if labelStateInfo['excludingModifications'] is not None:
-        for excludingModification, excludedLabelSymbol in viewitems(labelStateInfo['excludingModifications']):
-            if excludingModification in modPositions:
-                for excludingModPosition in modPositions[excludingModification]:
-                    if excludingModPosition in currLabelMods:
-                        if excludedLabelSymbol in currLabelMods[excludingModPosition]:
-                            if len(currLabelMods[excludingModPosition]) == 1:
-                                del(currLabelMods[excludingModPosition])
-                            else:
-                                excludedModIndex = currLabelMods[excludingModPosition].index(excludedLabelSymbol)
-                                currLabelMods[excludingModPosition].pop(excludedModIndex)
+        for excludingMod, excludedLabelSymbol in viewitems(labelStateInfo['excludingModifications']):
+            if excludingMod not in modPositions:
+                continue
+            for excludingModPos in modPositions[excludingMod]:
+                if excludingModPos not in currLabelMods:
+                    continue
+                if excludedLabelSymbol not in currLabelMods[excludingModPos]:
+                    continue
+                if len(currLabelMods[excludingModPos]) == 1:
+                    del(currLabelMods[excludingModPos])
+                else:
+                    excludedModIndex = currLabelMods[excludingModPos].index(excludedLabelSymbol)
+                    currLabelMods[excludingModPos].pop(excludedModIndex)
 
     for sequencePosition in list(viewkeys(currLabelMods)):
         currLabelMods[sequencePosition] = sorted(currLabelMods[sequencePosition])

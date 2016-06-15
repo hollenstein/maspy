@@ -5,7 +5,7 @@ try: # python 2.7
     from itertools import izip as zip
 except ImportError: # python 3.x series
     pass
-###############################################################################
+################################################################################
 import io
 import itertools
 import numpy
@@ -198,7 +198,7 @@ class ProteinDatabase(object):
         **minLength**: minimal peptide length
         **maxLength**: maximal peptide length
         **ignoreIsoleucine**: if True Isoleucine and Leucinge in peptide
-            sequences are treated as indistinguishable
+            sequences are treated as indistinguishable.
         **removeNtermM**: if True also peptides with the N-terminal Methionine
             of the protein removed are considered.
     """

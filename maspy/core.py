@@ -102,7 +102,7 @@ def _getItems(container, containerKeys=None, sort=False, reverse=False,
 
 
 def _getListItems(container, containerKeys=None, sort=False, reverse=False,
-                  selector=lambda item: True):
+                  selector=None):
     """Generator that yields filtered and/or sorted items from the specified
     container.
 
@@ -128,6 +128,7 @@ def _getListItems(container, containerKeys=None, sort=False, reverse=False,
 
     :returns: items from container that passed the selector function
     """
+    selector = (lambda item: True) if selector is None else selector
     if containerKeys is None:
         containerKeys = [_ for _ in viewkeys(container)]
     else:
@@ -260,7 +261,7 @@ class MsrunContainer(object):
                    ...
                    }
         """
-        selector = lambda si: True if selector is None else selector
+        selector = (lambda si: True) if selector is None else selector
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
         items = self.getItems(specfiles, sort, reverse, selector)
@@ -284,7 +285,7 @@ class MsrunContainer(object):
 
         :returns: items from container that passed the selector function
         """
-        selector = lambda si: True if selector is None else selector
+        selector = (lambda si: True) if selector is None else selector
         if specfiles is None:
             specfiles = [_ for _ in viewkeys(self.info)]
         else:
@@ -1349,7 +1350,7 @@ class SiiContainer(object):
                    ...
                    }
         """
-        selector = lambda sii: sii.isValid if selector is None else selector
+        selector = (lambda sii: sii.isValid) if selector is None else selector
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
         items = self.getItems(specfiles, sort, reverse, selector)
@@ -1373,7 +1374,7 @@ class SiiContainer(object):
 
         :returns: items from container that passed the selector function
         """
-        selector = lambda sii: sii.isValid if selector is None else selector
+        selector = (lambda sii: sii.isValid) if selector is None else selector
         if specfiles is None:
             specfiles = [_ for _ in viewkeys(self.info)]
         else:
@@ -1780,7 +1781,7 @@ class FiContainer(object):
                    ...
                    }
         """
-        selector = lambda fi: fi.isValid if selector is None else selector
+        selector = (lambda fi: fi.isValid) if selector is None else selector
         attr = attr if attr is not None else []
         attr = set(['id', 'specfile'] + aux.toList(attr))
         items = self.getItems(specfiles, sort, reverse, selector)
@@ -1804,7 +1805,7 @@ class FiContainer(object):
 
         :returns: items from container that passed the selector function
         """
-        selector = lambda fi: fi.isValid if selector is None else selector
+        selector = (lambda fi: fi.isValid) if selector is None else selector
         if specfiles is None:
             specfiles = [_ for _ in viewkeys(self.info)]
         else:

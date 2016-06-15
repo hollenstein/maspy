@@ -23,21 +23,29 @@ import maspy.ontology
 ##############################################################
 ### maspy unrelated xml (mzml) content #######################
 ##############################################################
-""" A dictionary with the psi-ms.obo ids of various binary data array types (derived from id: MS:1000513)
-    used to describe a data array of either a mzml spectrum or mzml chromatogram.
+""" A dictionary with the psi-ms.obo ids of various binary data array types
+(derived from id: MS:1000513) used to describe a data array of either a mzML
+spectrum element or mzML chromatogram element.
 """
 #TODO: check exact term of spectrum or chromatogram in mzml context
-binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i', 'MS:1000516': 'z', 'MS:1000517': 'sn',
-                        'MS:1000595': 'rt', 'MS:1000617': 'lambda', 'MS:1000786': 'non-standard',
-                        'MS:1000820': 'flow', 'MS:1000821': 'pressure', 'MS:1000822': 'temperature'
+binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i',
+                        'MS:1000516': 'z', 'MS:1000517': 'sn',
+                        'MS:1000595': 'rt', 'MS:1000617': 'lambda',
+                        'MS:1000786': 'non-standard', 'MS:1000820': 'flow',
+                        'MS:1000821': 'pressure', 'MS:1000822': 'temperature'
                         }
 
 
-#TODO: docstring
-#Note: duplicate values have to be removed from the ".obo" files, to prevent errors in maspy.ontology.OBOOntology()
-msOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'psi-ms.obo')
-unitOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies', 'unit.obo')
+"""#TODO: docstring """
 oboTranslator = maspy.ontology.OBOOntology()
+#Note: duplicate values have to be removed from the ".obo" files, to prevent
+#errors in maspy.ontology.OBOOntology()
+msOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies',
+                              'psi-ms.obo'
+                              )
+unitOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies',
+                                'unit.obo'
+                                )
 with io.open(msOntologyPath, 'r', encoding='utf-8') as openfile:
     oboTranslator.load(openfile)
 with io.open(unitOntologyPath, 'r', encoding='utf-8') as openfile:
@@ -52,6 +60,8 @@ def clearParsedElements(element):
 
     This function is used to save memory while iteratively parsing
     an xml file by removing already processed elements.
+
+    :param element: #TODO docstring
     """
     element.clear()
     while element.getprevious() is not None:
@@ -59,14 +69,18 @@ def clearParsedElements(element):
 
 
 def clearTag(tag):
-    #eg "{http://psi.hupo.org/ms/mzml}mzML" returns "mzML"
-    #TODO: docstring
+    """ #TODO: docstring
+    eg "{http://psi.hupo.org/ms/mzml}mzML" returns "mzML"
+
+    :param tag: #TODO docstring
+    :returns:
+    """
     return tag.split('}')[-1]
 
 
 def recClearTag(element):
-    """Applies maspy.xml.clearTag() to the tag attribute of the "element"
-    and recursively to all child elements.
+    """Applies maspy.xml.clearTag() to the tag attribute of the "element" and
+    recursively to all child elements.
 
     :param element: an :instance:`xml.etree.Element`
     """
@@ -78,8 +92,8 @@ def recClearTag(element):
 
 
 def recRemoveTreeFormating(element):
-    """Removes whitespace characters, which are leftovers from previous
-    xml formatting.
+    """Removes whitespace characters, which are leftovers from previous xml
+    formatting.
 
     :param element: an instance of lxml.etree._Element
 
@@ -107,9 +121,11 @@ def recCopyElement(oldelement):
     child elements.
 
     :param oldelement: an instance of lxml.etree._Element
-    :return newelement: a copy of the "oldelement"
 
-    #Note: doesn't copy "text" or "tail" of xml elements
+    :returns: a copy of the "oldelement"
+
+    .. warning::
+        doesn't copy ``.text`` or ``.tail`` of xml elements
     """
     newelement = ETREE.Element(oldelement.tag, oldelement.attrib)
     if len(oldelement.getchildren()) > 0:
@@ -122,27 +138,53 @@ def recCopyElement(oldelement):
 # --- working with param tuple --- #
 ####################################
 def cvParamFromDict(attributes):
-    """ Python representation of a mzML cvParam = tuple(accession, value, unitAccession) """
+    """Python representation of a mzML cvParam = tuple(accession, value,
+    unitAccession).
+
+    :param attributes: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     keys = ['accession', 'value', 'unitAccession']
     return tuple(attributes[key] if key in attributes else None for key in keys)
 
 
 def userParamFromDict(attributes):
-    """ Python representation of a mzML userParam = tuple(name, value, unitAccession, type) """
+    """Python representation of a mzML userParam = tuple(name, value,
+    unitAccession, type)
+
+    :param attributes: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     keys = ['name', 'value', 'unitAccession', 'type']
     return tuple(attributes[key] if key in attributes else None for key in keys)
 
 
 def refParamGroupFromDict(attributes):
-    """ Python representation of a mzML  referencableParamGroup = ('ref', ref)
-    NOTE: the utilization of referencableParamGroups is currently not implemented in maspy. """
+    """Python representation of a mzML  referencableParamGroup = ('ref', ref)
+
+    :param attributes: #TODO: docstring
+
+    :returns: #TODO: docstring
+
+    .. note::
+        altough the mzML element referencableParamGroups is imported, its
+        utilization is currently not implemented in MasPy.
+    """
     return ('ref', attributes['ref'])
 
 
 def findParam(params, targetValue):
-    """ Returns a param entry (cvParam or userParam) in a list of params if its
+    """Returns a param entry (cvParam or userParam) in a list of params if its
     'accession' (cvParam) or 'name' (userParam) matches the targetValue.
-    return: cvParam, userParam or None if no matching param was found """
+    return: cvParam, userParam or None if no matching param was found
+
+    :param params: #TODO: docstring
+    :param targetValue: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     for param in params:
         if param[0] == targetValue:
             return param
@@ -150,9 +192,12 @@ def findParam(params, targetValue):
 
 
 def getParam(xmlelement):
-    """ Extract parameters from an xmlelement
-    param: tuple, either a 'userParam', 'cvParam' or 'referenceableParamGroupRef'
-    return: param or False if xmlelement is not a parameter
+    """Converts an mzML xml element to a param tuple.
+
+    :param xmlelement: #TODO docstring
+
+    :returns: a param tuple or False if the xmlelement is not a parameter
+        ('userParam', 'cvParam' or 'referenceableParamGroupRef')
     """
     elementTag = clearTag(xmlelement.tag)
     if elementTag in ['userParam', 'cvParam', 'referenceableParamGroupRef']:
@@ -168,7 +213,12 @@ def getParam(xmlelement):
 
 
 def extractParams(xmlelement):
-    #TODO: docstring
+    """ #TODO docstring
+
+    :param xmlelement: #TODO docstring
+
+    :returns: #TODO docstring
+    """
     params = list()
     children = list()
     for child in xmlelement.getchildren():
@@ -181,24 +231,29 @@ def extractParams(xmlelement):
 
 
 def xmlAddParams(parentelement, params):
-    """Generates new mzML parameter xml elements and adds them to the 'parentelement'
-    as xml children elements.
+    """Generates new mzML parameter xml elements and adds them to the
+    'parentelement' as xml children elements.
 
-    :param parentelement: an :instance:`xml.etree.Element`
-    :param params: a list of mzML parameter tuples
-        can be a mzML 'cvParam', 'userParam' or 'referencableParamGroup'
+    :param parentelement: :class:`xml.etree.Element`, an mzML element
+    :param params: a list of mzML parameter tuples ('cvParam', 'userParam' or
+        'referencableParamGroup')
     """
     if not params:
         return None
     for param in params:
         if len(param) == 3:
-            cvAttrib = {'cvRef': param[0].split(':')[0], 'accession': param[0], 'name':oboTranslator[param[0]].name}
+            cvAttrib = {'cvRef': param[0].split(':')[0], 'accession': param[0],
+                        'name':oboTranslator[param[0]].name
+                        }
             if param[1]:
                 cvAttrib.update({'value': param[1]})
             else:
                 cvAttrib.update({'value': ''})
             if param[2]:
-                cvAttrib.update({'unitAccession': param[2], 'unitCvRef': param[2].split(':')[0], 'unitName': oboTranslator[param[2]].name})
+                cvAttrib.update({'unitAccession': param[2],
+                                 'unitCvRef': param[2].split(':')[0],
+                                 'unitName': oboTranslator[param[2]].name
+                                 })
             paramElement = ETREE.Element('cvParam', **cvAttrib)
         elif len(param) == 4:
             userAttrib = {'name': param[0]}
@@ -207,13 +262,17 @@ def xmlAddParams(parentelement, params):
             else:
                 userAttrib.update({'value': ''})
             if param[2]:
-                userAttrib.update({'unitAccession': param[2], 'unitCvRef': param[2].split(':')[0]})
+                userAttrib.update({'unitAccession': param[2],
+                                   'unitCvRef': param[2].split(':')[0]
+                                   })
             if param[3]:
                 userAttrib.update({'type': param[3]})
             paramElement = ETREE.Element('userParam', **userAttrib)
         elif param[0] == 'ref':
             refAttrib = {'ref': param[1]}
-            paramElement = ETREE.Element('referenceableParamGroupRef', **refAttrib)
+            paramElement = ETREE.Element('referenceableParamGroupRef',
+                                         **refAttrib
+                                         )
         parentelement.append(paramElement)
 
 
@@ -221,17 +280,19 @@ def xmlAddParams(parentelement, params):
 # --- decode and encode function for binary data of mzml files --- #
 ####################################################################
 def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
-    """Function to decode a mzML byte array into a numpy array.
+    """Function to decode a mzML byte array into a numpy array. This is the
+    inverse function of :func:`encodeBinaryData`. Concept inherited from
+    :func:`pymzml.spec.Spectrum._decode` of the python library `pymzML
+    <https://pymzml.github.io/>`_.
 
-    :param binaryData:
-    :param arrayLength:
-    :param binEncoding:
-    :param compression:
+    :param binaryData: #TODO: docstring
+    :param arrayLength: #TODO: docstring
+    :param binEncoding: #TODO: docstring
+    :param compression: #TODO: docstring
 
-    concept from the python module pymzml (pymzml.spec.Spectrum._decode)
+    :returns: #TODO: docstring
     """
-    #TODO: docstring
-    #Note: should raise an error if a wrong compression is specified
+    #TODO: should raise an error if a wrong compression is specified
     bitEncodedData = binaryData.encode("utf-8")
     bitDecodedData = B64DEC(bitEncodedData)
 
@@ -247,26 +308,34 @@ def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
     else:
         decompressedData = bitDecodedData
 
-    fmt = '{endian}{arraylength}{floattype}'.format(endian='<', arraylength=arrayLength, floattype=floattype)
+    fmt = '{endian}{arraylength}{floattype}'.format(endian='<',
+                                                    arraylength=arrayLength,
+                                                    floattype=floattype
+                                                    )
     dataArray = numpy.array(UNPACK(fmt, decompressedData), dtype=numpyType)
     return dataArray
 
 
 def encodeBinaryData(dataArray, bitEncoding, compression):
-    """Function to encode a numpy array into a mzML byte array.
+    """Function to encode a ``numpy.array`` into a mzML byte array. This is the
+    inverse function of :func:`decodeBinaryData`.
 
-    :param dataArray:
-    :param bitEncoding:
-    :param compression:
+    :param dataArray: #TODO: docstring
+    :param bitEncoding: #TODO: docstring
+    :param compression: #TODO: docstring
+
+    :returns: #TODO: docstring
     """
-    #TODO: docstring
-    #Note: should raise an error if a wrong compression is specified
+    #TODO: should raise an error if a wrong compression is specified
     arrayLength = len(dataArray)
     if bitEncoding == '64':
         floattype = 'd' # 64-bit
     else:
         floattype = 'f' # 32-bit
-    fmt = '{endian}{arraylength}{floattype}'.format(endian='<', arraylength=arrayLength, floattype=floattype)
+    fmt = '{endian}{arraylength}{floattype}'.format(endian='<',
+                                                    arraylength=arrayLength,
+                                                    floattype=floattype
+                                                    )
     packedData = PACK(fmt, *dataArray)
 
     if compression == 'zlib':
@@ -279,9 +348,14 @@ def encodeBinaryData(dataArray, bitEncoding, compression):
 
 
 def findBinaryDataType(params):
-    """
+    """ #TODO: docstring
     from: http://www.peptideatlas.org/tmp/mzML1.1.0.html#binaryDataArray
-    a binaryDataArray "MUST supply a *child* term of MS:1000518 (binary data type) only once"
+    a binaryDataArray "MUST supply a *child* term of MS:1000518
+    (binary data type) only once"
+
+    :param params: #TODO: docstring
+
+    :returns: #TODO: docstring
     """
     binaryDataType = None
     cvParam = None
@@ -294,19 +368,38 @@ def findBinaryDataType(params):
 
 
 def extractBinaries(binaryDataArrayList, arrayLength):
-    #TODO: docstring
+    """ #TODO: docstring
+
+    :param binaryDataArrayList: #TODO: docstring
+    :param arrayLength: #TODO: docstring
+
+    :returns: #TODO: docstring
+    """
     extractedArrays = dict()
     arrayInfo = dict()
     for binaryData in binaryDataArrayList:
         if binaryData['binary']:
-            bitEncoding = '64' if findParam(binaryData['params'], 'MS:1000523') is not None else '32'
-            compression = 'zlib' if findParam(binaryData['params'], 'MS:1000574') is not None else None
+            if findParam(binaryData['params'], 'MS:1000523') is not None:
+                bitEncoding = '64'
+            else:
+                bitEncoding = '32'
+            if findParam(binaryData['params'], 'MS:1000574') is not None:
+                compression = 'zlib'
+            else:
+                compression = None
             dataType, dataTypeParam = findBinaryDataType(binaryData['params'])
-            extractedArrays[dataType] = decodeBinaryData(binaryData['binary'], arrayLength, bitEncoding, compression)
+            extractedArrays[dataType] = decodeBinaryData(binaryData['binary'],
+                                                         arrayLength,
+                                                         bitEncoding,
+                                                         compression
+                                                         )
             binaryData['binary'] = None
-            arrayInfo[dataType] = {'dataProcessingRef': None, 'params': binaryData['params']}
+            arrayInfo[dataType] = {'dataProcessingRef': None,
+                                   'params': binaryData['params']
+                                   }
             if 'dataProcessingRef' in binaryData:
-                arrayInfo[dataType]['dataProcessingRef'] = binaryData['dataProcessingRef']
+                arrayInfo[dataType]['dataProcessingRef'] = \
+                    binaryData['dataProcessingRef']
     return extractedArrays, arrayInfo
 
 
@@ -314,7 +407,13 @@ def extractBinaries(binaryDataArrayList, arrayLength):
 # --- Parse a mzml file --- #
 #############################
 class MzmlReader(object):
-    #TODO: docstring
+    """ #TODO: docstring
+
+    :ívar mzmlPath: #TODO: docstring
+    :ívar metadataNode: #TODO: docstring
+    :ívar chromatogramList: #TODO: docstring
+
+    """
     #TODO: change to work as a with method
     def __init__(self, mzmlPath):
         self.mzmlPath = mzmlPath
@@ -341,7 +440,10 @@ class MzmlReader(object):
         return self.next()
 
     def next(self):
-        #TODO: docstring
+        """ #TODO: docstring
+
+        :returns: #TODO: docstring
+        """
         try:
             self.event, self.element = next(self.iterator)
             self.elementTag = clearTag(self.element.tag)
@@ -351,26 +453,35 @@ class MzmlReader(object):
         return self.event, self.element, self.elementTag
 
     def loadMetadata(self):
-        #TODO: docstring
-        #TODO: change that spectra dont have to be iterated to extract metadata node
+        """ #TODO: docstring """
+        #TODO: change that spectra dont have to be iterated to extract metadata
+        #node
         if self._parsed:
             raise TypeError('Mzml file already parsed.')
         [None for _ in self._parseMzml()]
         self._parsed = True
 
     def parseSpectra(self):
-        #TODO: docstring
-        #Note: the spectra need to be iterated completely to save the metadataNode
+        """ #TODO: docstring
+
+        :returns: #TODO: docstring
+        """
+        #Note: the spectra need to be iterated completely to save the
+        #metadataNode
         if self._parsed:
             raise TypeError('Mzml file already parsed.')
         self._parsed = True
         return self._parseMzml()
 
     def _parseMzml(self):
-        #TODO: docstring
+        """ #TODO: docstring """
+        #TODO: this is already pretty nested, reduce that eg by using a function
+        #   processRunNode
         for event, element, elementTag in self:
             if elementTag == 'mzML':
-                metadataNode = ETREE.Element(self.elementTag, self.element.attrib)
+                metadataNode = ETREE.Element(self.elementTag,
+                                             self.element.attrib
+                                             )
                 _, _, targetTag = self.next()
                 break
 
@@ -381,7 +492,9 @@ class MzmlReader(object):
                 while self.event != 'end' or self.elementTag != 'run':
                     if self.elementTag == 'spectrumList':
                         #Add spectrumListNode
-                        specListAttrib = {'defaultDataProcessingRef': self.element.attrib['defaultDataProcessingRef']}
+                        specListAttrib = {'defaultDataProcessingRef':
+                                          self.element.attrib['defaultDataProcessingRef']
+                                          }
                         specListNode = ETREE.Element('spectrumList', specListAttrib)
                         runNode.append(specListNode)
                         #Parse and yield spectrum xml elements
@@ -392,16 +505,21 @@ class MzmlReader(object):
                             next(self)
                     elif self.elementTag == 'chromatogramList':
                         #Add chromatogramListNode
-                        chromListAttrib = {'defaultDataProcessingRef': self.element.attrib['defaultDataProcessingRef']}
-                        chromListNode = ETREE.Element('chromatogramList', chromListAttrib)
+                        chromListAttrib = {'defaultDataProcessingRef':
+                                           self.element.attrib['defaultDataProcessingRef']
+                                           }
+                        chromListNode = ETREE.Element('chromatogramList',
+                                                      chromListAttrib
+                                                      )
                         runNode.append(chromListNode)
                         #Parse and store chromatogram xml elements
                         while self.event != 'end' or self.elementTag != 'chromatogramList':
                             if self.event == 'end' and self.elementTag == 'chromatogram':
                                 self.chromatogramList.append(self.element)
-                                #Alternatively also the chromatogram xml elements could be yielded:
-                                #yield self.element
-                                #clearParsedElements(self.element)
+                                #Alternatively also the chromatogram xml
+                                #elements could be yielded:
+                                #   yield self.element
+                                #   clearParsedElements(self.element)
                             next(self)
                     else:
                         runNode.append(self.element)
@@ -420,7 +538,7 @@ class MzmlReader(object):
 
 
 def sublistReader(xmlelement):
-    #TODO: docstring
+    """ #TODO: docstring """
     #Note: actually I'm not 100% sure how this function behaves
     elements = list()
     params, children = extractParams(xmlelement)
