@@ -409,9 +409,9 @@ def extractBinaries(binaryDataArrayList, arrayLength):
 class MzmlReader(object):
     """ #TODO: docstring
 
-    :ívar mzmlPath: #TODO: docstring
-    :ívar metadataNode: #TODO: docstring
-    :ívar chromatogramList: #TODO: docstring
+    :ivar mzmlPath: #TODO: docstring
+    :ivar metadataNode: #TODO: docstring
+    :ivar chromatogramList: #TODO: docstring
 
     """
     #TODO: change to work as a with method

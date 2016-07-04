@@ -467,7 +467,7 @@ class MsrunContainer(object):
                     filepath = aux.joinpath(specfilePath, filename)
                     with msr.open(filepath, 'w+b') as openfile:
                         if datatype == 'rm':
-                           self._writeRmc(openfile, specfile, compress)
+                           self._writeRmc(openfile, specfile)
                         elif datatype == 'ci':
                            self._writeCic(openfile, specfile, compress)
                         elif datatype == 'si':
@@ -557,13 +557,13 @@ class MsrunContainer(object):
                            'not present in MsrunContainer.info' % specfile
                 warnings.warn(warntext)
             else:
-                selectedSpecfiles.append()
+                selectedSpecfiles.append(specfile)
 
         datatypes = self._processDatatypes(rm, ci, smi, sai, si)
         if len(datatypes) == 0:
             datatypes = ['rm', 'ci', 'smi', 'sai', 'si']
 
-        for specfile in specfiles:
+        for specfile in selectedSpecfiles:
             msrunInfo = self.info[specfile]
             specfilePath = msrunInfo['path']
 
@@ -1024,8 +1024,11 @@ class MzmlScan(object):
     #kwargs are used to only take the arguments needed and ignore additionally
     #specified ones like 'arrayLength' of binaryDataArray
     __slots__ = ['scanWindowList', 'params']
-    def __init__(self, scanWindowList=(), params=None, **kwargs):
-        self.scanWindowList = tuple(tuple(_) for _ in scanWindowList)
+    def __init__(self, scanWindowList=None, params=None, **kwargs):
+        if scanWindowList is not None:
+            self.scanWindowList = tuple(tuple(_) for _ in scanWindowList)
+        else:
+            self.scanWindowList = None
         self.params = params
 
     def __getitem__(self, key):
@@ -1070,7 +1073,10 @@ class MzmlProduct(object):
     """
     __slots__ = ['isolationWindow']
     def __init__(self, isolationWindow=None, **kwargs):
-        self.isolationWindow = tuple(isolationWindow)
+        if isolationWindow is not None:
+            self.isolationWindow = tuple(isolationWindow)
+        else:
+            self.isolationWindow = None
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -1124,11 +1130,23 @@ class MzmlPrecursor(object):
                  'selectedIonList'
                  ]
     def __init__(self, spectrumRef=None, activation=None, isolationWindow=None,
-                 selectedIonList=[], **kwargs):
+                 selectedIonList=None, **kwargs):
         self.spectrumRef = spectrumRef
-        self.isolationWindow = tuple(isolationWindow)
-        self.selectedIonList = [tuple(_) for _ in selectedIonList]
-        self.activation = tuple(activation)
+
+        if activation is not None:
+            self.activation = tuple(activation)
+        else:
+            self.activation = None
+
+        if isolationWindow is not None:
+            self.isolationWindow = tuple(isolationWindow)
+        else:
+            self.isolationWindow = None
+
+        if selectedIonList is not None:
+            self.selectedIonList = [tuple(_) for _ in selectedIonList]
+        else:
+            self.selectedIonList = None
 
     def __getitem__(self, key):
         return getattr(self, key)
@@ -1754,6 +1772,16 @@ class FiContainer(object):
         self.container = dict()
         self.info = dict()
 
+    def getItem(self, specfile, identifier):
+        """Returns a :class:`Fi` instance from ``self.container``.
+
+        :param specfile: a ms-run file name
+        :param identifier: item identifier ``Fi.id``
+
+        :returns: ``self.container[specfile][identifier]``
+        """
+        return self.container[specfile][identifier]
+
     def getArrays(self, attr=None, specfiles=None, sort=False, reverse=False,
                   selector=None, defaultValue=None):
         """Return a condensed array of data selected from :class:`Fi` instances
@@ -1838,6 +1866,7 @@ class FiContainer(object):
         :param path: filedirectory used for loading and saving ``fic`` files
         """
         self.info[specfile] = {'path': path}
+        self.container[specfile] = dict()
 
     def setPath(self, folderpath, specfiles=None):
         """Changes the folderpath of the specified specfiles. The folderpath is

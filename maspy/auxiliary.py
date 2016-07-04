@@ -13,6 +13,7 @@ except NameError:
     #necessary for type comparison
     basestring=str
 
+import bisect
 from collections import defaultdict as ddict
 import contextlib
 import functools
@@ -540,7 +541,7 @@ def calcDeviationLimits(value, tolerance, mode):
     :param mode: either ``absolute`` or ``relative``, specifies how the
         ``tolerance`` should be applied to the ``value``.
     """
-    values = aux.toList(value)
+    values = toList(value)
     if mode == 'relative':
         lowerLimit = min(values) * (1 - tolerance)
         upperLimit = max(values) * (1 + tolerance)

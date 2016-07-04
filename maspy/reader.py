@@ -119,7 +119,7 @@ def ciFromXml(xmlelement, specfile):
         childElements, childParams = maspy.xml.sublistReader(child)
         childTag = maspy.xml.clearTag(child.tag)
         if childTag == 'precursor':
-            #TODO: THIS HAS TO BE ADAPTED
+            #TODO: THIS HAS TO BE ADAPTED, REPLACE "**element", ADD A LOOP
             newElement = MzmlPrecursor(**element)
         elif childTag == 'product':
             #TODO: THIS HAS TO BE ADAPTED
@@ -600,8 +600,9 @@ def importPeptideFeatures(fiContainer, filelocation, specfile):
     :param fiContainer: imported features are added to this instance of
         :class:`FeatureContainer <maspy.core.FeatureContainer>`.
     :param filelocation: Actual file path
-    :param specfile: Keyword (filename) to represent file in the :class:`FeatureContainer`. Each filename
-    can only occure once, therefore importing the same filename again is prevented.
+    :param specfile: Keyword (filename) to represent file in the
+        :class:`FeatureContainer`. Each filename can only occure once, therefore
+        importing the same filename again is prevented.
     """
     if not os.path.isfile(filelocation):
         warnings.warn('The specified file does not exist %s' %(filelocation, ))

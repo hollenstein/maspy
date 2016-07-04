@@ -9,3 +9,4 @@ Contents:
    mzml
    psms
    feature
+   fasta

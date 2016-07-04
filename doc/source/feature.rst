@@ -1,13 +1,173 @@
-Peptide features in MasPy - basics
-----------------------------------
+Peptide LC-MS features in MasPy
+-------------------------------
 
-**Introduction**
-    - what are peptide featuers and what is their purpose
-        - MS1 mass trace over time as a molecule is eluting from the HPLC
-        - very often the isotopes are incorportaed to get a more reliable feature and used to calculate the charge state
-        - minimal information: rt boundaries, rt center, m/z monoisotopic peak, charge state, intensity area
-    - FeatureItem and FeatureItemContainer
-    - Two algorithms used for MasPy: openMS feature finder centroided, Dinosaur (recently published)
-      both output formats are supported by MasPy
-    - Import of featureXML and dinosaur tsv
-    - matching Sii or Si to features
+Chromatographic separation coupled directly to the mass spectrometer results in
+analytes to appear over time as they emerge from the chromatography column in a
+more or less Gaussian peak shape. The elution profile of an analyte can be
+recapitulated by using the spectral information present in the MS1 scans. The
+simplest way to do this is by extracting the intensities of an ion species with
+a given m/z value in consecutive MS1 scans as long as the ion is detectable.
+Combining the extracted intensities with the respective MS1 retention times
+results in a so called extracted ion chromatogram (EIC or XIC). The intensity
+area obtained by integrating the XIC is frequently used as a measure of
+abundance in label free quantification (LFQ) and stable isotope labeling (SIL)
+workflows.
+
+In MS spectra each peptide consists of an isotope envelope of multiple ion
+species with different m/z values. Combining the XICs of the different isotope
+states of the same analyte allows the inference of its charge state and
+therefore its mass. In addition the availability of more information results in
+more accurate intensity area estimates and thus increased accuracy for
+quantification. The combined information of XICs and isotope clusters can be
+referred to as a peptide LC-MS feature or more commonly simply as a feature.
+
+
+Representation of LC-MS features in MasPy
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Peptide LC-MS features, but also XICs, are represented in MasPy with the feature
+item class (:class:`maspy.core.Fi`). Its structure is kept very simple, similar
+to :class:`Si <maspy.core.Si>` and :class:`Sii <maspy.core.Sii>`, with only a
+few mandatory attributes. Each instance is uniquely identified by the
+combination of the ``Fi.id`` and ``Fi.specfile`` attributes. However, the ``id``
+attribute is not associated with any particular MS scan, which was the case for
+``Si`` and ``Sii``. Further attributes that should always be supplied when
+importing features into MasPy are ``mz``, ``rt``, ``rtLow``, ``rtHigh`` and
+``intensity``. Altough not absolutely mandatory the ``charge`` attribute
+should also be supplied whenever possible, since the charge information is used
+in some algorithms.
+
+Attribute naming conventions in MasPy and additional attributes that might
+be necessary for working with feature items:
+
+    - ``mz`` the experimentally observed mass to charge ratio (Dalton /
+      charge). Normally the m/z value of the monoisotopic peak.
+
+    - ``rt`` the retention time center of the feature.
+
+    - ``rtLow`` the lower retention time boundary of the feature.
+
+    - ``rtHigh`` the upper retention time boundary of the feature.
+
+    - ``intensity`` an estimator for the feature abundance. The preferred value
+      is the integrated intensity area, but the feature apex intensity is also
+      possible.
+
+    - ``charge`` the charge state of the feature.
+
+    - ``peptide`` the peptide sequence of the :class:`Sii <maspy.core.Sii>`
+      that is used for annotating the feature.
+
+    - ``sequence`` the plain amino acid sequence of the
+      :class:`Sii <maspy.core.Sii>` that is used for annotating the feature.
+
+    - ``score`` or any other score attribute name of the
+      :class:`Sii <maspy.core.Sii>` that is used for annotating the feature.
+      It describes the quality of a spectrum identifications.
+
+    - ``obsMz`` the experimentally observed mass to charge ratio of the feature 
+      (Dalton / charge). Normally the m/z value of the monoisotopic peak.
+
+    - ``obsMh`` the experimentally observed mass to charge ratio of the
+      feature, calculated for the mono protonated ion (Dalton / charge).
+      Normally the monoisotopic peak.
+
+    - ``obsMass`` the experimentally observed not protonated mass of a feature
+      calculated by using the mz and charge values (Dalton / charge).
+      Normally the monoisotopic mass.
+
+    - ``excMz`` the exact calculated mass to charge ratio of the peptide
+      (Dalton / charge). Normally the monoisotopic ion.
+
+    - ``excMh`` the exact calculated mass to charge ratio of the peptide,
+      calculated for the mono protonated state (Dalton / charge). Normally the
+      monoisotopic ion.
+
+    - ``excMass`` the exact calculated mass of the not protonated peptide
+      (Dalton / charge). Normally the monoisotopic mass.
+
+
+MasPy internal feature item attributes:
+
+    - ``isValid`` can be used to flag if a Fi has passed a given quality
+      threshold.
+
+    - ``isMatched`` can be used to flag if a Fi has been matched to any
+      :class:`Si <maspy.core.Si>` or :class:`Sii <maspy.core.Sii>` elements.
+
+    - ``isAnnotated`` can be used to flag if a Fi has been annotated with a
+      :class:`Sii <maspy.core.Sii>` element and therefore with an identified
+      peptide sequence.
+
+    - ``siIds`` a list of :class:`Si <maspy.core.Si>` elements that have been
+      matched to the feature item.
+
+    - ``siiIds`` a list of :class:`Sii <maspy.core.Sii>` elements that have
+      been matched to the feature item.
+
+
+
+The feature item container (FiContainer)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :class:`FiContainer <maspy.core.FiContainer>` is used to store features
+items of one or multiple specfiles. The container allows saving and loading of
+imported results and provides methods for convenient access to the data.
+
+**Supported feature finding algorithms**
+
+#TODO: openMS and Dinosaur plus citation
+
+`An Automated Pipeline for High-Throughput Label-Free Quantitative Proteomics
+<http://pubs.acs.org/doi/abs/10.1021/pr300992u>`_ and `Dinosaur: A Refined Open-
+Source Peptide MS Feature Detector
+<http://pubs.acs.org/doi/abs/10.1021/acs.jproteome.6b00016>`_
+
+
+Basic code examples
+^^^^^^^^^^^^^^^^^^^
+
+**Importing peptide features**
+
+The function :func:`maspy.reader.importPeptideFeatures()` is used to import LC-
+MS features from a file. It automatically recognises the file type by the file
+name extension and executes the respective import routine. Therefore the file
+extension has to be either ``.featurexml`` (openMS) or ``.feature.tsv``
+(Dinosaur) and is not case sensitive. The imported feature items are stored in
+the ``FiContainer`` instance passed to the function. ::
+
+    import maspy.core
+    import maspy.reader
+
+    fiContainer = maspy.core.FiContainer()
+    maspy.reader.importPeptideFeatures(fiContainer, 'filelocation/f.featureXML',
+                                       'specfile_name_1')
+
+**Matching spectrum identification items to feature items**
+
+The peptide underlying a LC-MS feature can be determined by using the
+information of identified MSn scans. In MasPy this can be achieved by using
+:func:`maspy.featuremethods.matchToFeatures()`, which allows matching ``Sii`` to
+``Fi`` elements by comparing their m/z, retention time and charge information.
+User defined tolerance values for matching should be passed to the function, for
+details see the docstring documentation. However, the default settings should be
+appropriate for typical high resolution MS1 data as obtained by Thermo Orbitrap
+instruments.
+
+#TODO: describe the print output, add it to the code example
+
+    >>> import maspy.featuremethods
+    >>> maspy.featuremethods.matchToFeatures(fiContainer, siiContainer,
+    >>>                                      specfiles='specfile_name_1')
+    ------ specfile_name_1 ------
+    Annotated features:                      3802 / 20437 = 18.6 %
+    Spectra matched to features:             4240 / 4898 = 86.6 %
+
+.. note::
+
+    #TODO: describe which attributes must be present in the Sii items and link
+    to the tutorial that describes how to obtain these attributes.
+
+**Accessing data stored in a FiContainer**
+
+#TODO: describe .getItem(), .getArrays()

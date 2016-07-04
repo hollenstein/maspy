@@ -73,6 +73,8 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz',
         ``Fi`` the one with the best score is used.
 
     #TODO: this function is nested pretty badly and should maybe be rewritten
+    #TODO: replace tolerance unit "ppm" by tolerance mode "relative" and change
+        repsective calculations
     """
     isotopeErrorList = aux.toList(isotopeErrorList)
 
@@ -197,10 +199,10 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz',
         stats = dict()
         stats['totalFeatures'] = len(featureArrays['id'])
         stats['matchedFeatures'] = len(featureSpecDict)
-        stats['relMatchedFeatures'] = round(1.*stats['matchedFeatures']/stats['totalFeatures'], 3)
+        stats['relMatchedFeatures'] = round(100*stats['matchedFeatures']/stats['totalFeatures'], 1)
         stats['totalSpectra'] = len(specArrays['id'][(specArrays['msLevel'] != 1)])
         stats['matchedSpectra'] = len(specFeatureDict)
-        stats['relMatchedSpectra'] = round(1.*stats['matchedSpectra']/stats['totalSpectra'], 3)
+        stats['relMatchedSpectra'] = round(100*stats['matchedSpectra']/stats['totalSpectra'], 1)
 
         print('------', specfile, '------')
         print('Annotated features:\t\t\t', stats['matchedFeatures'], '/', stats['totalFeatures'], '=', stats['relMatchedFeatures'], '%')

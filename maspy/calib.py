@@ -57,6 +57,7 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
                'relDev': numpy.array([float, ...]),
                'absDev': numpy.array([float, ...]),
                'int': numpy.array([float, ...])
+               'source': numpy.array(['psm' or 'lock'])
                }
     """
     scanRange = kwargs.get('scanRange', [-1, 0, 1])
@@ -74,7 +75,7 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
         if lockMass == True: # Set default lock mass values
             lockMass = [445.12002, 519.13882, 593.15761, 667.1764, 536.16536,
             		    610.18416, 684.20295]
-        lockMassTuples = [(lockMassMz, lockMassMz) for lockMassMz in lockMass]
+        lockMassTuples = [(lockMassMz, lockMassMz, 'lock') for lockMassMz in lockMass]
         for ms1ArrayPos in range(len(ms1Arrays['id'])):
             ms1Arrays['calibrationMz'][ms1ArrayPos].extend(lockMassTuples)
 
@@ -92,14 +93,15 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
             for posModifier in scanRange:
                 _arrayPos = precursorArrayPos + posModifier
                 try:
-                    ms1Arrays['calibrationMz'][_arrayPos].append((obsMz, excMz))
+                    ms1Arrays['calibrationMz'][_arrayPos].append((obsMz, excMz, 'psm'))
                 except IndexError:
                     #An IndexError can occur because of the "scanRange" extension
                     #at the end and the beginning of the MS1 scans
                     pass
 
-    calibrationDataMs1 = {_: [] for _ in ['siId', 'rt', 'obsMz', 'excMz',
-                                          'relDev', 'absDev', 'int', 'iit']
+    calibrationDataMs1 = {_: [] for _ in ['siId', 'rt', 'obsMz', 'excMz', 'iit',
+                                          'source', 'relDev', 'absDev', 'int'
+                                          ]
                           }
     for siId, rtMs1, calibrationMz in zip(ms1Arrays['id'],
                                           ms1Arrays['rt'],
@@ -117,7 +119,7 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
             ionIntListMs1 = ionIntListMs1[ionIntMask]
 
         currCalibrationData = ddict(list)
-        for obsMz, excMz in calibrationMz:
+        for obsMz, excMz, source in calibrationMz:
             #todo: would be faster by using bisect
             limHigh = obsMz * (1+massTolerance)
             limLow = obsMz * (1-massTolerance)
@@ -144,6 +146,7 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
                 currCalibrationData['absDev'].append(absDevExc)
                 currCalibrationData['int'].append(ms1Int)
                 currCalibrationData['iit'].append(msrunContainer.sic[specfile][siId].iit)
+                currCalibrationData['source'].append(source)
         if len(currCalibrationData['siId']) == 0:
             continue
         for key in currCalibrationData.keys():
