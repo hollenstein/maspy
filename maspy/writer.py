@@ -6,8 +6,9 @@ try: # python 2.7
 except ImportError: # python 3.x series
     pass
 ###############################################################################
-from lxml import etree as ETREE
+import hashlib
 import io
+from lxml import etree as ETREE
 import numpy
 import os
 
@@ -19,7 +20,7 @@ import maspy.xml
 ### mzml import and export methods #######################
 ##########################################################
 def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
-              chromatogramIds=None):
+              chromatogramIds=None, writeIndex=True):
     """ #TODO: docstring
 
     :param specfile: #TODO docstring
@@ -44,6 +45,9 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
         chromatogramIds = [cId for cId in viewkeys(msrunContainer.cic[specfile])]
     chromatogramCounts = len(chromatogramIds)
 
+    spectrumIndexList = list()
+    chromatogramIndexList = list()
+
     xmlFile = ETREE.xmlfile(outputFile, encoding='ISO-8859-1', buffered=False)
     xmlWriter = xmlFile.__enter__()
     xmlWriter.write_declaration()
@@ -51,14 +55,25 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
     nsmap = {None: 'http://psi.hupo.org/ms/mzml',
              'xsi': 'http://www.w3.org/2001/XMLSchema-instance'
              }
-    xmlRoot = xmlWriter.element(metadataTree.tag, metadataTree.attrib,
-                                nsmap=nsmap
-                                )
-    xmlRoot.__enter__()
+    mzmlAttrib = {'{http://www.w3.org/2001/XMLSchema-instance}schemaLocation': \
+                    'http://psi.hupo.org/ms/mzml http://psidev.info/files/ms/mzML/xsd/mzML1.1.0.xsd',
+                  'version': '1.1.0', 'id': metadataTree.attrib['id']
+                  }
+
+    if writeIndex:
+        xmlIndexedMzml = xmlWriter.element('indexedmzML', nsmap=nsmap)
+        xmlIndexedMzml.__enter__()
+        xmlWriter.write('\n')
+    xmlMzml = xmlWriter.element('mzML', mzmlAttrib, nsmap=nsmap)
+    xmlMzml.__enter__()
     xmlWriter.write('\n')
 
     for metadataNode in metadataTree.getchildren():
-        if metadataNode.tag == 'run':
+        if metadataNode.tag != 'run':
+            xmlWriter.write(maspy.xml.recCopyElement(metadataNode),
+                            pretty_print=True
+                            )
+        else:
             xmlRun = xmlWriter.element(metadataNode.tag, metadataNode.attrib)
             xmlRun.__enter__()
             xmlWriter.write('\n')
@@ -71,7 +86,7 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
                     #TODO: maybe recCopy?
                     xmlRun.append(runChild)
 
-            #If any spectra should be written, generate the spectrumList Node
+            #If any spectra should be written, generate the spectrumList Node.
             if spectrumCounts > 0:
                 specListAttribs = {'count': str(spectrumCounts),
                                    'defaultDataProcessingRef': specDefaultProcRef
@@ -83,16 +98,21 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
                 xmlWriter.write('\n')
 
                 for index, key in enumerate(spectrumIds):
-                    #TODO: proper container format instead of msrunContainer
                     smi = msrunContainer.smic[specfile][key]
                     sai = msrunContainer.saic[specfile][key]
+                    #Store the spectrum element offset here
+                    spectrumIndexList.append((outputFile.tell(),
+                                              smi.attributes['id']
+                                              ))
+
                     xmlSpectrum = xmlSpectrumFromSmi(index, smi, sai)
                     xmlWriter.write(xmlSpectrum, pretty_print=True)
+
                 xmlSpectrumList.__exit__(None, None, None)
                 xmlWriter.write('\n')
 
             #If any chromatograms should be written, generate the
-            #   chromatogramList Node
+            #chromatogramList Node.
             if chromatogramCounts > 0:
                 chromListAttribs = {'count': str(chromatogramCounts),
                                     'defaultDataProcessingRef': chromDefaultProcRef
@@ -103,8 +123,10 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
                 xmlChromatogramList.__enter__()
                 xmlWriter.write('\n')
                 for index, key in enumerate(chromatogramIds):
-                    #TODO: proper container format instead of msrunContainer
                     ci = msrunContainer.cic[specfile][key]
+                    #Store the chromatogram element offset here
+                    chromatogramIndexList.append((outputFile.tell(), ci.id))
+
                     xmlChromatogram = xmlChromatogramFromCi(index, ci)
                     xmlWriter.write(xmlChromatogram, pretty_print=True)
                 xmlChromatogramList.__exit__(None, None, None)
@@ -112,17 +134,96 @@ def writeMzml(specfile, msrunContainer, outputdir, spectrumIds=None,
 
             xmlRun.__exit__(None, None, None)
             xmlWriter.write('\n')
-        else:
-            xmlWriter.write(maspy.xml.recCopyElement(metadataNode),
-                            pretty_print=True
-                            )
-    #Close the root node and the file
-    xmlRoot.__exit__(None, None, None)
-    xmlFile.__exit__(None, None, None)
 
+    #Close the mzml node
+    xmlMzml.__exit__(None, None, None)
+    #Optional: write the indexedMzml nodes and close the indexedMzml node
+    if writeIndex:
+        xmlWriter.write('\n')
+        indexListOffset = outputFile.tell()
+        _writeMzmlIndexList(xmlWriter, spectrumIndexList, chromatogramIndexList)
+        _writeIndexListOffset(xmlWriter, indexListOffset)
+        _writeMzmlChecksum(xmlWriter, outputFile)
+        xmlIndexedMzml.__exit__(None, None, None)
+    #Close the xml file
+    xmlFile.__exit__(None, None, None)
+    #Write the output mzML file
     filepath = aux.joinpath(outputdir, specfile+'.mzML')
     with open(filepath, 'wb') as openfile:
         openfile.write(outputFile.getvalue())
+
+
+def _writeMzmlIndexList(xmlWriter, spectrumIndexList, chromatogramIndexList):
+    """ #TODO: docstring
+
+    :param xmlWriter: #TODO: docstring
+    :param spectrumIndexList: #TODO: docstring
+    :param chromatogramIndexList: #TODO: docstring
+    """
+    counts = 0
+    if spectrumIndexList:
+        counts += 1
+    if chromatogramIndexList:
+        counts += 1
+    if counts == 0:
+        return None
+    #Create indexList node
+    xmlIndexList = xmlWriter.element('indexList', {'count': str(counts)})
+    xmlIndexList.__enter__()
+    xmlWriter.write('\n')
+
+    _writeIndexListElement(xmlWriter, 'spectrum', spectrumIndexList)
+    _writeIndexListElement(xmlWriter, 'chromatogram', chromatogramIndexList)
+
+    #Close indexList node
+    xmlIndexList.__exit__(None, None, None)
+    xmlWriter.write('\n')
+
+
+def _writeIndexListElement(xmlWriter, elementName, indexList):
+    """ #TODO: docstring
+
+    :param xmlWriter: #TODO: docstring
+    :param elementName: #TODO: docstring
+    :param indexList: #TODO: docstring
+    """
+    if indexList:
+        xmlIndex = xmlWriter.element('index', {'name': elementName})
+        xmlIndex.__enter__()
+        xmlWriter.write('\n')
+        for offset, indexId in indexList:
+            offsetElement = ETREE.Element('offset', {'idRef': indexId})
+            offsetElement.text = str(offset)
+            xmlWriter.write(offsetElement, pretty_print=True)
+        xmlIndex.__exit__(None, None, None)
+        xmlWriter.write('\n')
+
+
+def _writeMzmlChecksum(xmlWriter, outputFile):
+    """ #TODO: docstring
+
+    :param xmlWriter: #TODO: docstring
+    :param outputFile: #TODO: docstring
+    """
+    sha = hashlib.sha1(outputFile.getvalue())
+    sha.update('<fileChecksum>')
+
+    xmlChecksumElement = ETREE.Element('fileChecksum')
+    xmlChecksumElement.text = sha.hexdigest()
+
+    xmlWriter.write(xmlChecksumElement, pretty_print=True)
+
+
+def _writeIndexListOffset(xmlWriter, offset):
+    """ #TODO: docstring
+
+    :param xmlWriter: #TODO: docstring
+    :param offset: #TODO: docstring
+    """
+    xmlIndexListOffset = ETREE.Element('indexListOffset')
+    xmlIndexListOffset.text = str(offset)
+
+    xmlWriter.write(xmlIndexListOffset, pretty_print=True)
 
 
 # --- generate mzml elements from maspy objects --- #
@@ -170,16 +271,13 @@ def xmlGenPrecursorList(precursorList):
                                      {'count': str(numEntries)}
                                      )
     for precursor in precursorList:
-        #Note: no attributes supported
+        #Note: no attributes for external referencing supported
         precursorAttrib = {}
         if precursor['spectrumRef'] is not None:
             precursorAttrib.update({'spectrumRef': precursor['spectrumRef']})
         xmlPrecursor = ETREE.Element('precursor', precursorAttrib)
 
-        xmlActivation = ETREE.Element('activation')
-        maspy.xml.xmlAddParams(xmlActivation, precursor['activation'])
-        xmlPrecursor.append(xmlActivation)
-
+        #Add isolationWindow element
         if precursor['isolationWindow'] is not None:
             xmlIsolationWindow = ETREE.Element('isolationWindow')
             maspy.xml.xmlAddParams(xmlIsolationWindow,
@@ -187,7 +285,7 @@ def xmlGenPrecursorList(precursorList):
                                    )
             xmlPrecursor.append(xmlIsolationWindow)
 
-        #Generate the selectedIonList entry
+        #Add selectedIonList element
         numSelectedIons = len(precursor['selectedIonList'])
         if numSelectedIons > 0:
             xmlSelectedIonList = ETREE.Element('selectedIonList',
@@ -198,6 +296,12 @@ def xmlGenPrecursorList(precursorList):
                 maspy.xml.xmlAddParams(xmlSelectedIon, selectedIon)
                 xmlSelectedIonList.append(xmlSelectedIon)
             xmlPrecursor.append(xmlSelectedIonList)
+
+        #Add activation element
+        xmlActivation = ETREE.Element('activation')
+        maspy.xml.xmlAddParams(xmlActivation, precursor['activation'])
+        xmlPrecursor.append(xmlActivation)
+
 
         xmlPrecursorList.append(xmlPrecursor)
     return xmlPrecursorList

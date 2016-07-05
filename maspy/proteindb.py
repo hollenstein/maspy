@@ -382,6 +382,7 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]',
             proteinTags.append(decoyTag)
         else:
             isDecoy = False
+
         if header.startswith(contaminationTag):
             isCont = True
             header = header.replace(contaminationTag, '')
@@ -406,11 +407,14 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]',
             protein.fastaInfo = headerInfo
             proteindb.proteins[protein.id] = protein
 
+        #Perform the insilico digestion
         _digestion = maspy.peptidemethods.digestInSilico(sequence, cleavageRule,
                                                          missedCleavage,
                                                          removeNtermM,
                                                          minLength, maxLength
                                                          )
+
+        #Add peptides to the protein database
         for unmodPeptide, info in _digestion:
             if ignoreIsoleucine:
                 unmodPeptideNoIsoleucine = unmodPeptide.replace('I', 'L')
@@ -435,10 +439,14 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]',
 
             if proteinId not in currPeptide.proteins:
                 currPeptide.proteins.add(proteinId)
+                #TODO: change that a peptide can appear multiple times in a
+                #  protein sequence.
                 currPeptide.proteinPositions[proteinId] = (info['startPos'],
                                                            info['endPos']
                                                            )
 
+    #Add peptide entries to the protein entries, define wheter a peptide can be
+    #uniquely assigend to a single protein (.isUnique = True).
     for peptide, peptideEntry in viewitems(proteindb.peptides):
         numProteinMatches = len(peptideEntry.proteins)
         if numProteinMatches == 1:
@@ -455,6 +463,8 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]',
             else:
                 proteindb.proteins[proteinId].sharedPeptides.add(peptide)
 
+    #Check protein entries if the digestions generated at least one peptide that
+    #is uniquely assigned to the protein (.isUnique = True)
     for proteinEntry in viewvalues(proteindb.proteins):
         if len(proteinEntry.uniquePeptides) > 0:
             proteinEntry.isUnique = True
@@ -509,9 +519,11 @@ def _readFastaFile(fastaFileLocation):
 
 def _extractFastaHeader(fastaHeader, parser=None, forceId=False):
     """Parses a fasta header and returns extracted information in a dictionary.
-    Unless a custom parser is specified, a ``pyteomics`` function is used, which
-    provides parsers for the formats described at
-    http://www.uniprot.org/help/fasta-headers
+
+    Unless a custom parser is specified, a ``Pyteomics`` function is used, which
+    provides parsers for the formats of UniProtKB, UniRef, UniParc and  UniMES
+    (UniProt Metagenomic and Environmental Sequences), described at
+    `www.uniprot.org <http://www.uniprot.org/help/fasta-headers>_`.
 
     :param fastaHeader: str, protein entry header from a fasta file
     :param parser: is a function that takes a fastaHeader string and returns a

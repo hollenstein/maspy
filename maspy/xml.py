@@ -18,7 +18,7 @@ import io
 import zlib
 
 import maspy.auxiliary as aux
-import maspy.ontology
+import maspy.ontology as ONTOLOGY
 
 ##############################################################
 ### maspy unrelated xml (mzml) content #######################
@@ -37,9 +37,9 @@ binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i',
 
 
 """#TODO: docstring """
-oboTranslator = maspy.ontology.OBOOntology()
+oboTranslator = ONTOLOGY.OBOOntology()
 #Note: duplicate values have to be removed from the ".obo" files, to prevent
-#errors in maspy.ontology.OBOOntology()
+#errors in ONTOLOGY.OBOOntology()
 msOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies',
                               'psi-ms.obo'
                               )
