@@ -1,5 +1,5 @@
-Introduction to MasPy
-=====================
+Introduction to basic concepts of MasPy
+=======================================
 
 Contents:
 

@@ -28,7 +28,7 @@ class PeptideSequence(object):
     :param sequence: amino acid sequence of the peptide
     :param missedCleavage: number of missed cleavages, dependens on enzyme
         specificity
-    :param proteinList: protein ids that generate this peptide under certain
+    :param proteins: protein ids that generate this peptide under certain
         digest condition
     :param proteinPositions: start position and end position of a peptide in a
         protein sequence. One based index, ie the first protein position is "1".
@@ -100,6 +100,9 @@ class ProteinSequence(object):
     :ivar id: identifier of the protein, for example a uniprot id.
     :ivar name: name of the protein
     :ivar sequence: amino acid sequence of the protein
+    :ivar fastaHeader: str(), the proteins faster header line
+    :ivar fastaInfo: dict(), the interpreted fasta header as generated when
+        using a faster header parsing function, see :func:`fastaParseSgd()`.
     :ivar isUnique: bool, True if at least one unique peptide can be assigned to
         the protein
     :ivar uniquePeptides: a set of peptides which can be unambiguously assigned

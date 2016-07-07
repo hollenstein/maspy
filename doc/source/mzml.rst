@@ -60,8 +60,7 @@ others. We call this representation of an mzML file in MasPy an
 :class:`MsrunContainer <maspy.core.MsrunContainer>`. Altough the data is split
 into multiple parts, all information originally contained in an mzML file is
 still present. This allows the conversion from MsrunContainer to mzML at any
-given time (altough the generation of indexed mzML files is not yet implemented
-and we rely on ProteoWizard to add an index for now).
+given time.
 #TODO: Why do we want to be able to export mzML files?
 
 See tutorial/docstrings xxx for details on the MsrunContainer file

@@ -254,12 +254,14 @@ accessing the container :class:`SiiContainer.container
 present for the same spectrum, but only one is valid. ::
 
     >>> siiContainer.container['specfile_name_1']['10']
-    [<maspy.core.Sii at 0x17c67d30>]
+    [<maspy.core.Sii at 0xb354a90>,
+     <maspy.core.Sii at 0xb354c50>,
+     <maspy.core.Sii at 0xb354b38>]
     >>> for sii in siiContainer.container['specfile_name_1']['10']:
-    >>>     print(sii.id, sii.isValid, sii.rank)
-    10 True 1
-    10 False 2
-    10 False 3
+    >>>     print(sii.id, sii.rank, sii.isValid)
+    10 1 True
+    10 2 False
+    10 3 False
 
 By using the function :class:`SiiContainer.getItems()
 <maspy.core.SiiContainer.getItems()>` it is possible to iterate over all ``Sii``
