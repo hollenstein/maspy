@@ -676,6 +676,7 @@ def importPeptideFeatures(fiContainer, filelocation, specfile):
 def _importFeatureXml(filelocation):
     """Reads a featureXml file.
 
+    :param filelocation: #TODO: docstring
     :returns: {featureKey1: {attribute1:value1, attribute2:value2, ...}, ...}
 
     See also :func:`importPeptideFeatures`

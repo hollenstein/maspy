@@ -13,9 +13,9 @@ area obtained by integrating the XIC is frequently used as a measure of
 abundance in label free quantification (LFQ) and stable isotope labeling (SIL)
 workflows.
 
-In MS spectra each peptide consists of an isotope envelope of multiple ion
-species with different m/z values. Combining the XICs of the different isotope
-states of the same analyte allows the inference of its charge state and
+In MS spectra each peptide species consists of an isotope envelope of multiple
+ion species with different m/z values. Combining the XICs of the different
+isotope states of the same analyte allows the inference of its charge state and
 therefore its mass. In addition the availability of more information results in
 more accurate intensity area estimates and thus increased accuracy for
 quantification. The combined information of XICs and isotope clusters can be
