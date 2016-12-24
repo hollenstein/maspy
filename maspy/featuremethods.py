@@ -1,19 +1,27 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+#TODO: module description
+"""
+######################### Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 import bisect
 from collections import defaultdict as ddict
 import functools
 import io
-from matplotlib import pyplot as plt
-import numpy
 import operator
 import os
+
+from matplotlib import pyplot as plt
+import numpy
 
 import maspy.auxiliary as aux
 import maspy.core
@@ -94,8 +102,7 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz',
         multiMatchCounter = int()
         isotopeErrorMatchCounter = int()
         specArrays = specContainer.getArrays([sMassKey, 'rt', 'charge',
-                                              'msLevel'
-                                              ], specfiles=specfile
+                                              'msLevel'], specfiles=specfile
                                               )
         featureArrays = fiContainer.getArrays(['rtHigh', 'rtLow', 'charge',
                                                fMassKey], specfiles=specfile,
@@ -230,15 +237,20 @@ def matchToFeatures(fiContainer, specContainer, specfiles=None, fMassKey='mz',
                 fiContainer.container[specfile][featureId].sequence = matches[0][2]
 
 
-def rtCalibration(fiContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots=False, reference=None, specfiles=None):
+def rtCalibration(fiContainer, allowedRtDev=60, allowedMzDev=2.5,
+                  reference=None, specfiles=None, showPlots=False,
+                  plotDir=None, minIntensity=1e5):
     """Performs a retention time calibration between :class:`FeatureItem` of multiple specfiles.
 
     :ivar fiContainer: Perform alignment on :class:`FeatureItem` in :attr:`FeatureContainer.specfiles`
     :ivar allowedRtDev: maxium retention time difference of two features in two runs to be matched
     :ivar allowedMzDev: maxium relative m/z difference (in ppm) of two features in two runs to be matched
     :ivar showPlots: boolean, True if a plot should be generated which shows to results of the calibration
+    :ivar plotDir: if not None and showPlots is True, the plots are saved to
+        this location.
     :ivar reference: Can be used to specifically specify a reference specfile
     :ivar specfiles: Limit alignment to those specfiles in the fiContainer
+    :ivar minIntensity: consider only features with an intensity above this value
     """
     #TODO: long function, maybe split into subfunctions
     specfiles = [_ for _ in viewkeys(fiContainer.info)] if specfiles is None else specfiles
@@ -246,7 +258,6 @@ def rtCalibration(fiContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots=Fals
 
     refMzKey = 'mz'
     mzKey = 'mz'
-    minIntensity = 1E5
 
     if reference is not None:
         if reference in specfiles:
@@ -325,17 +336,25 @@ def rtCalibration(fiContainer, allowedRtDev=60, allowedMzDev=2.5, showPlots=Fals
             ax[0][0].hist(corrDevArr, bins=100, color='red', alpha=0.5, label='corrected')
             ax[0][0].set_title('Retention time deviation')
             ax[0][0].legend()
+            ax[0][0].set_xlim(allowedRtDev*-1, allowedRtDev)
             ax[0][1].hist(mzDevRelList, bins=100, color='grey')
             ax[0][1].set_title('Mz deviation [ppm]')
             ax[1][0].scatter(rtPosList, rtDevList, color='grey', alpha=0.1, label='observed')
             ax[1][0].plot(timePoints,corrValues, color='red', alpha=0.5, label='correction function')
             ax[1][0].set_title('Retention time deviation over time')
             ax[1][0].legend()
+            ax[1][0].set_ylim(allowedRtDev*-1, allowedRtDev)
             ax[1][1].scatter(rtPosList, mzDevRelList, color='grey', alpha=0.1)
             ax[1][1].set_title('Mz deviation over time')
+            ax[1][1].set_ylim(allowedMzDev*-1, allowedMzDev)
             ax[2][0].scatter(rtPosList, corrDevArr, color='grey', alpha=0.1)
             ax[2][0].set_title('Aligned retention time deviation over time')
-            plt.show()
+            ax[2][0].set_ylim(allowedRtDev*-1, allowedRtDev)
+            if plotDir is not None:
+                plotloc = aux.joinpath(plotDir, specfile+'.rtAlign.png')
+                fig.savefig(plotloc)
+            else:
+                fig.show()
 
         featureArrays = fiContainer.getArrays(['rt'], specfiles=specfile, sort='rt')
         featureArrays['corrRt'] = featureArrays['rt'] - dataFit.corrArray(featureArrays['rt'])

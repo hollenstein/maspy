@@ -1,3 +1,5 @@
+# This is an outdated version that uses the module maspy_resources.external
+# 07.09.2016
 from __future__ import print_function, division, unicode_literals
 from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
 

@@ -1,21 +1,28 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+#TODO: module description
+"""
+######################## Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
-###############################################################################
-import os
-
-import numpy
+################################################################################
 from base64 import b64decode as B64DEC
 from base64 import b64encode as B64ENC
+import io
 from struct import unpack as UNPACK
 from struct import pack as PACK
-from lxml import etree as ETREE
-import io
+import os
 import zlib
+
+import numpy
+from lxml import etree as ETREE
 
 import maspy.auxiliary as aux
 import maspy.ontology as ONTOLOGY
@@ -279,6 +286,27 @@ def xmlAddParams(parentelement, params):
 ####################################################################
 # --- decode and encode function for binary data of mzml files --- #
 ####################################################################
+def interpretBitEncoding(bitEncoding):
+    """Returns a floattype string and a numpy array type.
+
+    :param bitEncoding: Must be either '64' or '32'
+
+    :returns: (floattype, numpyType)
+    """
+    if bitEncoding == '64':
+        floattype = 'd' # 64-bit
+        numpyType = numpy.float64
+    elif bitEncoding == '32':
+        floattype = 'f' # 32-bit
+        numpyType = numpy.float32
+    else:
+        errorText = ''.join(['bitEncoding \'', bitEncoding, '\' not defined. ',
+                             'Must be \'64\' or \'32\''
+                             ])
+        raise TypeError(errorText)
+    return (floattype, numpyType)
+
+
 def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
     """Function to decode a mzML byte array into a numpy array. This is the
     inverse function of :func:`encodeBinaryData`. Concept inherited from
@@ -295,13 +323,7 @@ def decodeBinaryData(binaryData, arrayLength, bitEncoding, compression):
     #TODO: should raise an error if a wrong compression is specified
     bitEncodedData = binaryData.encode("utf-8")
     bitDecodedData = B64DEC(bitEncodedData)
-
-    if bitEncoding == '64':
-        floattype = 'd' # 64-bit
-        numpyType = numpy.float64
-    else:
-        floattype = 'f' # 32-bit
-        numpyType = numpy.float32
+    floattype, numpyType = interpretBitEncoding(bitEncoding)
 
     if compression == 'zlib':
         decompressedData = zlib.decompress(bitDecodedData)
@@ -328,10 +350,7 @@ def encodeBinaryData(dataArray, bitEncoding, compression):
     """
     #TODO: should raise an error if a wrong compression is specified
     arrayLength = len(dataArray)
-    if bitEncoding == '64':
-        floattype = 'd' # 64-bit
-    else:
-        floattype = 'f' # 32-bit
+    floattype, __ = interpretBitEncoding(bitEncoding)
     fmt = '{endian}{arraylength}{floattype}'.format(endian='<',
                                                     arraylength=arrayLength,
                                                     floattype=floattype
@@ -378,28 +397,32 @@ def extractBinaries(binaryDataArrayList, arrayLength):
     extractedArrays = dict()
     arrayInfo = dict()
     for binaryData in binaryDataArrayList:
+        if findParam(binaryData['params'], 'MS:1000523') is not None:
+            bitEncoding = '64'
+        else:
+            bitEncoding = '32'
+        if findParam(binaryData['params'], 'MS:1000574') is not None:
+            compression = 'zlib'
+        else:
+            compression = None
+        dataType, dataTypeParam = findBinaryDataType(binaryData['params'])
         if binaryData['binary']:
-            if findParam(binaryData['params'], 'MS:1000523') is not None:
-                bitEncoding = '64'
-            else:
-                bitEncoding = '32'
-            if findParam(binaryData['params'], 'MS:1000574') is not None:
-                compression = 'zlib'
-            else:
-                compression = None
-            dataType, dataTypeParam = findBinaryDataType(binaryData['params'])
             extractedArrays[dataType] = decodeBinaryData(binaryData['binary'],
                                                          arrayLength,
                                                          bitEncoding,
                                                          compression
                                                          )
-            binaryData['binary'] = None
-            arrayInfo[dataType] = {'dataProcessingRef': None,
-                                   'params': binaryData['params']
-                                   }
-            if 'dataProcessingRef' in binaryData:
-                arrayInfo[dataType]['dataProcessingRef'] = \
-                    binaryData['dataProcessingRef']
+        else:
+            __, numpyType = interpretBitEncoding(bitEncoding)
+            extractedArrays[dataType] = numpy.array([], dtype=numpyType)
+
+        binaryData['binary'] = None
+        arrayInfo[dataType] = {'dataProcessingRef': None,
+                               'params': binaryData['params']
+                               }
+        if 'dataProcessingRef' in binaryData:
+            arrayInfo[dataType]['dataProcessingRef'] = \
+                binaryData['dataProcessingRef']
     return extractedArrays, arrayInfo
 
 

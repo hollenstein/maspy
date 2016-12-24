@@ -1,9 +1,16 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+#TODO: module description
+"""
+######################## Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 #TODO: review for compatibility to maspy 1.0
@@ -13,6 +20,7 @@ import maspy.auxiliary as aux
 import maspy.constants
 import maspy.peptidemethods
 
+raise DeprecationWarning('Module is not up to date')
 
 # --- Functions dealing with isotopic labels --- #
 class LabelDescriptor(object):

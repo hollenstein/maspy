@@ -1,12 +1,20 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+A collection of helper functions used in different modules. Functions deal for
+example with saving files, encoding and decoding data in the json format, 
+filtering of numpy arrays, data fitting, etc.
+"""
+######################### Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
-
 try:
     basestring
 except NameError:
@@ -337,7 +345,7 @@ def _arrayFromBytes(dataBytes, metadata):
 
     :returns: ``numpy.array``
     """
-    array = numpy.frombuffer(dataBytes, dtype=numpy.typeDict[metadata['dtype']])
+    array = numpy.fromstring(dataBytes, dtype=numpy.typeDict[metadata['dtype']])
     if 'shape' in metadata:
         array = array.reshape(metadata['shape'])
     return array

@@ -1,20 +1,29 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+""" 
+The protein database module allows the import of protein sequences from fasta
+files, parsing of fasta entry headers and performing in silico digestion by
+specified cleavage rules to generate peptides.
+"""
+######################## Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 import io
 import itertools
-import numpy
-import re
-
 import json
+import re
+import zipfile
+
+import numpy
 import pyteomics
 import pyteomics.fasta
-import zipfile
 
 import maspy.auxiliary as aux
 import maspy.peptidemethods
@@ -488,10 +497,10 @@ def _readFastaFile(fastaFileLocation):
         entries of fasta files between the fasta header and the sequence,
         starting with either ";" or ">".
 
-    See also :func:`returnDigestedFasta` and
+    See also :func:`importProteinDatabase` and
     :func:`maspy.peptidemethods.digestInSilico`.
     """
-    fastaPattern = '(?P<header>([>;].+\n)+)(?P<sequence>[A-Z\*\n]+)' #[\*\n)
+    fastaPattern = '(?P<header>([>;].+[\n\r])+)(?P<sequence>[A-Z\*\n\r]+)' #[\*\n)
     _stripSequence = lambda s: s.replace('\n', '').replace('\r', '').strip('*')
     with io.open(fastaFileLocation, 'rb') as openfile:
         readfile = openfile.read()

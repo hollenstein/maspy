@@ -1,19 +1,26 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+#TODO: module description
+"""
+######################## Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 from collections import defaultdict as ddict
 import io
 from lxml import etree as ETREE
-import numpy
 from operator import itemgetter as ITEMGETTER
 import os
 import warnings
 
+import numpy
 import pyteomics.mzid
 import pyteomics.mass
 
@@ -658,6 +665,7 @@ def importPeptideFeatures(fiContainer, filelocation, specfile):
             fi.rtLow = featureEntryDict['rtStart']
             fi.rtHigh = featureEntryDict['rtEnd']
             fi.charge = featureEntryDict['charge']
+            fi.numScans  = featureEntryDict['nScans']
             fi.mz = featureEntryDict['mz']
             fi.mh = maspy.peptidemethods.calcMhFromMz(featureEntryDict['mz'],
                                                       featureEntryDict['charge'])
@@ -759,7 +767,8 @@ def _importDinosaurTsv(filelocation):
         lines = openFile.readlines()
         headerDict = dict([[y,x] for (x,y) in enumerate(lines[0].strip().split('\t'))])
         featureDict = dict()
-        for featureId, line in enumerate(lines[1:]):
+        for linePos, line in enumerate(lines[1:]):
+            featureId = str(linePos)
             fields = line.strip().split('\t')
             entryDict = dict()
             for headerName, headerPos in viewitems(headerDict):

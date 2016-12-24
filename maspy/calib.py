@@ -1,18 +1,23 @@
-""" The module ``maspy.calib`` contains methods for data calibration. This
-comprises methods to aquire calibration data, to generate calibration functions
-and to apply the calibration functions to items in one of the MasPy data
-containers.."""
+"""
+This module is used for m/z calibration of spectra. It contains methods to
+aquire calibration data, to generate calibration functions and to apply the
+calibration functions to MS1 spectra. 
+"""
+######################### Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
-
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 import bisect
 from collections import defaultdict as ddict
+
 import numpy
 
 
@@ -72,9 +77,9 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
     ms1Arrays['calibrationMz'] = [list() for x in range(len(ms1Arrays['id']))]
 
     if lockMass is not None:
-        if lockMass == True: # Set default lock mass values
-            lockMass = [445.12002, 519.13882, 593.15761, 667.1764, 536.16536,
-            		    610.18416, 684.20295]
+        if lockMass == True: #Use default lock mass values
+            lockMass = [445.12002, 519.13882, 593.15761, 667.1764,
+                        536.16536, 610.18416, 684.20295]
         lockMassTuples = [(lockMassMz, lockMassMz, 'lock') for lockMassMz in lockMass]
         for ms1ArrayPos in range(len(ms1Arrays['id'])):
             ms1Arrays['calibrationMz'][ms1ArrayPos].extend(lockMassTuples)
@@ -95,8 +100,8 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
                 try:
                     ms1Arrays['calibrationMz'][_arrayPos].append((obsMz, excMz, 'psm'))
                 except IndexError:
-                    #An IndexError can occur because of the "scanRange" extension
-                    #at the end and the beginning of the MS1 scans
+                    #An IndexError can occur because of the "scanRange"
+                    #extension at the end and the beginning of the MS1 scans
                     pass
 
     calibrationDataMs1 = {_: [] for _ in ['siId', 'rt', 'obsMz', 'excMz', 'iit',
@@ -120,7 +125,6 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
 
         currCalibrationData = ddict(list)
         for obsMz, excMz, source in calibrationMz:
-            #todo: would be faster by using bisect
             limHigh = obsMz * (1+massTolerance)
             limLow = obsMz * (1-massTolerance)
             pL = bisect.bisect_left(ionMzListMs1, limLow)
@@ -132,7 +136,7 @@ def aquireMs1CalibrationData(msrunContainer, specfile, siiArrays=None,
             ms1Mz = ionMzListMs1[pL:pH][ionMatchMask]
             ms1Int = ionIntListMs1[pL:pH][ionMatchMask]
 
-            #note: rel dev calculation changed, test dataFit functions!!!
+            #TODO: rel dev calculation changed, test dataFit functions!!!
             relDevObs = (1 - ms1Mz / obsMz)
             absDevObs = obsMz - ms1Mz
             relDevExc = (1 - ms1Mz / excMz)

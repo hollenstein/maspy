@@ -1,16 +1,24 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+#TODO: module description
+"""
+######################## Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
-###############################################################################
+################################################################################
 import hashlib
 import io
+import os
+
 from lxml import etree as ETREE
 import numpy
-import os
 
 import maspy.auxiliary as aux
 import maspy.xml
@@ -341,10 +349,14 @@ def xmlGenBinaryDataArrayList(binaryDataInfo, binaryDataDict,
         _, dataTypeParam = maspy.xml.findBinaryDataType(binaryDataInfo[arrayType]['params'])
         binaryData = binaryDataDict[arrayType]
         bitEncoding = '64' if binaryData.dtype.str == '<f8' else '32'
-        binaryData, arrayLength = maspy.xml.encodeBinaryData(binaryData,
-                                                             bitEncoding,
-                                                             compression
-                                                             )
+        if binaryData.size > 0:
+            binaryData, arrayLength = maspy.xml.encodeBinaryData(binaryData,
+                                                                 bitEncoding,
+                                                                 compression
+                                                                 )
+        else:
+            binaryData = ''
+            arrayLength = 0
 
         # --- define binaryDataArray parameters --- #
         params = list()

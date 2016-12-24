@@ -1,3 +1,12 @@
+Maspy resources
+---------------
+
+make executables usable in linux
+
+
+Fasta reading:
+-> change maspy.proteindb._readFastaFile to maybe something like from pyteomics, which is more robust
+
 Bug fixes, performance, code design, documentation, ...
 -------------------------------------------------------
 - Implementation of multi processing for certain bottleneck tasks.

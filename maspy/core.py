@@ -1,24 +1,29 @@
-""" The module ``maspy.core`` contains python representations of spectra,
-peptide spectrum matches and peptide LC-MS features and containers which manage
-storage, data access, saving and loading of these data types. """
+"""
+The core module contains python classes to representat spectra, peptide spectrum
+matches and peptide LC-MS features, and containers which manage storage,
+data access, saving and loading of these data types. 
+"""
+######################### Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
-
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 from collections import defaultdict as ddict
 import io
-import numpy
+import json
 from operator import itemgetter as ITEMGETTER
 import os
 import warnings
 
-import json
 from lxml import etree as ETREE
+import numpy
 import zipfile
 
 import maspy.auxiliary as aux
@@ -1310,7 +1315,7 @@ class SiiContainer(object):
     :ivar info: a dictionary containing information about imported specfiles. ::
 
             {specfilename: {'path': str, 'qcAttr': str, 'qcLargerBetter': bool,
-                            'qcCutOff': float, 'rankAttr': str,
+                            'qcCutoff': float, 'rankAttr': str,
                             'rankLargerBetter': bool
                             },
              ...
@@ -1319,13 +1324,13 @@ class SiiContainer(object):
         **path**: folder location used by the ``SiiContainer`` to save and load
         data to the hard disk.
 
-        **qcAttr**: name of the parameter to define a quality cut off. Typically
+        **qcAttr**: name of the parameter to define a quality cutoff. Typically
         this is some sort of a global false positive estimator (eg FDR)
 
         **qcLargerBetter**: bool, True if a large value for the ``.qcAttr``
         means a higher confidence.
 
-        **qcCutOff**: float, the quality threshold for the specifed ``.qcAttr``
+        **qcCutoff**: float, the quality threshold for the specifed ``.qcAttr``
 
         **rankAttr**: name of the parameter used for ranking ``Sii`` according
         to how well they match to a fragment ion spectrum, in the case when
@@ -1440,9 +1445,9 @@ class SiiContainer(object):
         :param specfile: the name of an ms-run file
         :param path: filedirectory for loading and saving the ``siic`` files
         """
-        self.info[specfile] = {'path': path, 'qcAttr': None, 'qcCutOff': None,
+        self.info[specfile] = {'path': path, 'qcAttr': None, 'qcCutoff': None,
                                'qcLargerBetter': None, 'rankAttr': None,
-                               'ranklargerBetter': None
+                               'rankLargerBetter': None
                                }
         self.container[specfile] = dict()
 
@@ -1731,8 +1736,6 @@ class Fi(object):
         """
         newInstance = cls(None, None)
         newInstance.__dict__.update(jsonobject)
-        newInstance.siIds = [tuple(_) for _ in newInstance.siIds]
-        newInstance.siiIds = [tuple(_) for _ in newInstance.siiIds]
         return newInstance
 
     @staticmethod

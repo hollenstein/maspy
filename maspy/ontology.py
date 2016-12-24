@@ -1,9 +1,16 @@
-from __future__ import print_function, division, unicode_literals
-from future.utils import viewkeys, viewvalues, viewitems, listvalues, listitems
+"""
+#TODO: module description
+"""
+######################### Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
 
-try: # python 2.7
+try:
+    #python 2.7
     from itertools import izip as zip
-except ImportError: # python 3.x series
+except ImportError:
+    #python 3 series
     pass
 ################################################################################
 #http://pythonhosted.org/Orange-Bioinformatics/index.html
@@ -11,8 +18,6 @@ except ImportError: # python 3.x series
 #replaced: from six import StringIO with import StringIO, and subsequently StringIO() with StringIO.StringIO()
 #replaced: StringIO.StringIO with io.StringIO
 #replaced: six.iteritems() with viewitems()
-
-
 
 """
 ==============================
@@ -58,13 +63,13 @@ To load an ontology from a file, pass the file or filename to the
 See the definition of the `.obo file format <http://www.geneontology.org/GO.format.obo-1_2.shtml>`_.
 
 """
-import sys
-import re
-import warnings
-import keyword
 from collections import defaultdict
-
 import io
+import keyword
+import re
+import sys
+import warnings
+
 
 try:
     from urllib2 import urlopen

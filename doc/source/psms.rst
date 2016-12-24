@@ -18,7 +18,7 @@ is also possible to isolate a fragment ion from an MS2 spectrum, fragment it
 again and measure the resulting ions, which is then called MS3. This procedure
 could be repeated multiple times and would result in consequent MSn scans, where
 "n" stands for the number of isolation and fragmentation cycles +1. Peptide
-sequence identification can now be infered by comparing the observed MSn spectra
+sequence identification can now be inferred by comparing the observed MSn spectra
 with theoretical fragmentation spectra generated in silico. This procedure is
 called peptide spectrum matching. Another possibility is to compare the observed
 MS2 spectra with already identified observed fragmentation spectra from a
@@ -77,42 +77,42 @@ Further attributes which can be necessary for a reasonable utilization of
     - ``rt`` the retention time in seconds of the corresponding spectrum.
 
     - ``obsMz`` the experimentally observed mass to charge ratio of the
-      precursor ion (Dalton / charge). Normally the monoisotopic ion.
+      precursor ion (Dalton / charge). Usually the monoisotopic ion.
 
     - ``obsMh`` the experimentally observed mass to charge ratio of the
       precursor ion, calculated for the mono protonated ion (Dalton / charge).
-      Normally the monoisotopic ion.
+      Usually the monoisotopic ion.
 
     - ``obsMass`` the experimentally observed not protonated mass of precursor
       ion, calculated by using the mz and charge values (Dalton / charge).
-      Normally the monoisotopic mass.
+      Usually the monoisotopic mass.
 
     - ``excMz`` the exact calculated mass to charge ratio of the peptide
-      (Dalton / charge). Normally the monoisotopic ion.
+      (Dalton / charge). Usually the monoisotopic ion.
 
     - ``excMh`` the exact calculated mass to charge ratio of the peptide,
-      calculated for the mono protonated peptide (Dalton / charge). Normally the
+      calculated for the mono protonated peptide (Dalton / charge). Usually the
       monoisotopic ion.
 
     - ``excMass`` the exact calculated mass of the not protonated peptide
-      (Dalton / charge). Normally the monoisotopic mass.
+      (Dalton / charge). Usually the monoisotopic mass.
 
 .. note::
 
-    The amino acid sequence itself is commonly written in the single letter
-    code. However, there is no common style how to depict amino acid
-    modifications in a linear string. Very often each modification is
-    represented by a single symbol or a short string specifically highlighted
-    for example by using brackets. This modification represenation is then
-    written next to the modified amino acid residue, ie on the right side.
+    The amino acid sequence itself is commonly written in single letter code.
+    However, there is no common style how to depict amino acid modifications
+    in a linear string. Very often each modification is represented by a
+    single symbol or a short string specifically highlighted for example by
+    using brackets. This modification represenation is then written next to
+    the modified amino acid residue, i.e. on the right side.
 
     In MasPy we decided to highlight modifications by using square brackets
-    positioned next to the modified amino acid. It is allowed to add multiple
-    modifications to one single residue by writing multiple bracket pairs, eg
-    ``PEP[mod1][mod2]TIDE``. This format allows simple parsing of peptide
-    strings to retrieve modifications and their position in the amino acid
-    sequence. In addition every character, except square brackets, could be used
-    as a symbol for an additional amino acid.
+    positioned right of the modified amino acid. It is possible to add
+    multiple modifications to one single residue by writing multiple bracket
+    pairs, eg ``PEP[mod1][mod2]TIDE``. This format allows simple parsing of
+    peptide strings to retrieve modifications and their position in the amino
+    acid sequence. In addition every character, except square brackets, could
+    be used as a symbol for an additional amino acid.
 
     `Unimod <www.unimod.org>`_ provides a comprehensive database of protein
     modifications and is to our knowledge widely-used in the field of mass
@@ -194,7 +194,7 @@ Basic code examples
 
 **Importing spectrum identification results**
 
-A percolator .tsv file can be imported by using the function
+A percolator tab separated file can be imported by using the function
 :func:`maspy.reader.importPercolatorResults()`, the imported ``Sii`` elements
 are then added to the ``SiiContainer`` instance passed to the function. ::
 
