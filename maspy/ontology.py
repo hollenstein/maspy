@@ -109,8 +109,8 @@ class OboTranslator(object):
                 self.oboTerms[oboTerm['id']] = oboTerm            
             else:
                 oldOboTerm = self.oboTerms[oboTerm['id']]
-                oldTermIsObsolete = termIsObsolete(oldOboTerm)
-                newTermIsObsolete = termIsObsolete(oboTerm)
+                oldTermIsObsolete = _termIsObsolete(oldOboTerm)
+                newTermIsObsolete = _termIsObsolete(oboTerm)
                 if oldTermIsObsolete and not newTermIsObsolete:
                     self.oboTerms[oboTerm['id']] = oboTerm
                 else:
@@ -120,11 +120,11 @@ class OboTranslator(object):
     def __getitem__(self, oboTermId):
         return self.oboTerms[oboTermId]
 
-    def getNameFromId(self, oboTermId):
+    def getNameWithId(self, oboTermId):
         """Return the term name by using the term id."""
         return self.oboTerms[oboTermId]['name']
 
-    def getIdFromName(self, oboTermName):
+    def getIdWithName(self, oboTermName):
         """Return the term id by using the term name."""
         raise NotImplementedError
 
@@ -135,7 +135,7 @@ class DefaultTranslator(OboTranslator):
     Imports the files 'psi-ms.obo' and 'unit.obo' which are distributed together
     with maspy.
 
-    Use :func:`maspy.ontology.DefaultTranslator.getNameFromId()` to get a terms
+    Use :func:`maspy.ontology.DefaultTranslator.getNameWithId()` to get a terms
     'name' by its 'id'.
     """
     def __init__(self):

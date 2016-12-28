@@ -237,14 +237,14 @@ def xmlAddParams(parentelement, params):
     for param in params:
         if len(param) == 3:
             cvAttrib = {'cvRef': param[0].split(':')[0], 'accession': param[0],
-                        'name':oboTranslator.getNameFromId(param[0])
+                        'name':oboTranslator.getNameWithId(param[0])
                         }
             if param[1]:
                 cvAttrib.update({'value': param[1]})
             else:
                 cvAttrib.update({'value': ''})
             if param[2]:
-                unitName = oboTranslator.getNameFromId(param[2])
+                unitName = oboTranslator.getNameWithId(param[2])
                 cvAttrib.update({'unitAccession': param[2],
                                  'unitCvRef': param[2].split(':')[0],
                                  'unitName': unitName
