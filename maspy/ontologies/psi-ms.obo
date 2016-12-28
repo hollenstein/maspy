@@ -14874,7 +14874,7 @@ relationship: has_units UO:0000218 ! volt
 
 [Term]
 id: MS:1002274
-name: SQ Detector 2
+name: SQ Detector 2	
 def: "Waters quadrupole based SQ Detector 2." [PSI:MS]
 is_a: MS:1000126 ! Waters instrument model
 
@@ -14969,6 +14969,14 @@ id: MS:1002289
 name: ProteinProphet
 def: "A program in the TPP that calculates protein-level probabilities based on input PSM or peptide-level probabilities from PeptideProphet or iProphet. The output is written in the protXML format." [PMID:14632076]
 is_a: MS:1002286 ! Trans-Proteomic Pipeline software
+
+[Term]
+id: MS:1002289
+name: ASAPRatio
+def: "OBSOLETE A program in the TPP that calculates PSM, peptide, and protein-level abundances based on 2-channel isotope-labelled data such as ICAT, SILAC, etc." [PSI:PI]
+comment: This term was made obsolete because of id clash with the term MS:1002289 (ProteinProphet) - use term MS:1002574 (ASAPRatio) instead.
+is_a: MS:1002286 ! Trans-Proteomic Pipeline software
+is_obsolete: true
 
 [Term]
 id: MS:1002290
@@ -15519,7 +15527,7 @@ id: MS:1002367
 name: probability for proteins
 def: "Probability that a specific protein sequence has been correctly identified from the PSM and distinct peptide evidence, and based on the available protein sequences presented to the analysis software." [PSI:PI]
 xref: value-type:xsd\:double "The allowed value-type for this CV term."
-is_a: MS:1001198 ! protein identification confidence metric
+is_a: MS:1001198 ! protein identification confidence metric 
 relationship: has_domain MS:1002305 ! value between 0 and 1 inclusive
 
 [Term]
@@ -16506,7 +16514,7 @@ is_a: MS:1001153 ! search engine specific score
 
 [Term]
 id: MS:1002513
-name: molecules per cell
+name: molecules per cell 
 def: "The absolute abundance of protein in a cell." [PSI:PI]
 xref: value-type:xsd\:double "The allowed value-type for this CV term."
 is_a: MS:1001805 ! quantification datatype
@@ -16734,7 +16742,7 @@ relationship: has_order MS:1002108 ! higher score better
 
 [Term]
 id: MS:1002546
-name: Skyline mzQuantML converter
+name: Skyline mzQuantML converter 
 def: "A software package to convert Skyline report to mzQuantML." [PSI:PI, http://code.google.com/p/srm-mzquantml-convertor/]
 is_a: MS:1001139 ! quantitation software name
 is_a: MS:1001456 ! analysis software
@@ -16748,7 +16756,7 @@ is_a: MS:1001805 ! quantification datatype
 [Term]
 id: MS:1002548
 name: distributed normalized spectral abundance factor
-def: "A distributed normalized spectral abundance factor (dNSAF." [DOI:10.1021/ac9023999, PMID:20166708]
+def: "A distributed normalized spectral abundance factor (dNSAF." [DOI:10.1021/ac9023999, PMID:20166708] 
 is_a: MS:1001805 ! quantification datatype
 
 [Term]

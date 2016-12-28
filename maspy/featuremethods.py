@@ -20,6 +20,7 @@ import io
 import operator
 import os
 
+#TODO: remove matplotlib from this modul, return a report object
 from matplotlib import pyplot as plt
 import numpy
 
@@ -362,134 +363,134 @@ def rtCalibration(fiContainer, allowedRtDev=60, allowedMzDev=2.5,
             fiContainer.container[specfile][featureId].rt = corrRt
 
 
-##TODO: NOT PROPERLY CHANGED YET ###
-class FeatureGroupItem(object):
-    """Representation of a group of :class:`FeatureItem`.
-
-    :ivar isMatched: False by default, True if any :class:`FeatureItem` in the group are matched.
-    :ivar isAnnotated: False by default, True if any :class:`FeatureItem` in the group are annotated.
-    :ivar siIds: containerId values of matched Si entries
-    :ivar siiIds: containerId values of matched Sii entries
-    :ivar featureIds: containerId values of :class:`FeatureItem` in the feature group
-    :ivar peptide: peptide sequence of best scoring Sii match
-    :ivar sequence: plain amino acid sequence of best scoring Sii match, used to retrieve protein information
-    :ivar score: score of best scoring Sii match
-    :ivar matchMatrix: structured representation of :attr:`FeatureItem.containerId` in the feature group.
-    :ivar intensityMatrix: similar to :attr:`matchMatrix` but contains :attr:`FeatureItem.intensity` values.
-    {chargeState: 2d numpy.array with specfiles as 1st dimension and labelState as 2nd dimension}
-    """
-    def __init__(self):
-        self.isMatched = None
-        self.isAnnotated = None
-        self.siIds = list()
-        self.siiIds = list()
-        self.featureIds = list()
-        self.peptide = None
-        self.sequence = None
-        self.score = None
-        self.matchMatrix = dict()
-        self.intensityMatrix = dict()
-
-
-class FeatureGroupContainer(object):
-    """ItemContainer for peptide feature groups :class`FeatureGroupItem`.
-
-    :ivar container: Storage list of :class:`FeatureGroupItem`
-    :ivar index: Use :attr:`FeatureItem.containerId` to which :class:`FeatureGroupItem` the feature was grouped
-    :ivar labelDescriptor: :class:`maspy.sil.LabelDescriptor` describes the label setup of an experiment
-    :ivar specfiles: List of keywords (filenames) representing files
-    :ivar specfilePositions: {specfile:arrayPosition, ...}
-    arrayPosition respresents the array position of a specfile in :attr:`FeatureGroupItem.matchMatrix`
-    """
-    def __init__(self, specfiles, labelDescriptor=None):
-        self.container = dict()
-        self.labelDescriptor = maspy.sil.LabelDescriptor() if labelDescriptor is None else labelDescriptor
-        self._index = 0
-
-        self.info = dict()
-        for position, specfile in enumerate(specfiles):
-            self.info[specfile] = {'matrixPosition': position}
-
-    def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda fgi: True):
-        """Generator that yields filtered and/or sorted :class:`Si` objects from :instance:`self.sic`
-
-        :param specfiles: filenames of msrun files - if specified return only items from those files
-        :type specfiles: str or [str, str, ...]
-        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
-        :param reverse: boolean to reverse sort order
-        :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned
-        """
-        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
-        return _getItems(self.container, specfiles, sort, reverse, selector)
-
-    def getArrays(self, report='lfq', attr=None, specfiles=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
-        """Return a condensed array of data selected from :class:`Si` objects of :instance:`self.sic`
-        for fast and convenient data processing.
-
-        :param attr: list of :class:`Si` item attributes that should be added to the returned array.
-        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
-        are always included, in combination they serve as a unique id.
-        :param specfiles: filenames of msrun files - if specified return only items from those files
-        :type specfiles: str or [str, str, ...]
-        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
-        attribute specified by "sort", if the attribute is not present the item is skipped.
-        :param reverse: boolean to reverse sort order
-        :param selector: a function which is called with each :class:`Si` item and returns
-        True (include item) or False (discard item). If not specified all items are returned
-
-        return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
-        """
-        attr = attr if attr is not None else []
-        attr = set(['id', 'specfile'] + aux.toList(attr))
-        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
-
-        arrays = arrays = dict([(key, []) for key in attr])
-        reportAttributes = list()
-        if report == 'lfq':
-            arrays['charge'] = list()
-            arrays['labelState'] = list()
-            for specfile in self.specfiles:
-                arrays[specfile] = list()
-                reportAttributes.append(specfile)
-        elif report == 'sil':
-            arrays['charge'] = list()
-            arrays['specfile'] = list()
-            for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
-                labelAttributeName = ' '.join(('label:', str(labelState)))
-                arrays[labelAttributeName] = list()
-                reportAttributes.append(labelAttributeName)
-
-        if report == 'sil':
-            for item in _getItems(self.container, specfiles, sort, reverse, selector):
-                for charge in viewkeys(item.intensityMatrix):
-                    for specfile in specfiles:
-                        specfilePosition = self.info[specfile]['matrixPosition']
-                        for key in attributes:
-                            arrays[key].append(getattr(item, key, None))
-                        arrays['charge'].append(charge)
-                        arrays['specfile'].append(specfile)
-                        for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
-                            labelAttributeName = ' '.join(('label:', str(labelState)))
-                            arrays[labelAttributeName].append(item.intensityMatrix[charge][specfilePosition, labelState])
-        elif report == 'lfq':
-            for item in _getItems(self.container, specfiles, sort, reverse, selector):
-                for charge in viewkeys(item.intensityMatrix):
-                    for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
-                        for key in attributes:
-                            arrays[key].append(getattr(item, key, None))
-                        arrays['charge'].append(charge)
-                        arrays['labelState'].append(labelState)
-                        for specfile in specfiles:
-                            specfilePosition = self.info[specfile]['matrixPosition']
-                            arrays[specfile].append(item.intensityMatrix[charge][specfilePosition, labelState])
-        else:
-            raise Exception('report must be either "lfq" or "sil", not '+report)
-
-        for key in  [_ for _ in viewkeys(arrays)]:
-            if key in reportAttributes:
-                arrays[key] = numpy.array(arrays[key], dtype=numpy.float64)
-            else:
-                arrays[key] = numpy.array(arrays[key])
-        return arrays
+##TODO: Code is deprecated, new classes are currently located in maspy.featuregrouping
+#class FeatureGroupItem(object):
+#    """Representation of a group of :class:`FeatureItem`.
+#
+#    :ivar isMatched: False by default, True if any :class:`FeatureItem` in the group are matched.
+#    :ivar isAnnotated: False by default, True if any :class:`FeatureItem` in the group are annotated.
+#    :ivar siIds: containerId values of matched Si entries
+#    :ivar siiIds: containerId values of matched Sii entries
+#    :ivar featureIds: containerId values of :class:`FeatureItem` in the feature group
+#    :ivar peptide: peptide sequence of best scoring Sii match
+#    :ivar sequence: plain amino acid sequence of best scoring Sii match, used to retrieve protein information
+#    :ivar score: score of best scoring Sii match
+#    :ivar matchMatrix: structured representation of :attr:`FeatureItem.containerId` in the feature group.
+#    :ivar intensityMatrix: similar to :attr:`matchMatrix` but contains :attr:`FeatureItem.intensity` values.
+#    {chargeState: 2d numpy.array with specfiles as 1st dimension and labelState as 2nd dimension}
+#    """
+#    def __init__(self):
+#        self.isMatched = None
+#        self.isAnnotated = None
+#        self.siIds = list()
+#        self.siiIds = list()
+#        self.featureIds = list()
+#        self.peptide = None
+#        self.sequence = None
+#        self.score = None
+#        self.matchMatrix = dict()
+#        self.intensityMatrix = dict()
+#
+#
+#class FeatureGroupContainer(object):
+#    """ItemContainer for peptide feature groups :class`FeatureGroupItem`.
+#
+#    :ivar container: Storage list of :class:`FeatureGroupItem`
+#    :ivar index: Use :attr:`FeatureItem.containerId` to which :class:`FeatureGroupItem` the feature was grouped
+#    :ivar labelDescriptor: :class:`maspy.sil.LabelDescriptor` describes the label setup of an experiment
+#    :ivar specfiles: List of keywords (filenames) representing files
+#    :ivar specfilePositions: {specfile:arrayPosition, ...}
+#    arrayPosition respresents the array position of a specfile in :attr:`FeatureGroupItem.matchMatrix`
+#    """
+#    def __init__(self, specfiles, labelDescriptor=None):
+#        self.container = dict()
+#        self.labelDescriptor = maspy.sil.LabelDescriptor() if labelDescriptor is None else labelDescriptor
+#        self._index = 0
+#
+#        self.info = dict()
+#        for position, specfile in enumerate(specfiles):
+#            self.info[specfile] = {'matrixPosition': position}
+#
+#    def getItems(self, specfiles=None, sort=False, reverse=False, selector=lambda fgi: True):
+#        """Generator that yields filtered and/or sorted :class:`Si` objects from :instance:`self.sic`
+#
+#        :param specfiles: filenames of msrun files - if specified return only items from those files
+#        :type specfiles: str or [str, str, ...]
+#        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+#        attribute specified by "sort", if the attribute is not present the item is skipped.
+#        :param reverse: boolean to reverse sort order
+#        :param selector: a function which is called with each :class:`Si` item and returns
+#        True (include item) or False (discard item). If not specified all items are returned
+#        """
+#        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
+#        return _getItems(self.container, specfiles, sort, reverse, selector)
+#
+#    def getArrays(self, report='lfq', attr=None, specfiles=None, sort=False, reverse=False, selector=lambda si: True, defaultValue=None):
+#        """Return a condensed array of data selected from :class:`Si` objects of :instance:`self.sic`
+#        for fast and convenient data processing.
+#
+#        :param attr: list of :class:`Si` item attributes that should be added to the returned array.
+#        If an attribute is not present the "defaultValue" is added instead. The attributes "id" and "specfile"
+#        are always included, in combination they serve as a unique id.
+#        :param specfiles: filenames of msrun files - if specified return only items from those files
+#        :type specfiles: str or [str, str, ...]
+#        :param sort: if "sort" is specified the returned list of items is sorted according to the :class:`Si`
+#        attribute specified by "sort", if the attribute is not present the item is skipped.
+#        :param reverse: boolean to reverse sort order
+#        :param selector: a function which is called with each :class:`Si` item and returns
+#        True (include item) or False (discard item). If not specified all items are returned
+#
+#        return {'attribute1': numpy.array(), 'attribute1': numpy.array(), ...}
+#        """
+#        attr = attr if attr is not None else []
+#        attr = set(['id', 'specfile'] + aux.toList(attr))
+#        specfiles = [_ for _ in viewkeys(self.info)] if specfiles is None else aux.toList(specfiles)
+#
+#        arrays = arrays = dict([(key, []) for key in attr])
+#        reportAttributes = list()
+#        if report == 'lfq':
+#            arrays['charge'] = list()
+#            arrays['labelState'] = list()
+#            for specfile in self.specfiles:
+#                arrays[specfile] = list()
+#                reportAttributes.append(specfile)
+#        elif report == 'sil':
+#            arrays['charge'] = list()
+#            arrays['specfile'] = list()
+#            for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
+#                labelAttributeName = ' '.join(('label:', str(labelState)))
+#                arrays[labelAttributeName] = list()
+#                reportAttributes.append(labelAttributeName)
+#
+#        if report == 'sil':
+#            for item in _getItems(self.container, specfiles, sort, reverse, selector):
+#                for charge in viewkeys(item.intensityMatrix):
+#                    for specfile in specfiles:
+#                        specfilePosition = self.info[specfile]['matrixPosition']
+#                        for key in attributes:
+#                            arrays[key].append(getattr(item, key, None))
+#                        arrays['charge'].append(charge)
+#                        arrays['specfile'].append(specfile)
+#                        for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
+#                            labelAttributeName = ' '.join(('label:', str(labelState)))
+#                            arrays[labelAttributeName].append(item.intensityMatrix[charge][specfilePosition, labelState])
+#        elif report == 'lfq':
+#            for item in _getItems(self.container, specfiles, sort, reverse, selector):
+#                for charge in viewkeys(item.intensityMatrix):
+#                    for labelState in list(viewkeys(self.labelDescriptor.labels)) + [-1]:
+#                        for key in attributes:
+#                            arrays[key].append(getattr(item, key, None))
+#                        arrays['charge'].append(charge)
+#                        arrays['labelState'].append(labelState)
+#                        for specfile in specfiles:
+#                            specfilePosition = self.info[specfile]['matrixPosition']
+#                            arrays[specfile].append(item.intensityMatrix[charge][specfilePosition, labelState])
+#        else:
+#            raise Exception('report must be either "lfq" or "sil", not '+report)##
+#
+#        for key in  [_ for _ in viewkeys(arrays)]:
+#            if key in reportAttributes:
+#                arrays[key] = numpy.array(arrays[key], dtype=numpy.float64)
+#            else:
+#                arrays[key] = numpy.array(arrays[key])
+#        return arrays

@@ -25,7 +25,7 @@ import numpy
 from lxml import etree as ETREE
 
 import maspy.auxiliary as aux
-import maspy.ontology as ONTOLOGY
+import maspy.ontology
 
 ##############################################################
 ### maspy unrelated xml (mzml) content #######################
@@ -44,20 +44,7 @@ binaryDataArrayTypes = {'MS:1000514': 'mz', 'MS:1000515': 'i',
 
 
 """#TODO: docstring """
-oboTranslator = ONTOLOGY.OBOOntology()
-#Note: duplicate values have to be removed from the ".obo" files, to prevent
-#errors in ONTOLOGY.OBOOntology()
-msOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies',
-                              'psi-ms.obo'
-                              )
-unitOntologyPath = aux.joinpath(os.path.dirname(aux.__file__), 'ontologies',
-                                'unit.obo'
-                                )
-with io.open(msOntologyPath, 'r', encoding='utf-8') as openfile:
-    oboTranslator.load(openfile)
-with io.open(unitOntologyPath, 'r', encoding='utf-8') as openfile:
-    oboTranslator.load(openfile)
-
+oboTranslator = maspy.ontology.DefaultTranslator()
 
 ###############################
 # --- general xml methods --- #
@@ -250,16 +237,17 @@ def xmlAddParams(parentelement, params):
     for param in params:
         if len(param) == 3:
             cvAttrib = {'cvRef': param[0].split(':')[0], 'accession': param[0],
-                        'name':oboTranslator[param[0]].name
+                        'name':oboTranslator.getNameFromId(param[0])
                         }
             if param[1]:
                 cvAttrib.update({'value': param[1]})
             else:
                 cvAttrib.update({'value': ''})
             if param[2]:
+                unitName = oboTranslator.getNameFromId(param[2])
                 cvAttrib.update({'unitAccession': param[2],
                                  'unitCvRef': param[2].split(':')[0],
-                                 'unitName': oboTranslator[param[2]].name
+                                 'unitName': unitName
                                  })
             paramElement = ETREE.Element('cvParam', **cvAttrib)
         elif len(param) == 4:
