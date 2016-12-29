@@ -1,6 +1,25 @@
 """
-#TODO: module description
+This module provides functions to import various data types as maspy objects,
+which are associated with analysis workflows of mass spectrometry data. This
+currently comprises the mzML format, results of the percolator software and to
+some extent mzIdentML files, and file formats representing peptide LC-MS feature
+".featureXML" and ".features.tsv".
 """
+
+#  Copyright 2016 David M. Hollenstein, Jakob J. Hollenstein
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 ######################## Python 2 and 3 compatibility #########################
 from __future__ import absolute_import, division, print_function
 from __future__ import unicode_literals
@@ -13,6 +32,7 @@ except ImportError:
     #python 3 series
     pass
 ################################################################################
+
 from collections import defaultdict as ddict
 import io
 from lxml import etree as ETREE

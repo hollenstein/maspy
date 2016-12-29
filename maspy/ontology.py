@@ -2,7 +2,25 @@
 This module provides access to OBO ontology files. The class DefaulTranslator
 already contains OBO Terms used in mzML files and other file formats specified
 by the Proteomics Standards Initiative (PSI).
+
+Refer to http://pythonhosted.org/Orange-Bioinformatics/index.html and the OBO
+ontology module for a much more comprehensive OBO library.
 """
+
+#  Copyright 2016 David M. Hollenstein, Jakob J. Hollenstein
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 ######################### Python 2 and 3 compatibility #########################
 from __future__ import absolute_import, division, print_function
 from __future__ import unicode_literals
@@ -15,8 +33,7 @@ except ImportError:
     #python 3 series
     pass
 ################################################################################
-#Refer to http://pythonhosted.org/Orange-Bioinformatics/index.html and the 
-#OBO ontology module for a much more comprehensive OBO library.
+
 import io
 import os
 
@@ -69,6 +86,10 @@ def _attributeLinesToDict(attributeLines):
         and a value part which are separated by a ':'.
 
     :return: a dictionary containing the attributes of an obo 'Term' entry.
+
+    NOTE: Some attributes can occur multiple times in one single term, for 
+          example 'is_a' or 'relationship'. However, currently only the last
+          occurence is stored.
     """
     attributes = dict()
     for line in attributeLines:
@@ -97,6 +118,13 @@ class OboTranslator(object):
 
     Use OboTranslator.load(filepath) to import '[Term]' entries from an ontology
     file. Loaded terms are stored in self.oboTerms by using their 'id'.  
+
+    :ivar oboTerms: a dictionary that stores imported obo terms in the form
+        {termId: {attributeName: attributeValue, ...}, ...}
+
+    NOTE: Some attributes can occur multiple times in one single term, for 
+          example 'is_a' or 'relationship'. However, currently only the last
+          occurence is stored.
     """
     def __init__(self):
         self.oboTerms = dict()
@@ -137,6 +165,13 @@ class DefaultTranslator(OboTranslator):
 
     Use :func:`maspy.ontology.DefaultTranslator.getNameWithId()` to get a terms
     'name' by its 'id'.
+
+    :ivar oboTerms: a dictionary that stores imported obo terms in the form
+        {termId: {attributeName: attributeValue, ...}, ...}
+
+    NOTE: Some attributes can occur multiple times in one single term, for 
+          example 'is_a' or 'relationship'. However, currently only the last
+          occurence is stored.
     """
     def __init__(self):
         super(DefaultTranslator, self).__init__()
