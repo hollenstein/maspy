@@ -4,7 +4,7 @@ masses of atoms and amino acids or cleavage rules of the most common proteolytic
 enzymes.
 """
 
-#  Copyright 2016 David M. Hollenstein, Jakob J. Hollenstein
+#  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.

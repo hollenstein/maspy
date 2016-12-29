@@ -4,7 +4,7 @@ matches and peptide LC-MS features, and containers which manage storage,
 data access, saving and loading of these data types.
 """
 
-#  Copyright 2016 David M. Hollenstein, Jakob J. Hollenstein
+#  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.

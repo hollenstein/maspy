@@ -5,7 +5,7 @@ a given peptide and calculate the expected mass of alternative labeling
 states.
 """
 
-#  Copyright 2016 David M. Hollenstein, Jakob J. Hollenstein
+#  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.

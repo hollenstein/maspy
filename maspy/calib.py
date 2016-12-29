@@ -4,7 +4,7 @@ aquire calibration data, to generate calibration functions and to apply the
 calibration functions to MS1 spectra. 
 """
 
-#  Copyright 2016 David M. Hollenstein, Jakob J. Hollenstein
+#  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
