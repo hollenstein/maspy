@@ -6,8 +6,6 @@
 Welcome to maspy's documentation!
 =================================
 
-HALLO ICH BIN DER INDEX
-
 Contents:
 
 .. toctree::
