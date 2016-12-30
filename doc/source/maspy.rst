@@ -28,10 +28,10 @@ maspy.core module
     :undoc-members:
     :show-inheritance:
 
-maspy.evidence module
----------------------
+maspy.errors module
+-------------------
 
-.. automodule:: maspy.evidence
+.. automodule:: maspy.errors
     :members:
     :undoc-members:
     :show-inheritance:
