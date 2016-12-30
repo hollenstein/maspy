@@ -17,4 +17,26 @@ Documentation
 An introduction to the underlying concepts of maspy is available at
 http://maspy.readthedocs.io
 
+Workflow examples
+-----------------
 
+Test files
+----------
+Test files can be downloaded from
+https://github.com/hollenstein/maspy_testfiles
+
+Installation
+------------
+
+
+Compatibility
+-------------
+
+Maspy is developed and tested on Python 2.7 and 3.5. 
+
+Contributors
+------------
+
+David Hollenstein https://github.com/hollenstein
+
+Jakob Hollenstein https://github.com/jkbjh

@@ -1,6 +1,5 @@
 """
 This module contains functions to calculate a running mean, median and mode.
-These implementations were published on the websit ... under the MIT license.
 """
 
 #  The MIT License (MIT)
