@@ -19,7 +19,24 @@ import os
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../..'))
+
+import mock
+ 
+MOCK_MODULES = ['future.utils',
+                'lxml',
+                'matplotlib',
+                'matplotlib.pyplot',
+                'numpy',
+                'pyteomics',
+                'pyteomics.fasta',
+                'pyteomics.mass',
+                'pyteomics.mzid',
+                'scipy',
+                'scipy.interpolate']
+
+for mod_name in MOCK_MODULES:
+    sys.modules[mod_name] = mock.MagicMock()
 
 # -- General configuration ------------------------------------------------
 
