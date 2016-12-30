@@ -54,9 +54,9 @@ def oboTermParser(filepath):
 
     #Iterate through lines until the first obo "[Term]" is encountered
     try:
-        line = lineIter.next()
+        line = next(lineIter)
         while line != '[Term]':
-            line = lineIter.next()
+            line = next(lineIter)
         header = line #Remove
         entryLines = list()
     except StopIteration:
