@@ -33,6 +33,7 @@ Compatibility
 -------------
 
 Maspy is developed and tested on Python 2.7 and 3.5. 
+Tested on Windows (7) and Linux (Debian 8).
 
 Contributors
 ------------
