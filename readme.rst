@@ -28,17 +28,18 @@ https://github.com/hollenstein/maspy_testfiles
 Installation
 ------------
 For Windows users without Python we recommend installing the
-[Anaconda](https://www.continuum.io/downloads) Python package provided by
+`Anaconda <https://www.continuum.io/downloads>`_ Python package provided by
 Continuum Analytics.
 
 NOTE: The current release of maspy will soon be submitted to
-[PyPi](https://pypi.python.org/), which allows installation with PIP, as
+`PyPi <https://pypi.python.org/>`_, which allows installation with PIP, as
 described below:
 
 For installing maspy and its dependencies we recommend using
-[PIP](https://pip.pypa.io/en/stable/installing/).
+`PIP <https://pip.pypa.io/en/stable/installing/>`_.
 
-Installing maspy from the command line with PIP after the release
+Installing maspy from the command line with PIP after the release:
+
 ```
 pip install maspy
 ```
