@@ -16,6 +16,10 @@ Bug fixes, performance, code design, documentation, ...
   - rt alignment (one specfile pair per process)
   - recalibration of mz (one process per specfile)
 
+Constants
+---------
+- use a local unimod database and pyteomics.mass.unimod to generate constants.aaModComp
+
 Core
 ----
 - splitContainer -> returns a list of containers or a dict
