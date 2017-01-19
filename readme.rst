@@ -56,7 +56,7 @@ maspy is licensed under the `Apache License 2.0
 
 The project contains additional code and files licensed under different
 licenses. For details refer to `LICENSE.txt
-<https://github.com/hollenstein/maspy/LICENSE.txt>`_.
+<https://github.com/hollenstein/maspy/blob/master/LICENSE.txt>`_.
 
 
 Contributors
