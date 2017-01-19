@@ -1,5 +1,3 @@
-  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
-                                 
                                  Apache License
                            Version 2.0, January 2004
                         http://www.apache.org/licenses/
@@ -180,7 +178,7 @@
    APPENDIX: How to apply the Apache License to your work.
 
       To apply the Apache License to your work, attach the following
-      boilerplate notice, with the fields enclosed by brackets "{}"
+      boilerplate notice, with the fields enclosed by brackets "[]"
       replaced with your own identifying information. (Don't include
       the brackets!)  The text should be enclosed in the appropriate
       comment syntax for the file format. We also recommend that a
@@ -188,7 +186,7 @@
       same "printed page" as the copyright notice for easier
       identification within third-party archives.
 
-   Copyright {yyyy} {name of copyright owner}
+   Copyright [yyyy] [name of copyright owner]
 
    Licensed under the Apache License, Version 2.0 (the "License");
    you may not use this file except in compliance with the License.
@@ -201,3 +199,18 @@
    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
    See the License for the specific language governing permissions and
    limitations under the License.
+
+   MASPY SUBCOMPONENTS:
+
+   Maspy includes a number of subcomponents with separate copyright notices
+   and license terms. Your use of the source code for these subcomponents is
+   subject to the terms and conditions of the following licenses.
+
+   This product bundles the mass spectrometry ontology file "psi-ms.obo",
+   copyright HUPO Proteomics Standards Initiative (HUPO-PSI), which is
+   available under the Creative Commons Attribution 3.0 Unported License. For
+   details, see licenses/psi-ms_obo.CC_BY_3 or to view a copy of this license,
+   visit http://creativecommons.org/licenses/by/3.0/
+
+   This product bundles the file "mit_stats.py" copyright Virgil Stokes, which
+   is available under a MIT license. For details, see licenses/mit_stats.MIT

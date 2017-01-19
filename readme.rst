@@ -49,6 +49,16 @@ Compatibility
 Maspy is developed and tested on Python 2.7 and 3.5.
 Tested on Windows (7) and Linux (Debian 8).
 
+License
+-------
+maspy is licensed under the `Apache License 2.0
+<http://www.apache.org/licenses/LICENSE-2.0.txt>`_.
+
+The project contains additional code and files licensed under different
+licenses. For details refer to `LICENSE.txt
+<https://github.com/hollenstein/maspy/LICENSE.txt>`_.
+
+
 Contributors
 ------------
 David Hollenstein https://github.com/hollenstein
