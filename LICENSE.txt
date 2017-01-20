@@ -210,7 +210,13 @@
    copyright HUPO Proteomics Standards Initiative (HUPO-PSI), which is
    available under the Creative Commons Attribution 3.0 Unported License. For
    details, see licenses/psi-ms_obo.CC_BY_3 or to view a copy of this license,
-   visit http://creativecommons.org/licenses/by/3.0/
+   visit https://creativecommons.org/licenses/by/3.0/
+
+   This product bundles the Units Ontology file "unit.obo", copyright Georgios
+   Gkoutos and Rob Hoehndorf, which is available under the Creative Commons
+   Attribution 2.0 Generic License. For details, see licenses/unit_obo.CC_BY_2
+   or to view a copy of this license, visit
+   https://creativecommons.org/licenses/by/2.0/
 
    This product bundles the file "mit_stats.py" copyright Virgil Stokes, which
    is available under a MIT license. For details, see licenses/mit_stats.MIT
