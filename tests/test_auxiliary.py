@@ -1,6 +1,4 @@
 import sys
-sys.path.append('D:/Dropbox/python/maspy')
-sys.path.append('C:/Users/David/Dropbox/python/maspy')
 import mock
 import unittest
 

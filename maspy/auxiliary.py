@@ -295,7 +295,7 @@ def _dumpNdarrayToFile(filelike, ndarray):
 
     :param filelike: can be a file or a file-like object that provides the
         methods ``.write()`` and ``.tell()``.
-    :param array: a N-dimensional ``numpy.array``
+    :param ndarray: a N-dimensional ``numpy.array``
 
     :returns: a metadata dictionary ::
         {'start': start position in the file, 'end': end position in the file,
@@ -303,11 +303,11 @@ def _dumpNdarrayToFile(filelike, ndarray):
          'shape': description of the array shape
          }
     """
-    bytedata = array.tobytes('C')
+    bytedata = ndarray.tobytes('C')
     start = filelike.tell()
     end = start + len(bytedata)
-    metadata = {'start': start, 'end': end, 'size': array.size,
-                'dtype': array.dtype.name, 'shape': array.shape
+    metadata = {'start': start, 'end': end, 'size': ndarray.size,
+                'dtype': ndarray.dtype.name, 'shape': ndarray.shape
                 }
     filelike.write(bytedata)
     return metadata

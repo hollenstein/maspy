@@ -1,5 +1,4 @@
 import sys
-sys.path.append('D:/Dropbox/python/maspy')
 import unittest
 import maspy.constants as module
 
