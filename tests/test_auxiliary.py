@@ -1,6 +1,23 @@
+######################### Python 2 and 3 compatibility #########################
+from __future__ import absolute_import, division, print_function
+from __future__ import unicode_literals
+from future.utils import viewitems, viewkeys, viewvalues, listitems, listvalues
+
+try:
+    #python 2.7
+    from itertools import izip as zip
+except ImportError:
+    #python 3 series
+    pass
+################################################################################
+
 import sys
-import mock
+sys.path.append('D:/Dropbox/python/maspy')
 import unittest
+try:
+    import unittest.mock as MOCK
+except ImportError:
+    import mock as MOCK
 
 import maspy.auxiliary as module
 
@@ -45,16 +62,16 @@ class TestLookUpFileLocationMethods(unittest.TestCase):
     def mock_os_path_isfile_false(self):
         return False
 
-    @mock.patch('os.walk', mock_os_walk)
-    @mock.patch('os.listdir', mock_os_listdir)
-    @mock.patch('os.path.isfile', mock_os_path_isfile_true)
+    @MOCK.patch('os.walk', mock_os_walk)
+    @MOCK.patch('os.listdir', mock_os_listdir)
+    @MOCK.patch('os.path.isfile', mock_os_path_isfile_true)
     def test_searchFileLocation_isfile_true(self):
         self.assertIsNone(module.searchFileLocation('test.tsv', 'csv', 'mockdir', recursive=False))
         self.assertEqual(module.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=False), 'mockdir/test.xml')
         self.assertEqual(module.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=True), 'mockdir/test.xml')
 
-    @mock.patch('os.listdir', mock_os_listdir)
-    @mock.patch('os.path.isfile', mock_os_path_isfile_false)
+    @MOCK.patch('os.listdir', mock_os_listdir)
+    @MOCK.patch('os.path.isfile', mock_os_path_isfile_false)
     def test_searchFileLocation_isfile_false(self):
         self.assertIsNone(module.searchFileLocation('test.tsv', 'csv', 'mockdir', recursive=False))
         self.assertIsNone(module.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=False))
@@ -64,13 +81,13 @@ class TestLookUpFileLocationMethods(unittest.TestCase):
         pass
         #module.matchingFilePaths
 
-    @mock.patch('os.listdir', mock_os_listdir)
-    @mock.patch('os.path.isfile', mock_os_path_isfile_true)
+    @MOCK.patch('os.listdir', mock_os_listdir)
+    @MOCK.patch('os.path.isfile', mock_os_path_isfile_true)
     def test_listFiletypes_isfile_true(self):
         self.assertEqual(module.listFiletypes('test', 'mockdir'), ['xml', 'txt', 'txt.zip'])
 
-    @mock.patch('os.listdir', mock_os_listdir)
-    @mock.patch('os.path.isfile', mock_os_path_isfile_false)
+    @MOCK.patch('os.listdir', mock_os_listdir)
+    @MOCK.patch('os.path.isfile', mock_os_path_isfile_false)
     def test_listFiletypes_isfile_false(self):
         self.assertEqual(module.listFiletypes('test', 'mockdir'), [])
 
