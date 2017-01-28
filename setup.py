@@ -17,20 +17,21 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'readme.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
+VERSION='1.1.2'
 setup(
     name='maspy',
 
     # Versions should comply with PEP440.  For a discussion on single-sourcing
     # the version across setup.py and the project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version='1.1.1',
+    version=VERSION,
 
     description='An open-source python library for mass spectrometry-based proteomics data analysis',
     long_description=long_description,
 
     # The project's main homepage.
     url='https://github.com/hollenstein/maspy',
-
+    download_url='https://codeload.github.com/hollenstein/maspy/legacy.tar.gz/%s' % (VERSION,),
     # Author details
     author='David M. Hollenstein',
     author_email='hollenstein.david@gmail.com',
@@ -41,10 +42,10 @@ setup(
     # See https://pypi.python.org/pypi?%3Aaction=list_classifiers
     classifiers=[
         'Development Status :: 5 - Production/Stable',
-        'Intended Audience :: Science/Research'
+        'Intended Audience :: Science/Research',
         'Intended Audience :: Developers',
         'Topic :: Software Development :: Libraries :: Python Modules',
-        'Topic :: Scientific/Engineering :: Bio-Informatics'
+        'Topic :: Scientific/Engineering :: Bio-Informatics',
         'License :: OSI Approved :: Apache Software License',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
@@ -84,11 +85,11 @@ setup(
     # installed, specify them here.  If using Python 2.6 or less, then these
     # have to be included in MANIFEST.in as well.
     package_data={
-        'ontologies': ['psi-ms.obo',
-                       'unit.obo'
-                       ],
+        'maspy/ontologies': ['psi-ms.obo',
+                             'unit.obo'
+                            ],
     },
-
+    include_package_data=True,
     # Although 'package_data' is the preferred approach, in some case you may
     # need to place data files outside of your packages. See:
     # http://docs.python.org/3.4/distutils/setupscript.html#installing-additional-files # noqa
