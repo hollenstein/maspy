@@ -1,6 +1,6 @@
 """
 A collection of helper functions used in different modules. Functions deal for
-example with saving files, encoding and decoding data in the json format, 
+example with saving files, encoding and decoding data in the json format,
 filtering of numpy arrays, data fitting, etc.
 """
 
@@ -55,7 +55,6 @@ import zipfile
 import numpy
 from scipy.interpolate import LSQUnivariateSpline
 
-from maspy.mit_stats import runningMode as runningMode
 from maspy.mit_stats import runningMean as runningMean
 from maspy.mit_stats import runningMedian as runningMedian
 

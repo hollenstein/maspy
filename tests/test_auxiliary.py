@@ -12,7 +12,6 @@ except ImportError:
 ################################################################################
 
 import sys
-sys.path.append('D:/Dropbox/python/maspy')
 import unittest
 try:
     import unittest.mock as MOCK
@@ -97,8 +96,7 @@ class TestRunningAverageMethods(unittest.TestCase):
         testData = [0, 1, 2, 3, 3, 6, 7, 10, 4, 5.5]
         N = len(testData)
         self.assertEqual(module.runningMean(testData, N, 5), [1.8, 3.0, 4.2, 5.8, 6.0, 6.5])
-        self.assertEqual(module.runningMode(testData, N, 5), [3, 3, 3, 3, 10, 5.5])
-        self.assertEqual(module.runningMedian(testData, 5),[2, 3, 3, 6, 6, 6])
+        self.assertEqual(module.runningMedian(testData, 5), [2, 3, 3, 6, 6, 6])
 
 
 #PartiallySafeReplace
