@@ -17,7 +17,7 @@ here = path.abspath(path.dirname(__file__))
 with open(path.join(here, 'readme.rst'), encoding='utf-8') as f:
     long_description = f.read()
 
-VERSION='1.1.2'
+VERSION='1.1.3'
 setup(
     name='maspy',
 
