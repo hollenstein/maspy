@@ -27,18 +27,18 @@ https://github.com/hollenstein/maspy_testfiles
 
 Installation
 ------------
-For Windows users without Python we recommend installing the
+For Windows users without Python we recommend installing the free
 `Anaconda <https://www.continuum.io/downloads>`_ Python package provided by
-Continuum Analytics.
-
-NOTE: The current release of maspy will soon be submitted to
-`PyPi <https://pypi.python.org/>`_, which allows installation with PIP, as
-described below:
+Continuum Analytics, which already contains a large number of popular Python
+packages for data science. Or get it from the
+`Python homepage <https://www.python.org/downloads/windows/>`_.
 
 For installing maspy and its dependencies we recommend using
 `PIP <https://pip.pypa.io/en/stable/installing/>`_.
 
-Installing maspy from the command line with PIP after the release:
+The following command will install the latest version of a maspy and its
+dependencies from the Python Packaging Index
+`PyPi <https://pypi.python.org/pypi/maspy/1.1.3>`_:
 
 ```
 pip install maspy
@@ -57,7 +57,6 @@ maspy is licensed under the `Apache License 2.0
 The project contains additional code and files licensed under different
 licenses. For details refer to `LICENSE.txt
 <https://github.com/hollenstein/maspy/blob/master/LICENSE.txt>`_.
-
 
 Contributors
 ------------
