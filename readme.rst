@@ -33,12 +33,10 @@ Continuum Analytics, which already contains a large number of popular Python
 packages for data science. Or get it from the
 `Python homepage <https://www.python.org/downloads/windows/>`_.
 
-For installing maspy and its dependencies we recommend using
-`PIP <https://pip.pypa.io/en/stable/installing/>`_.
-
-The following command will install the latest version of a maspy and its
-dependencies from the Python Packaging Index
-`PyPi <https://pypi.python.org/pypi/maspy/1.1.3>`_:
+For installing we recommend using
+`PIP <https://pip.pypa.io/en/stable/installing/>`_. The following command will
+install the latest version of a maspy and its dependencies from the Python
+Packaging Index `PyPi <https://pypi.python.org/pypi/maspy/1.1.3>`_:
 
 ```
 pip install maspy
