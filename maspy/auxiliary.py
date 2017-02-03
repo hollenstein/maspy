@@ -817,7 +817,10 @@ def tolerantArrayMatching(referenceArray, matchArray, matchTolerance,
 
     #TODO: change matchUnit to "absolute", "relative" and remove the "*1e-6"
     """
-    if matchUnit == 'ppm':
+    if matchUnit == 'relative':
+        lowLimMatchArr = matchArray * (1 - matchTolerance)
+        uppLimMatchArr = matchArray * (1 + matchTolerance)
+    elif matchUnit == 'ppm':
         lowLimMatchArr = matchArray * (1 - matchTolerance*1e-6)
         uppLimMatchArr = matchArray * (1 + matchTolerance*1e-6)
     elif matchUnit == 'da':
