@@ -11,12 +11,9 @@ except ImportError:
     pass
 ################################################################################
 
-import sys
-sys.path.append("D:/Dropbox/python/maspy")
-
 import numpy
 import unittest
-import maspy.isobar as module
+import maspy.isobar as MODULE
 
 
 class TestIsobarClass(unittest.TestCase):
@@ -35,9 +32,9 @@ class TestIsobarClass(unittest.TestCase):
                      'i': numpy.array(ionIntensityList)
                      }
 
-        isobar = module.IsobaricTag('reagentName')
-        isobar.addReporterMz(reporterMz)
-        isobar.addImpurityMatrix(impurityMatrix, preChannels=1, postChannels=1)
+        isobar = MODULE.IsobaricTag('reagentName')
+        isobar.setReporterMz(reporterMz)
+        isobar.setImpurityMatrix(impurityMatrix, preChannels=1, postChannels=1)
 
         #Test matrix processing
         processedMatrix = numpy.array([
@@ -66,7 +63,7 @@ class TestIsobarMethods(unittest.TestCase):
         reporterMz = [100, 101, 102, 103]
         mzTolerance = 10e-6
 
-        reporterArrays = module._extractReporterIons(ionArrays, reporterMz,
+        reporterArrays = MODULE._extractReporterIons(ionArrays, reporterMz,
                                                      mzTolerance)
         self.assertEqual(reporterArrays['mz'].size, len(reporterMz))
         self.assertTrue(numpy.all(reporterArrays['i'] == 1))
@@ -78,7 +75,7 @@ class TestIsobarMethods(unittest.TestCase):
             [1.88, 93.12, 4.90],
             [2.82, 93.21, 3.90]
             ]
-        normedMatrix = module._normalizeImpurityMatrix(matrix)
+        normedMatrix = MODULE._normalizeImpurityMatrix(matrix)
         for row in normedMatrix:
             self.assertAlmostEqual(sum(row), 1, places=7)
 
@@ -98,8 +95,7 @@ class TestIsobarMethods(unittest.TestCase):
             [0.00, 0.00, 0.00, 3.77, 93.29],
             ]
 
-        resultMatrix = module._padImpurityMatrix(matrix, preChannels=1,
-                                                 postChannels=2)
+        resultMatrix = MODULE._padImpurityMatrix(matrix, 1, 2)
 
         self.assertEqual(len(resultMatrix), len(extendedMatrix))
         self.assertEqual(len(resultMatrix[0]), len(resultMatrix))
@@ -120,7 +116,7 @@ class TestIsobarMethods(unittest.TestCase):
             [0.00, 0.00, 0.00, 0.00],
             [0.00, 0.00, 0.00, 0.90]
             ])
-        resultMatrix = module._transposeMatrix(matrix)
+        resultMatrix = MODULE._transposeMatrix(matrix)
         self.assertTrue(numpy.array_equal(resultMatrix, transposedMatrix))
 
     def test_correctIsotopeImpurities(self):
@@ -132,7 +128,7 @@ class TestIsobarMethods(unittest.TestCase):
             ])
         intensities = [0.99, 1, 0.01, 0.90]
         expectedIntensities = numpy.array([1., 1., 0., 1.])
-        corrIntensities = module._correctIsotopeImpurities(transposedMatrix,
+        corrIntensities = MODULE._correctIsotopeImpurities(transposedMatrix,
                                                            intensities)
         self.assertEqual(corrIntensities.size, len(intensities))
         numpy.testing.assert_almost_equal(corrIntensities, expectedIntensities)

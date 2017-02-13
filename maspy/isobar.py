@@ -1,6 +1,9 @@
 """
+The module "isobar" is still in development. The interface of high and low level
+functions is not yet stable!
+
 This module provides methods for working with isobaric tag labeling
-strategies.
+strategies, providing access to reporter intensities for quantification.
 """
 
 #  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
@@ -43,7 +46,31 @@ import scipy.optimize
 import maspy.auxiliary as AUX
 
 
+#Example how to use current functions
+"""
+isobaricTag = IsobaricTag()
+isobaricTag.setReporterMz(reporterMz)
+isobaricTag.setImpurityMatrix(impurityMatrix)
+
+mzTolerance = 20e-6
+
+selector = lambda si: si.msLevel > 1
+for si in msrunContainer.getItems(selector=selector):
+    sai = msrunContainer.saic[si.specfile][si.id]
+    reporterIons = _extractReporterIons(sai.arrays, isobaricTag.reporterMz,
+                                        mzTolerance)
+    reporterIons['corrI'] = isobar.correctIsotopeImpurities(reporterIons['i'])
+"""
+
+
 class IsobaricTag(object):
+    """
+    #TODO
+    :ivar reagentName:
+    :ivar reporterMz:
+    :ivar impurityMatrix:
+
+    """
     def __init__(self, reagentName):
         self.reagentName = reagentName
         self.reporterMz = None
@@ -52,15 +79,20 @@ class IsobaricTag(object):
         self._matrixPostChannels = None
         self._processedMatrix = None
 
-    def addReporterMz(self, reporterMz):
-        """Add a list of expected reporter ion mz values.
+    def setReporterMz(self, reporterMz):
+        """Define a list of expected reporter ion mz values.
 
         :param reporterMz: a list of reporter mz values
         """
         self.reporterMz = reporterMz
 
-    def addImpurityMatrix(self, impurityMatrix, preChannels=2, postChannels=2):
+    def setImpurityMatrix(self, impurityMatrix, preChannels=2, postChannels=2):
         """Add and process an isotope impurity matrix.
+
+        The standard impurity matrix of an isobaric tag reagent provided by the
+        vendor contains five columns with a nominal mass shift of (-2, -1, 0,
+        +1, +2), hence the default values of 2 for the arguments "preChannels"
+        and "postChannels".
 
         :params impurityMatrix: a matrix (2d nested list) that describes
             reporter ion isotope impurities. Each isobaric channel must be
@@ -80,19 +112,22 @@ class IsobaricTag(object):
         observed reporter intensities.
         """
         processedMatrix = _normalizeImpurityMatrix(self.impurityMatrix)
-        processedMatrix = _padImpurityMatrix(processedMatrix,
-            preChannels=self._matrixPreChannels,
-            postChannels=self._matrixPostChannels
+        processedMatrix = _padImpurityMatrix(
+            processedMatrix, self._matrixPreChannels, self._matrixPostChannels
             )
         processedMatrix = _transposeMatrix(processedMatrix)
         self._processedMatrix = processedMatrix
 
     def correctIsotopeImpurities(self, intensities):
         """#TODO
-        :param intensities: #TODO
-        :returns: #TODO
+
+        :param intensities: a list or numpy array of observed reporter ion
+            intensities.
+        :returns: a numpy array of reporter ion intensities corrected for
+            isotope impurities.
         """
         return _correctIsotopeImpurities(self._processedMatrix, intensities)
+
 
 def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
     """Find and a list of reporter ions and return mz and intensity values.
@@ -157,7 +192,7 @@ def _normalizeImpurityMatrix(matrix):
     return newMatrix
 
 
-def _padImpurityMatrix(matrix, preChannels=2, postChannels=2):
+def _padImpurityMatrix(matrix, preChannels, postChannels):
     """Align the values of an isotope impurity matrix and fill up with 0.
 
     NOTE:
@@ -202,8 +237,10 @@ def _correctIsotopeImpurities(matrix, intensities):
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
         channel must be present as a COLUMN. Use maspy.isobar._transposeMatrix()
         if channels are written in rows.
-    :param intensities: a list of observed intensities, each
-    :returns: #TODO
+    :param intensities: a list or numpy array of observed reporter ion
+        intensities.
+    :returns: a numpy array of reporter ion intensities corrected for isotope
+        impurities.
     """
     correctedIntensities, _ = scipy.optimize.nnls(matrix, intensities)
     return correctedIntensities
