@@ -4,6 +4,20 @@ functions is not yet stable!
 
 This module provides methods for working with isobaric tag labeling
 strategies, providing access to reporter intensities for quantification.
+
+Example:
+    isobaricTag = IsobaricTag()
+    isobaricTag.setReporterMz(reporterMz)
+    isobaricTag.setImpurityMatrix(impurityMatrix)
+
+    mzTolerance = 20e-6
+
+    selector = lambda si: si.msLevel > 1
+    for si in msrunContainer.getItems(selector=selector):
+        sai = msrunContainer.saic[si.specfile][si.id]
+        reporterIons = _extractReporterIons(sai.arrays, isobaricTag.reporterMz,
+                                            mzTolerance)
+        reporterIons['corrI'] = isobar.correctIsotopeImpurities(reporterIons['i'])
 """
 
 #  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
@@ -46,30 +60,15 @@ import scipy.optimize
 import maspy.auxiliary as AUX
 
 
-#Example how to use current functions
-"""
-isobaricTag = IsobaricTag()
-isobaricTag.setReporterMz(reporterMz)
-isobaricTag.setImpurityMatrix(impurityMatrix)
-
-mzTolerance = 20e-6
-
-selector = lambda si: si.msLevel > 1
-for si in msrunContainer.getItems(selector=selector):
-    sai = msrunContainer.saic[si.specfile][si.id]
-    reporterIons = _extractReporterIons(sai.arrays, isobaricTag.reporterMz,
-                                        mzTolerance)
-    reporterIons['corrI'] = isobar.correctIsotopeImpurities(reporterIons['i'])
-"""
-
-
 class IsobaricTag(object):
-    """
-    #TODO
-    :ivar reagentName:
-    :ivar reporterMz:
-    :ivar impurityMatrix:
+    """Representation of an isobaric labeling strategy.
 
+    :ivar reagentName: Name to identify isobaric labeling reagent. For example
+        "tmt6plex" or "itraq4plex.
+    :ivar reporterMz: a list of reporter ion mz values
+    :ivar impurityMatrix: a matrix (2d nested list) that describes reporter ion
+        isotope impurities. Each isobaric channel must be present as a row. The
+        number of rows must be equal to the number of "reporterMz" values.
     """
     def __init__(self, reagentName):
         self.reagentName = reagentName
@@ -89,14 +88,14 @@ class IsobaricTag(object):
     def setImpurityMatrix(self, impurityMatrix, preChannels=2, postChannels=2):
         """Add and process an isotope impurity matrix.
 
-        The standard impurity matrix of an isobaric tag reagent provided by the
-        vendor contains five columns with a nominal mass shift of (-2, -1, 0,
-        +1, +2), hence the default values of 2 for the arguments "preChannels"
-        and "postChannels".
+        The standard impurity matrix of an isobaric labeling reagent provided by
+        the manufacturer contains five columns with a nominal mass shift of
+        (-2, -1, 0, +1, +2), hence the default values of 2 for the arguments
+        "preChannels" and "postChannels".
 
         :params impurityMatrix: a matrix (2d nested list) that describes
             reporter ion isotope impurities. Each isobaric channel must be
-            present as a ROW.
+            present as a row.
         :params preChannels: number of matrix columns with a nominal mass shift
             < 0 (-1, -2,..) in respect to the reporter ion mz value.
         :params postChannels: number of matrix columns with a nominal mass shift
@@ -119,7 +118,14 @@ class IsobaricTag(object):
         self._processedMatrix = processedMatrix
 
     def correctIsotopeImpurities(self, intensities):
-        """#TODO
+        """Corrects observed reporter ion intensities for isotope impurities.
+
+        Because of isotope impurities of the isobaric tagging reagents, the
+        individual observed reporter ion intensities have some contributions
+        from adjcent reporter ions. To account for these isotope overlaps the
+        observed reporter ion intensities can be corrected using an isotope
+        impurity matrix, which is supplied by the manufacturer and can vary
+        between reagent batches.
 
         :param intensities: a list or numpy array of observed reporter ion
             intensities.
@@ -179,7 +185,7 @@ def _normalizeImpurityMatrix(matrix):
     """Normalize each row of the matrix that the sum of the row equals 1.
 
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
-        channel must be present as a ROW.
+        channel must be present as a row.
     :returns: a matrix containing normalized values
     """
     newMatrix = list()
@@ -200,7 +206,7 @@ def _padImpurityMatrix(matrix, preChannels, postChannels):
         and "postChannels" + 1.
 
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
-        channel must be present as a ROW.
+        channel must be present as a row.
     :params preChannels: number of matrix columns with a nominal mass shift < 0
         (-1, -2,..) in respect to the reporter ion mz value.
     :params postChannels: number of matrix columns with a nominal mass shift > 0
@@ -221,18 +227,18 @@ def _padImpurityMatrix(matrix, preChannels, postChannels):
 
 
 def _transposeMatrix(matrix):
-    """Converts an impurity matrix to a numpy array and invert columns and rows,
+    """Convert an impurity matrix to a numpy array and invert columns and rows,
     so that each channel is present as a column.
 
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
-        channel must be present as a ROW.
+        channel must be present as a row.
     :returns: transposed matrix
     """
     return numpy.array(matrix).transpose()
 
 
 def _correctIsotopeImpurities(matrix, intensities):
-    """ #TODO
+    """Corrects observed reporter ion intensities for isotope impurities.
 
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
         channel must be present as a COLUMN. Use maspy.isobar._transposeMatrix()
