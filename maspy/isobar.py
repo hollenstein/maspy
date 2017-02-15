@@ -5,19 +5,65 @@ functions is not yet stable!
 This module provides methods for working with isobaric tag labeling
 strategies, providing access to reporter intensities for quantification.
 
-Example:
-    isobaricTag = IsobaricTag()
-    isobaricTag.setReporterMz(reporterMz)
-    isobaricTag.setImpurityMatrix(impurityMatrix)
+:Todos:
+    Missing reporter ions
+        At the moment missing reporter ion mz values are returned as numpy.nan
+        but missing intensities as 0, this is because the linear regression
+        function for normalizing isotope impurities can't handle nan.
+
+:Example:
+    import numpy
+
+    import maspy.reader
+    import maspy.isobar
+
+    mzmlPath = 'a_file_path/a_file_name.mzML'
+    msrunContainer = maspy.reader.importMzml(mzmlPath)
+
+    reporterMz = [126.127726, 127.124761, 128.134436,
+                  129.131471, 130.141145, 131.138180]
+    impurityMatrix = [
+        [0.00, 0.00, 99.00, 1.00, 0.00],
+        [0.00, 0.00, 99.00, 1.00, 0.00],
+        [0.00, 0.00, 99.00, 1.00, 0.00],
+        [0.00, 0.00, 99.00, 1.00, 0.00],
+        [0.00, 0.00, 99.00, 1.00, 0.00],
+        [0.00, 0.00, 99.00, 1.00, 0.00]
+    ]
+
+    tmt6plex = maspy.isobar.IsobaricTag('tmt6plex')
+    tmt6plex.setReporterMz(reporterMz)
+    tmt6plex.setImpurityMatrix(impurityMatrix)
 
     mzTolerance = 20e-6
-
     selector = lambda si: si.msLevel > 1
+
+    reporterArrays = {'mz': [], 'i': [], 'corrI': []}
     for si in msrunContainer.getItems(selector=selector):
         sai = msrunContainer.saic[si.specfile][si.id]
-        reporterIons = _extractReporterIons(sai.arrays, isobaricTag.reporterMz,
-                                            mzTolerance)
-        reporterIons['corrI'] = isobar.correctIsotopeImpurities(reporterIons['i'])
+        reporterIons = maspy.isobar._extractReporterIons(
+            sai.arrays, tmt6plex.reporterMz, mzTolerance
+        )
+        reporterIons['corrI'] = tmt6plex.correctIsotopeImpurities(reporterIons['i'])
+        for key in reporterIons:
+            reporterArrays[key].append(reporterIons[key])
+    for key in list(reporterArrays):
+        reporterArrays[key] = numpy.array(reporterArrays[key])
+
+    #Plot mz deviation of observed reporter ions
+    from matplotlib import pyplot as plt
+    fig, ax = plt.subplots(6, figsize=(4, 9), sharex=True, sharey=True)
+    bins = numpy.linspace(-10, 10, 40)
+    for channel in range(6):
+        exactMz = reporterMz[channel]
+        mzDev = (1 - reporterArrays['mz'][:, channel] / exactMz) * 1e6
+        m = numpy.isfinite(mzDev)
+        ax[channel].hist(mzDev[m], bins=bins, color='grey')
+        title = ''.join(['Channel ', str(channel+1), ': ', str(int(exactMz))])
+        ax[channel].set_title(title)
+    ax[channel].set_xlabel('delta m/z [ppm]')
+    fig.tight_layout()
+    fig.show()
 """
 
 #  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
@@ -127,8 +173,7 @@ class IsobaricTag(object):
         impurity matrix, which is supplied by the manufacturer and can vary
         between reagent batches.
 
-        :param intensities: a list or numpy array of observed reporter ion
-            intensities.
+        :param intensities: numpy array of observed reporter ion intensities.
         :returns: a numpy array of reporter ion intensities corrected for
             isotope impurities.
         """
@@ -141,8 +186,9 @@ def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
     Expected reporter mz values are searched in "ionArray['mz']" and reported if
     the observed relative deviation is less than specified by "mzTolerance". In
     the case of multiple matches, the one with the minimal deviation is picked.
-    If no matching entries are found numpy.nan is returned. The returned arrays
-    are in the order of "reporterMz" values.
+    If no matching entries are found numpy.nan is returned for the mz value and
+    an intensity of 0. The returned arrays are in the order of "reporterMz"
+    values.
 
     :param ionArrays: a dictionary containing two numpy arrays of equal size,
         {"i": an array of ion intensities, "mz" an array of ion mz values}
@@ -159,7 +205,8 @@ def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
 
         matchingValues = ionArrays['mz'][loPos:upPos]
         if matchingValues.size == 0:
-            reporterIons['i'].append(numpy.nan)
+            #reporterIons['i'].append(numpy.nan)
+            reporterIons['i'].append(0)
             reporterIons['mz'].append(numpy.nan)
         elif matchingValues.size == 1:
             reporterIons['i'].append(ionArrays['i'][loPos])
@@ -243,8 +290,7 @@ def _correctIsotopeImpurities(matrix, intensities):
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
         channel must be present as a COLUMN. Use maspy.isobar._transposeMatrix()
         if channels are written in rows.
-    :param intensities: a list or numpy array of observed reporter ion
-        intensities.
+    :param intensities: numpy array of observed reporter ion intensities.
     :returns: a numpy array of reporter ion intensities corrected for isotope
         impurities.
     """
