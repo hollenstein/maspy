@@ -11,6 +11,8 @@ except ImportError:
     pass
 ################################################################################
 
+import sys
+
 from collections import defaultdict as ddict
 import numpy
 import unittest
@@ -28,6 +30,18 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
             '04_P1': {'04_p1', '04_p2'},
             '04_P2': {'04_p1', '04_p2'},
             '04_P3': {'04_p2'},
+            '05_P1': {'05_p1', '05_p2', '05_p3'},
+            '05_P2': {'05_p1', '05_p4'},
+            '05_P3': {'05_p2', '05_p3', '05_p4'},
+            '06_P1': {'06_p1', '06_p2', '06_p3'},
+            '06_P2': {'06_p2', '06_p3'},
+            '06_P3': {'06_p2', '06_p4'},
+            '06_P4': {'06_p2', '06_p3', '06_p4'},
+            '06_P5': {'06_p2', '06_p4'},
+            '07_P1': {'07_p1', '07_p2'},
+            '07_P2': {'07_p1', '07_p3', '07_p4'},
+            '07_P3': {'07_p2', '07_p3'},
+            '07_P4': {'07_p3', '07_p5'},
             }
         peptideToProteins = {
             '01_p1': {'01_P1'},
@@ -37,7 +51,20 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
             '03_p1': {'03_P1', '03_P2'},
             '03_p2': {'03_P1', '03_P2'},
             '04_p1': {'04_P1', '04_P2'},
-            '04_p2': {'04_P1', '04_P2', '04_P3'}
+            '04_p2': {'04_P1', '04_P2', '04_P3'},
+            '05_p1': {'05_P1', '05_P2'},
+            '05_p2': {'05_P1', '05_P3'},
+            '05_p3': {'05_P1', '05_P3'},
+            '05_p4': {'05_P2', '05_P3'},
+            '06_p1': {'06_P1'},
+            '06_p2': {'06_P1', '06_P2' , '06_P3', '06_P4', '06_P5'},
+            '06_p3': {'06_P1', '06_P2' , '06_P4'},
+            '06_p4': {'06_P3', '06_P4', '06_P5'},
+            '07_p1': {'07_P1', '07_P2'},
+            '07_p2': {'07_P1', '07_P3'},
+            '07_p3': {'07_P2', '07_P3', '07_P4'},
+            '07_p4': {'07_P2'},
+            '07_p5': {'07_P4'},
             }
         mergedProteinToPeptides = {
             '01_P1': {'01_p1', '01_p2'},
@@ -46,7 +73,18 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
             tuple(['03_P1', '03_P2']): {'03_p1', '03_p2'},
             tuple(['04_P1', '04_P2']): {'04_p1', '04_p2'},
             '04_P3': {'04_p2'},
-            }
+            '05_P1': {'05_p1', '05_p2', '05_p3'},
+            '05_P2': {'05_p1', '05_p4'},
+            '05_P3': {'05_p2', '05_p3', '05_p4'},
+            '06_P1': {'06_p1', '06_p2', '06_p3'},
+            '06_P2': {'06_p2', '06_p3'},
+            tuple(['06_P3', '06_P5']): {'06_p2', '06_p4'},
+            '06_P4': {'06_p2', '06_p3', '06_p4'},
+            '07_P1': {'07_p1', '07_p2'},
+            '07_P2': {'07_p1', '07_p3', '07_p4'},
+            '07_P3': {'07_p2', '07_p3'},
+            '07_P4': {'07_p3', '07_p5'}
+        }
         mergedPeptideToProteins = {
             '01_p1': {'01_P1'},
             '01_p2': {'01_P1'},
@@ -55,34 +93,55 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
             '03_p1': {tuple(['03_P1', '03_P2'])},
             '03_p2': {tuple(['03_P1', '03_P2'])},
             '04_p1': {tuple(['04_P1', '04_P2'])},
-            '04_p2': {tuple(['04_P1', '04_P2']), '04_P3'}
+            '04_p2': {tuple(['04_P1', '04_P2']), '04_P3'},
+            '05_p1': {'05_P1', '05_P2'},
+            '05_p2': {'05_P1', '05_P3'},
+            '05_p3': {'05_P1', '05_P3'},
+            '05_p4': {'05_P2', '05_P3'},
+            '06_p1': {'06_P1'},
+            '06_p2': {'06_P1', '06_P2' , '06_P4', tuple(['06_P3', '06_P5'])},
+            '06_p3': {'06_P1', '06_P2' , '06_P4'},
+            '06_p4': {'06_P4', tuple(['06_P3', '06_P5'])},
+            '07_p1': {'07_P1', '07_P2'},
+            '07_p2': {'07_P1', '07_P3'},
+            '07_p3': {'07_P2', '07_P3', '07_P4'},
+            '07_p4': {'07_P2'},
+            '07_p5': {'07_P4'},
             }
 
         observedPeptides = set(peptideToProteins)
-        expectedGroups = {p.split('_')[0] for p in proteinToPeptides}
-        equalProteins = [{'03_P1', '03_P2'}, {'04_P1', '04_P2'}]
+        potentialProteins = set(proteinToPeptides)
+        expectedClusters = {p.split('_')[0] for p in proteinToPeptides}
+        equalProteins = [{'03_P1', '03_P2'}, {'04_P1', '04_P2'},
+                         {'06_P3', '06_P5'}]
 
-        uniqueProteins = {'01_P1', '02_P1'}
+        uniqueProteins = {'01_P1', '02_P1', '06_P1', '07_P2', '07_P4'}
         uniqueMergedProteins = {'01_P1', '02_P1', tuple(['03_P1', '03_P2']),
-                                tuple(['04_P1', '04_P2'])
+                                tuple(['04_P1', '04_P2']), '06_P1', '07_P2',
+                                '07_P4'
                                 }
 
         subsetProteins = [
-            ('02_P2', {'02_P1'}), ('03_P1', {'03_P2'}), ('03_P2', {'03_P1'}),
-            ('04_P1', {'04_P2'}), ('04_P2', {'04_P1'}),
-            ('04_P3', {'04_P1', '04_P2'})
-            ]
+            ('02_P2', {'02_P1'}), ('04_P3', {'04_P1', '04_P2'}),
+            ('06_P2', {'06_P1', '06_P4'}), ('06_P3', {'06_P4'}),
+            ('06_P5', {'06_P4'})
+        ]
         subsetMergedProteins = [
-            ('02_P2', {'02_P1'}), ('04_P3', {tuple(['04_P1', '04_P2'])})
-            ]
+            ('02_P2', {'02_P1'}), ('04_P3', {tuple(['04_P1', '04_P2'])}),
+            ('06_P2', {'06_P1', '06_P4'}),
+            (tuple(['06_P3', '06_P5']), {'06_P4'})
+        ]
+        redundantProteins = {'02_P2', '03_P2', '04_P2', '04_P3',
+                             '05_P2', '06_P2', '06_P3', '06_P5', '07_P3'}
 
         self.proteinToPeptides = proteinToPeptides
         self.mergedProteinToPeptides = mergedProteinToPeptides
         self.peptideToProteins = peptideToProteins
         self.mergedPeptideToProteins = mergedPeptideToProteins
         self.observedPeptides = observedPeptides
+        self.potentialProteins = potentialProteins
 
-        self.expectedGroups = expectedGroups
+        self.expectedClusters = expectedClusters
         self.equalProteins = equalProteins
         self.equalProteinTuples = sorted([tuple(p) for p in equalProteins])
 
@@ -91,23 +150,25 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
 
         self.subsetProteins = sorted(subsetProteins)
         self.subsetMergedProteins = sorted(subsetMergedProteins)
+        self.redundantProteins = redundantProteins
 
-    def test_groupConnectedPeptides(self):
-        peptideGroups = MODULE._groupConnectedPeptides(self.peptideToProteins,
-                                                       self.proteinToPeptides)
-        self.assertEqual(len(peptideGroups), len(self.expectedGroups))
 
-        allGroupedPeptides = reduce(lambda s1, s2: s1.union(s2), peptideGroups)
-        self.assertSetEqual(allGroupedPeptides, self.observedPeptides)
+    def test_findProteinClusters(self):
+        proteinClusters = MODULE._findProteinClusters(self.proteinToPeptides,
+                                                     self.peptideToProteins)
+        self.assertEqual(len(proteinClusters), len(self.expectedClusters))
+        allClusteredProteins = reduce(lambda c1, c2: c1.union(c2), proteinClusters)
+        self.assertSetEqual(allClusteredProteins, self.potentialProteins)
 
-        #Assert that all grouped peptides are actually from the same group
-        for group in peptideGroups:
-            self.assertIsInstance(group, set)
-            self.assertEqual(len({p.split('_')[0] for p in group}), 1)
+        #Assert that all proteins withing a cluster belong the correct cluster,
+        #which is indicated by the number infront of the first "_" of the protein names.
+        for cluster in proteinClusters:
+            self.assertIsInstance(cluster, set)
+            self.assertEqual(len({p.split('_')[0] for p in cluster}), 1)
 
-    def test_findEqualEvidenceProteins(self):
-        equalProteins = MODULE._findEqualEvidenceProteins(self.proteinToPeptides,
-                                                          self.proteinToPeptides)
+    def test_findSamesetProteins(self):
+        equalProteins = MODULE._findSamesetProteins(self.proteinToPeptides,
+                                                    self.proteinToPeptides)
         equalProteinTuples = sorted([tuple(p) for p in equalProteins])
         self.assertListEqual(equalProteinTuples, self.equalProteinTuples)
 
@@ -146,53 +207,6 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
                                                           self.mergedPeptideToProteins)
         self.assertListEqual(sorted(subsetMergedProteins), self.subsetMergedProteins)
 
-    def test_getValueCounts(self):
-        peptideFrequency = MODULE._getValueCounts(self.peptideToProteins)
-        for peptide, counts in viewitems(peptideFrequency):
-            self.assertEqual(counts, len(self.peptideToProteins[peptide]))
-
-        protPepCounts = MODULE._getValueCounts(self.proteinToPeptides)
-        for protein, counts in viewitems(protPepCounts):
-            self.assertEqual(counts, len(self.proteinToPeptides[protein]))
-
-
-class TestFindRedundantProteins(unittest.TestCase):
-    def setUp(self):
-        proteinToPeptides = {
-            '05_P1': {'05_p1', '05_p2', '05_p3'},
-            '05_P2': {'05_p1', '05_p4'},
-            '05_P3': {'05_p2', '05_p3', '05_p4'},
-            '06_P1': {'06_p1', '06_p2', '06_p3'},
-            '06_P2': {'06_p2', '06_p3'},
-            '06_P3': {'06_p2', '06_p4'},
-            '06_P4': {'06_p2', '06_p3', '06_p4'},
-            '06_P5': {'06_p2', '06_p4'},
-            '07_P1': {'07_p1', '07_p2'},
-            '07_P2': {'07_p1', '07_p3', '07_p4'},
-            '07_P3': {'07_p2', '07_p3'},
-            '07_P4': {'07_p3', '07_p5'}
-            }
-        peptideToProteins = {
-            '05_p1': {'05_P1', '05_P2'},
-            '05_p2': {'05_P1', '05_P3'},
-            '05_p3': {'05_P1', '05_P3'},
-            '05_p4': {'05_P2', '05_P3'},
-            '06_p1': {'06_P1'},
-            '06_p2': {'06_P1', '06_P2' , '06_P3', '06_P4', '06_P5'},
-            '06_p3': {'06_P1', '06_P2' , '06_P4'},
-            '06_p4': {'06_P3', '06_P4', '06_P5'},
-            '07_p1': {'07_P1', '07_P2'},
-            '07_p2': {'07_P1', '07_P3'},
-            '07_p3': {'07_P2', '07_P3', '07_P4'},
-            '07_p4': {'07_P2'},
-            '07_p5': {'07_P4'},
-            }
-        redundantProteins = {'05_P2', '06_P2', '06_P3', '06_P5', '07_P3'}
-
-        self.proteinToPeptides = proteinToPeptides
-        self.peptideToProteins = peptideToProteins
-        self.redundantProteins = redundantProteins
-
     def test_findRedundantProteins(self):
         redundantProteins = MODULE._findRedundantProteins(self.proteinToPeptides,
                                                           self.peptideToProteins)
@@ -211,3 +225,12 @@ class TestFindRedundantProteins(unittest.TestCase):
 
         for peptide, proteins in viewitems(pepToProts):
             self.assertGreater(len(proteins), 0)
+
+    def test_getValueCounts(self):
+        peptideFrequency = MODULE._getValueCounts(self.peptideToProteins)
+        for peptide, counts in viewitems(peptideFrequency):
+            self.assertEqual(counts, len(self.peptideToProteins[peptide]))
+
+        protPepCounts = MODULE._getValueCounts(self.proteinToPeptides)
+        for protein, counts in viewitems(protPepCounts):
+            self.assertEqual(counts, len(self.proteinToPeptides[protein]))

@@ -6,6 +6,39 @@ This module will allow a simple protein inference; reporting a minimal set of
 proteins that can explain a set of peptides; defining shared und unique
 peptides; defining proteins that share equal evidence and protein subgroups;
 defining protein redundancy groups.
+
+
+Relevant terms from the PSI-MS ontology
+---------------------------------------
+
+Cluster identifier (MS:1002407)
+    An identifier applied to protein groups to indicate that they are linked by
+    shared peptides.
+
+Same-set protein (MS:1001594)
+    A protein which is indistinguishable or equivalent to another protein,
+    having matches to an identical set of peptide sequences.
+
+Sequence sub-set protein (MS:1001596)
+    A protein with a sub-set of the peptide sequence matches for another
+    protein, and no distinguishing peptide matches.
+
+Sequence subsumable protein (MS:1001598)
+    A sequence same-set or sequence sub-set protein where the matches are
+    distributed across two or more proteins.
+
+Peptide unique to one protein (MS:1001363)
+    A peptide matching only one.
+
+Peptide shared in multiple proteins (MS:1001175)
+    A peptide matching multiple proteins.
+
+
+Additional terms used in maspy
+------------------------------
+
+Unique protein (uniqueProtein)
+    A protein mapped to at least one unique peptide.
 """
 
 #  Copyright 2015-2017 David M. Hollenstein, Jakob J. Hollenstein
@@ -53,41 +86,45 @@ Mapping objects
     associated peptides (=value). For Example {protein: {peptide, ...}, ...}
 """
 
-def _groupConnectedPeptides(pepToProts, protToPeps):
-    """ #TODO
+def _findProteinClusters(protToPeps, pepToProts):
+    """Find protein clusters in the specified protein to peptide mappings.
 
-    :param pepToProts: dict, for each peptide (=key) contains a set of parent
-        proteins (=value). For Example {peptide: {protein, ...}, ...}
+    A protein cluster is a group of proteins that are somehow directly or
+    indirectly connected by shared peptides.
+
     :param protToPeps: dict, for each protein (=key) contains a set of
         associated peptides (=value). For Example {protein: {peptide, ...}, ...}
-    :returns: a list of peptide sets
+    :param pepToProts: dict, for each peptide (=key) contains a set of parent
+        proteins (=value). For Example {peptide: {protein, ...}, ...}
+    :returns: a list of protein clusters, each cluster is a set of proteins
     """
-    connectedGroups = list()
-    resolvingPeptides = set(pepToProts)
-    while resolvingPeptides:
-        peptide = resolvingPeptides.pop()
-        peptideGroup = set([peptide])
-        proteins = set(pepToProts[peptide])
-        parsedProteins = set()
+    clusters = list()
+    resolvingProteins = set(protToPeps)
+    while resolvingProteins:
+        protein = resolvingProteins.pop()
+        proteinCluster = set([protein])
 
-        while len(proteins) != len(parsedProteins):
-            for protein in proteins:
-                peptideGroup.update(protToPeps[protein])
-            parsedProteins.update(proteins)
+        peptides = set(protToPeps[protein])
+        parsedPeptides = set()
 
-            for peptide in peptideGroup:
-                proteins.update(pepToProts[peptide])
-        connectedGroups.append(peptideGroup)
-        resolvingPeptides = resolvingPeptides.difference(peptideGroup)
-    return connectedGroups
+        while len(peptides) != len(parsedPeptides):
+            for peptide in peptides:
+                proteinCluster.update(pepToProts[peptide])
+            parsedPeptides.update(peptides)
+
+            for protein in proteinCluster:
+                peptides.update(protToPeps[protein])
+        clusters.append(proteinCluster)
+        resolvingProteins = resolvingProteins.difference(proteinCluster)
+    return clusters
 
 
 def _findUniqueProteins(pepToProts):
-    """ #TODO
+    """Find proteins that are mapped to at least one unique peptide.
 
     :param pepToProts: dict, for each peptide (=key) contains a set of parent
         proteins (=value). For Example {peptide: {protein, ...}, ...}
-    :returns: #TODO
+    :returns: a set of unique proteins
     """
     uniqueProteins = list()
     for proteins in viewvalues(pepToProts):
@@ -96,8 +133,8 @@ def _findUniqueProteins(pepToProts):
     return set(uniqueProteins)
 
 
-def _findEqualEvidenceProteins(proteins, protToPeps):
-    """#TODO
+def _findSamesetProteins(proteins, protToPeps):
+    """Find proteins that are mapped to an identical set of peptides.
 
     :param proteins: iterable, proteins that are tested for having equal
         evidence.
@@ -117,7 +154,8 @@ def _findEqualEvidenceProteins(proteins, protToPeps):
 
 
 def _findSubsetProteins(proteins, protToPeps, pepToProts):
-    """Find proteins which peptides are a subset of or equal to other proteins.
+    """Find proteins which peptides are a sub-set, but not a same-set to other
+    proteins.
 
     :param proteins: iterable, proteins that are tested for being a subset
     :param pepToProts: dict, for each peptide (=key) contains a set of parent
@@ -127,6 +165,8 @@ def _findSubsetProteins(proteins, protToPeps, pepToProts):
     :returns: a list of pairs of protein and their superset proteins.
         [(protein, {superset protein, ...}), ...]
     """
+    proteinsEqual = lambda prot1, prot2: protToPeps[prot1] == protToPeps[prot2]
+
     subGroups = list()
     for protein in proteins:
         peptideCounts = Counter()
@@ -137,8 +177,9 @@ def _findSubsetProteins(proteins, protToPeps, pepToProts):
 
         superGroups = set()
         for sharingProtein, sharedPeptides in peptideCounts.most_common():
-            if sharedPeptides == peptideCount:
-                superGroups.add(sharingProtein)
+            if peptideCount == sharedPeptides:
+                if not proteinsEqual(protein, sharingProtein):
+                    superGroups.add(sharingProtein)
             else:
                 break
         if superGroups:
@@ -163,7 +204,9 @@ def _findRedundantProteins(protToPeps, pepToProts, proteins=None):
         Proteins with an equal number of peptides are sorted in descending order
             of their sorted peptide frequencies (= proteins per peptide).
         If two proteins are still equal, they are sorted alpha numerical in
-        ascending order according to their protein names.
+        descending order according to their protein names. For example in the
+        case of a tie between proteins "A" and "B", protein "B" would be
+        removed.
     3.  Parse this list of sorted non unique proteins;
         If all its peptides have a frequency value of greater 1;
         mark the protein as redundant; remove its peptides from the peptide
@@ -189,7 +232,7 @@ def _findRedundantProteins(protToPeps, pepToProts, proteins=None):
     getProt = operator.itemgetter(0)
 
     sort = list()
-    for protein in sorted(proteins):
+    for protein in sorted(proteins, reverse=True):
         protPepFreq = [pepFrequency[pep] for pep in protToPeps[protein]]
         if min(protPepFreq) > 1:
             sortValue = (len(protPepFreq)*-1, sorted(protPepFreq, reverse=True))
@@ -261,11 +304,12 @@ def _invertMapping(mapping):
 
 
 def _getValueCounts(mapping):
-    """ #TODO:
+    """Returns a counter object; contains for each key of the mapping the counts
+    of the respective value element (= set length).
 
     :param mapping: dict, for each key contains a set of values. Can be either a
         protToPeps or pepToProts dictionary.
-    :returns: #TODO:
+    :returns: a counter
     """
     return Counter({k: len(v) for k, v in viewitems(mapping)})
 
