@@ -11,12 +11,16 @@ except ImportError:
     pass
 ################################################################################
 
+import sys
+sys.path.append("D:/Dropbox/python/maspy")
+sys.path.append("C:/Users/David/Dropbox/python/maspy")
+
 import numpy
 import unittest
 import maspy.isobar as MODULE
 
 
-class TestIsobarClass(unittest.TestCase):
+class TestIsobaricTag(unittest.TestCase):
     def test_InitClass(self):
         reporterMz = [100, 101, 102, 103]
         impurityMatrix = [
@@ -32,9 +36,7 @@ class TestIsobarClass(unittest.TestCase):
                      'i': numpy.array(ionIntensityList)
                      }
 
-        isobar = MODULE.IsobaricTag('reagentName')
-        isobar.setReporterMz(reporterMz)
-        isobar.setImpurityMatrix(impurityMatrix, preChannels=1, postChannels=1)
+        isobar = MODULE.IsobaricTag('name', reporterMz, impurityMatrix, 1, 1)
 
         #Test matrix processing
         processedMatrix = numpy.array([
@@ -49,7 +51,7 @@ class TestIsobarClass(unittest.TestCase):
         #Test intensity correction
         intensities = numpy.array([0.99, 1, 0.01, 0.90])
         expectedIntensities = numpy.array([1., 1., 0., 1.])
-        corrIntensities = isobar.correctIsotopeImpurities(intensities)
+        corrIntensities = isobar.corrImpurities(intensities)
         numpy.testing.assert_almost_equal(corrIntensities, expectedIntensities)
 
 
@@ -67,6 +69,54 @@ class TestIsobarMethods(unittest.TestCase):
                                                      mzTolerance)
         self.assertEqual(reporterArrays['mz'].size, len(reporterMz))
         self.assertTrue(numpy.all(reporterArrays['i'] == 1))
+
+    def test_correctIsotopeImpurities(self):
+        transposedMatrix = numpy.array([
+            [0.99, 0.00, 0.00, 0.00],
+            [0.01, 0.99, 0.00, 0.00],
+            [0.00, 0.00, 0.00, 0.00],
+            [0.00, 0.00, 0.00, 0.90]
+            ])
+        intensities = [0.99, 1, 0.01, 0.90]
+        expectedIntensities = numpy.array([1., 1., 0., 1.])
+        corrIntensities = MODULE._correctIsotopeImpurities(transposedMatrix,
+                                                           intensities)
+        self.assertEqual(corrIntensities.size, len(intensities))
+        numpy.testing.assert_almost_equal(corrIntensities, expectedIntensities)
+
+    def test_rearrangeItraq8plexMatrix(self):
+        impurityMatrix = [
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2]
+        ]
+
+        newMatrix = MODULE._rearrangeItraq8plexMatrix(impurityMatrix)
+        self.assertEqual(impurityMatrix[6][3], 2)
+        self.assertEqual(impurityMatrix[6][4], 0)
+        self.assertEqual(impurityMatrix[7][1], -2)
+        self.assertEqual(impurityMatrix[7][0], 0)
+
+    def test_rearrangeTmt10plexMatrix(self):
+        impurityMatrix = [
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2],
+            [-2, -1, 0, 1, 2]
+        ]
+
+        newMatrix = MODULE._rearrangeTmt10plexMatrix(impurityMatrix)
 
     def test_normalizeImpurityMatrix(self):
         matrix = [
@@ -119,16 +169,3 @@ class TestIsobarMethods(unittest.TestCase):
         resultMatrix = MODULE._transposeMatrix(matrix)
         self.assertTrue(numpy.array_equal(resultMatrix, transposedMatrix))
 
-    def test_correctIsotopeImpurities(self):
-        transposedMatrix = numpy.array([
-            [0.99, 0.00, 0.00, 0.00],
-            [0.01, 0.99, 0.00, 0.00],
-            [0.00, 0.00, 0.00, 0.00],
-            [0.00, 0.00, 0.00, 0.90]
-            ])
-        intensities = [0.99, 1, 0.01, 0.90]
-        expectedIntensities = numpy.array([1., 1., 0., 1.])
-        corrIntensities = MODULE._correctIsotopeImpurities(transposedMatrix,
-                                                           intensities)
-        self.assertEqual(corrIntensities.size, len(intensities))
-        numpy.testing.assert_almost_equal(corrIntensities, expectedIntensities)

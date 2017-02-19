@@ -11,6 +11,23 @@ strategies, providing access to reporter intensities for quantification.
         but missing intensities as 0, this is because the linear regression
         function for normalizing isotope impurities can't handle nan.
 
+    Simple normalization procedures
+        Normalization procedures like equal median or summed intensity for each
+        channel could be implemented here. However, these procedures are not
+        necessarily unique for Isobaric labeling strategies. Therefore it makes
+        more sense to generate a new module containing these functions. Either
+        a module called something like "quant" or a separate module like
+        "quantnorm".
+
+    Extract reporter ions for one or multiple specfiles
+        A function providing similar functionality as used in the example.
+
+    Correct isotope impurities
+        Check logic and correctness of iTRAQ8plex and TMT10plex matrix
+        transformation. Implement TMT10plex matrix transformation.
+
+    Unit tests for Individual Label strategies (iTRAQ4plex, TMT6plex, ...)
+
 :Example:
     import numpy
 
@@ -31,10 +48,8 @@ strategies, providing access to reporter intensities for quantification.
         [0.00, 0.00, 99.00, 1.00, 0.00]
     ]
 
-    tmt6plex = maspy.isobar.IsobaricTag('tmt6plex')
-    tmt6plex.setReporterMz(reporterMz)
-    tmt6plex.setImpurityMatrix(impurityMatrix)
-
+    tmt6plex = maspy.isobar.IsobaricTag('tmt6plex', reporterMz,
+                                        impurityMatrix, 2, 2)
     mzTolerance = 20e-6
     selector = lambda si: si.msLevel > 1
 
@@ -110,26 +125,32 @@ class IsobaricTag(object):
     """Representation of an isobaric labeling strategy.
 
     :ivar reagentName: Name to identify isobaric labeling reagent. For example
-        "tmt6plex" or "itraq4plex.
-    :ivar reporterMz: a list of reporter ion mz values
+        "TMT6plex-HCD" or "iTRAQ4plex".
+    :ivar reporterMz: A list of reporter ion mz values observed after
+        fragmentation.
     :ivar impurityMatrix: a matrix (2d nested list) that describes reporter ion
         isotope impurities. Each isobaric channel must be present as a row. The
         number of rows must be equal to the number of "reporterMz" values.
+    :ivar matrixPreChannels: number of matrix columns with a nominal mass shift
+        < 0 (-1, -2,..) in respect to the reporter ion mz value.
+    :ivar matrixPostChannels: number of matrix columns with a nominal mass shift
+        > 0 (+1, +2,..) in respect to the reporter ion mz value.
+    :ivar labelReagents: #TODO: docstring
     """
-    def __init__(self, reagentName):
+    def __init__(self, reagentName, reporterMz, impurityMatrix,
+                 matrixPreChannels, matrixPostChannels, labelReagents=None):
         self.reagentName = reagentName
-        self.reporterMz = None
-        self.impurityMatrix = None
-        self._matrixPreChannels = None
-        self._matrixPostChannels = None
-        self._processedMatrix = None
-
-    def setReporterMz(self, reporterMz):
-        """Define a list of expected reporter ion mz values.
-
-        :param reporterMz: a list of reporter mz values
-        """
         self.reporterMz = reporterMz
+        self.impurityMatrix = impurityMatrix
+        self.matrixPreChannels = matrixPreChannels
+        self.matrixPostChannels = matrixPostChannels
+        self._processedMatrix = self._processImpurityMatrix()
+        if labelReagents is None:
+            self.labelReagents = [
+                'reporter'+str(i) for i in range(1, len(reporterMz)+1)
+            ]
+        else:
+            self.labelReagents = labelReagents
 
     def setImpurityMatrix(self, impurityMatrix, preChannels=2, postChannels=2):
         """Add and process an isotope impurity matrix.
@@ -147,10 +168,7 @@ class IsobaricTag(object):
         :params postChannels: number of matrix columns with a nominal mass shift
             > 0 (+1, +2,..) in respect to the reporter ion mz value.
         """
-        self.impurityMatrix = impurityMatrix
-        self._matrixPreChannels = preChannels
-        self._matrixPostChannels = postChannels
-        self._processImpurityMatrix()
+        raise DeprecationWarning
 
     def _processImpurityMatrix(self):
         """Process the impurity matrix so that it can be used to correct
@@ -158,12 +176,12 @@ class IsobaricTag(object):
         """
         processedMatrix = _normalizeImpurityMatrix(self.impurityMatrix)
         processedMatrix = _padImpurityMatrix(
-            processedMatrix, self._matrixPreChannels, self._matrixPostChannels
+            processedMatrix, self.matrixPreChannels, self.matrixPostChannels
             )
         processedMatrix = _transposeMatrix(processedMatrix)
-        self._processedMatrix = processedMatrix
+        return processedMatrix
 
-    def correctIsotopeImpurities(self, intensities):
+    def corrImpurities(self, intensities):
         """Corrects observed reporter ion intensities for isotope impurities.
 
         Because of isotope impurities of the isobaric tagging reagents, the
@@ -175,9 +193,164 @@ class IsobaricTag(object):
 
         :param intensities: numpy array of observed reporter ion intensities.
         :returns: a numpy array of reporter ion intensities corrected for
-            isotope impurities.
+            isotope impuritiesself.
         """
         return _correctIsotopeImpurities(self._processedMatrix, intensities)
+
+
+class Tmt2plex(IsobaricTag):
+    """#TODO:
+
+    :ivar reagentName: "TMT2plex", name of the isobaric labeling reagent
+    :ivar reporterMz: A list of reporter ion mz values observed after
+        fragmentation.
+    :ivar impurityMatrix: #TODO
+    :ivar labelReagents: A list of label reagent names that correspond to the
+        reporter ions of "reporterMz".
+
+    #TODO: Describe init here, use proper matrix, specify hcd or etd
+    """
+    _reporterMz = {'hcd': [126.127726, 127.131081],
+                   'etd': [114.127725, 114.127725]
+                   }
+    _labelReagents = ['126', '127C']
+    def __init__(self, impurityMatrix, fragmentation='hcd'):
+        IsobaricTag.__init__(self, 'TMT2plex', self._reporterMz[fragmentation],
+            impurityMatrix, 2, 2, labelReagents=self._labelReagents
+        )
+
+    def _processImpurityMatrix(self):
+        raise NotImplementedError()
+
+
+class Tmt6plex(IsobaricTag):
+    """#TODO:
+
+    :ivar reagentName: "TMT6plex", name of the isobaric labeling reagent
+    :ivar reporterMz: A list of reporter ion mz values observed after
+        fragmentation.
+    :ivar impurityMatrix: #TODO
+    :ivar labelReagents: A list of label reagent names that correspond to the
+        reporter ions of "reporterMz".
+
+    #TODO: Describe init here, use proper matrix, specify hcd or etd
+    """
+    _reporterMz = {'hcd': [126.127726, 127.124761, 128.134436,
+                           129.131471, 130.141145, 131.138180],
+                   'etd': [114.127725, 115.124760, 116.134433,
+                           117.131468, 118.141141, 119.138176]
+                   }
+    _labelReagents = ['126',  '127N', '128C', '129N', '130C', '131']
+
+    def __init__(self, impurityMatrix, fragmentation='hcd'):
+        IsobaricTag.__init__(self, 'TMT6plex', self._reporterMz[fragmentation],
+            impurityMatrix, 2, 2, labelReagents=self._labelReagents
+        )
+
+    def _processImpurityMatrix(self):
+        raise NotImplementedError()
+
+
+class Tmt10plex(IsobaricTag):
+    """#TODO:
+
+    :ivar reagentName: "TMT10plex", name of the isobaric labeling reagent
+    :ivar reporterMz: A list of reporter ion mz values observed after
+        fragmentation.
+    :ivar impurityMatrix: #TODO
+    :ivar labelReagents: A list of label reagent names that correspond to the
+        reporter ions of "reporterMz".
+
+    #TODO: Describe init here, use proper matrix, specify hcd or etd
+    """
+    #Values from the R package MSnbase
+    _reporterMz = {'hcd': [126.127725, 127.124760, 127.131079, 128.128114,
+                           128.134433, 129.131468, 129.137787, 130.134822,
+                           130.141141, 131.138176],
+                   'etd': [114.127725, 115.124760, 114.127725, 115.124760,
+                           116.134433, 117.131468, 116.134433, 117.131468,
+                           118.141141, 119.138176]
+                   }
+    _labelReagents = ['126', '127N', '127C', '128N', '128C',
+                      '129N', '129C', '130N', '130C', '131']
+
+    def __init__(self, impurityMatrix, fragmentation='hcd'):
+        IsobaricTag.__init__(self, 'TMT10plex', self._reporterMz[fragmentation],
+            impurityMatrix, 2, 2, labelReagents=self._labelReagents
+        )
+
+    def _processImpurityMatrix(self):
+        raise NotImplementedError()
+
+
+class Itraq4plex(IsobaricTag):
+    """#TODO:
+
+    :ivar reagentName: "iTRAQ4plex", name of the isobaric labeling reagent
+    :ivar reporterMz: A list of reporter ion mz values observed after
+        fragmentation.
+    :ivar impurityMatrix: #TODO
+    :ivar labelReagents: A list of label reagent names that correspond to the
+        reporter ions of "reporterMz".
+
+    #TODO: Describe init here
+    """
+    _labelReagents = ['114', '115', '116', '117']
+    _reporterMz = [114.1112, 115.1083, 116.1116, 117.1150]
+    _impurityMatrix =[
+        [0.00, 1.00, 92.90, 5.90, 0.20],
+        [0.00, 2.00, 92.30, 5.60, 0.10],
+        [0.00, 3.00, 92.40, 4.50, 0.10],
+        [0.10, 4.00, 92.30, 3.50, 0.10]
+    ]
+
+    def __init__(self):
+        IsobaricTag.__init__(self, 'iTRAQ4plex', self._reporterMz,
+            self._impurityMatrix, 2, 2, labelReagents=self._labelReagents)
+
+    def _processImpurityMatrix(self):
+        raise NotImplementedError()
+
+
+class Itraq8plex(IsobaricTag):
+    """#TODO:
+
+    :ivar reagentName: "iTRAQ8plex", name of the isobaric labeling reagent
+    :ivar reporterMz: A list of reporter ion mz values observed after
+        fragmentation.
+    :ivar impurityMatrix: #TODO
+    :ivar labelReagents: A list of label reagent names that correspond to the
+        reporter ions of "reporterMz".
+
+    #TODO: Describe init here
+    """
+    _labelReagents = ['113', '114', '115', '116', '117', '118', '119', '121']
+    _reporterMz = [113.10787, 114.11123, 115.10826, 116.11162,
+                   117.11497, 118.11201, 119.11530, 121.12200]
+    _impurityMatrix = [
+        [0.00, 0.00, 92.87, 6.89, 0.24],
+        [0.00, 0.94, 93.00, 5.90, 0.16],
+        [0.00, 1.88, 93.12, 4.90, 0.10],
+        [0.00, 2.82, 93.21, 3.90, 0.07],
+        [0.06, 3.77, 93.29, 2.88, 0.00],
+        [0.09, 4.71, 93.29, 1.91, 0.00],
+        [0.14, 5.66, 93.33, 0.87, 0.00],
+        [0.27, 7.44, 92.11, 0.18, 0.00]
+    ]
+
+    def __init__(self):
+        IsobaricTag.__init__(self, 'iTRAQ8plex', self._reporterMz,
+            self._impurityMatrix, 2, 2, labelReagents=self._labelReagents)
+
+    def _processImpurityMatrix(self):
+        raise NotImplementedError()
+        processedMatrix = _normalizeImpurityMatrix(self.impurityMatrix)
+        _rearrangeItraq8plexMatrix(processedMatrix)
+        processedMatrix = _padImpurityMatrix(
+            processedMatrix, self.matrixPreChannels, self.matrixPostChannels
+            )
+        processedMatrix = _transposeMatrix(processedMatrix)
+        return processedMatrix
 
 
 def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
@@ -226,6 +399,48 @@ def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
                                     )
 
     return reporterIons
+
+
+def _correctIsotopeImpurities(matrix, intensities):
+    """Corrects observed reporter ion intensities for isotope impurities.
+
+    :params matrix: a matrix (2d nested list) containing numbers, each isobaric
+        channel must be present as a COLUMN. Use maspy.isobar._transposeMatrix()
+        if channels are written in rows.
+    :param intensities: numpy array of observed reporter ion intensities.
+    :returns: a numpy array of reporter ion intensities corrected for isotope
+        impurities.
+    """
+    correctedIntensities, _ = scipy.optimize.nnls(matrix, intensities)
+    return correctedIntensities
+
+
+def _rearrangeItraq8plexMatrix(matrix):
+    """Rearranges an iTRAQ 8plex isotope impurity matrix, so that the impurities
+    of 119 and 121 are positioned appropriately.
+
+    #TODO: explain why
+
+    :params matrix: a matrix (2d nested list) containing numbers, each isobaric
+        channel must be present as a row.
+    """
+    matrix[6][3] = matrix[6][4]
+    matrix[6][4] = 0
+    matrix[7][1] = matrix[7][0]
+    matrix[7][0] = 0
+
+
+def _rearrangeTmt10plexMatrix(matrix):
+    """Rearranges a TMT 10plex isotope impurity matrix, so that the impurities
+    are positioned appropriately.
+
+    #TODO: explain why
+
+    :params matrix: a matrix (2d nested list) containing numbers, each isobaric
+        channel must be present as a row.
+    """
+    #see https://tools.thermofisher.com/content/sfs/gallery/high/90110-004-TMT10-ratios.jpg
+    raise NotImplementedError
 
 
 def _normalizeImpurityMatrix(matrix):
@@ -284,15 +499,3 @@ def _transposeMatrix(matrix):
     return numpy.array(matrix).transpose()
 
 
-def _correctIsotopeImpurities(matrix, intensities):
-    """Corrects observed reporter ion intensities for isotope impurities.
-
-    :params matrix: a matrix (2d nested list) containing numbers, each isobaric
-        channel must be present as a COLUMN. Use maspy.isobar._transposeMatrix()
-        if channels are written in rows.
-    :param intensities: numpy array of observed reporter ion intensities.
-    :returns: a numpy array of reporter ion intensities corrected for isotope
-        impurities.
-    """
-    correctedIntensities, _ = scipy.optimize.nnls(matrix, intensities)
-    return correctedIntensities
