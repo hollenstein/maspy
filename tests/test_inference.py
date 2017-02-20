@@ -19,7 +19,7 @@ import unittest
 import maspy.inference as MODULE
 
 
-class TestSimpleProteinInferenceFunctions(unittest.TestCase):
+class SetupMappingExamples(unittest.TestCase):
     def setUp(self):
         proteinToPeptides = {
             '01_P1': {'01_p1', '01_p2'},
@@ -153,6 +153,7 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
         self.redundantProteins = redundantProteins
 
 
+class TestProteinInferenceFunctions(SetupMappingExamples):
     def test_findProteinClusters(self):
         proteinClusters = MODULE._findProteinClusters(self.proteinToPeptides,
                                                      self.peptideToProteins)
@@ -234,3 +235,8 @@ class TestSimpleProteinInferenceFunctions(unittest.TestCase):
         protPepCounts = MODULE._getValueCounts(self.proteinToPeptides)
         for protein, counts in viewitems(protPepCounts):
             self.assertEqual(counts, len(self.proteinToPeptides[protein]))
+
+
+class TestProteinInferenceClass(SetupMappingExamples):
+    def test_dummy(self):
+        self.assertEqual(1, 1)
