@@ -83,6 +83,7 @@ class TestIsobarMethods(unittest.TestCase):
         numpy.testing.assert_almost_equal(corrIntensities, expectedIntensities)
 
     def test_rearrangeItraq8plexMatrix(self):
+        #TODO: deprecated
         impurityMatrix = [
             [-2, -1, 0, 1, 2],
             [-2, -1, 0, 1, 2],
@@ -101,6 +102,7 @@ class TestIsobarMethods(unittest.TestCase):
         self.assertEqual(impurityMatrix[7][0], 0)
 
     def test_rearrangeTmt10plexMatrix(self):
+        #TODO: not implemented yet
         impurityMatrix = [
             [-2, -1, 0, 1, 2],
             [-2, -1, 0, 1, 2],
@@ -114,7 +116,7 @@ class TestIsobarMethods(unittest.TestCase):
             [-2, -1, 0, 1, 2]
         ]
 
-        newMatrix = MODULE._rearrangeTmt10plexMatrix(impurityMatrix)
+        #newMatrix = MODULE._rearrangeTmt10plexMatrix(impurityMatrix)
 
     def test_normalizeImpurityMatrix(self):
         matrix = [

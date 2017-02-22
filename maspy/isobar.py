@@ -5,6 +5,7 @@ functions is not yet stable!
 This module provides methods for working with isobaric tag labeling
 strategies, providing access to reporter intensities for quantification.
 
+
 :Todos:
     Missing reporter ions
         At the moment missing reporter ion mz values are returned as numpy.nan
@@ -23,10 +24,11 @@ strategies, providing access to reporter intensities for quantification.
         A function providing similar functionality as used in the example.
 
     Correct isotope impurities
-        Check logic and correctness of iTRAQ8plex and TMT10plex matrix
-        transformation. Implement TMT10plex matrix transformation.
+        Implement TMT10plex matrix transformation.
 
-    Unit tests for Individual Label strategies (iTRAQ4plex, TMT6plex, ...)
+    Unit tests and docstrings for individual labeling strategies
+        (iTRAQ4plex, iTRAQ8plex, TMT2plex, TMT6plex, TMT10plex)
+
 
 :Example:
     import numpy
@@ -48,8 +50,9 @@ strategies, providing access to reporter intensities for quantification.
         [0.00, 0.00, 99.00, 1.00, 0.00]
     ]
 
-    tmt6plex = maspy.isobar.IsobaricTag('tmt6plex', reporterMz,
-                                        impurityMatrix, 2, 2)
+    tmt6plex = maspy.isobar.IsobaricTag('tmt6plex', reporterMz, impurityMatrix
+                                    matrixPreChannels=2, matrixPostChannels=2
+                                    )
     mzTolerance = 20e-6
     selector = lambda si: si.msLevel > 1
 
@@ -284,7 +287,11 @@ class Tmt10plex(IsobaricTag):
 
 
 class Itraq4plex(IsobaricTag):
-    """#TODO:
+    """Representation of an iTRAQ 4-plex labeling strategy.
+
+    .. Note:
+            Explain why isotope impurity correction only works properly for low
+            resolation data.
 
     :ivar reagentName: "iTRAQ4plex", name of the isobaric labeling reagent
     :ivar reporterMz: A list of reporter ion mz values observed after
@@ -298,22 +305,23 @@ class Itraq4plex(IsobaricTag):
     _labelReagents = ['114', '115', '116', '117']
     _reporterMz = [114.1112, 115.1083, 116.1116, 117.1150]
     _impurityMatrix =[
-        [0.00, 1.00, 92.90, 5.90, 0.20],
-        [0.00, 2.00, 92.30, 5.60, 0.10],
-        [0.00, 3.00, 92.40, 4.50, 0.10],
-        [0.10, 4.00, 92.30, 3.50, 0.10]
+        [0.00, 1.00, 92.90, 5.90, 0.20], #1C    | hiRes group 1
+        [0.00, 2.00, 92.30, 5.60, 0.10], #2C    | hiRes group 1
+        [0.00, 3.00, 92.40, 4.50, 0.10], #2C 1N | hiRes group 2
+        [0.10, 4.00, 92.30, 3.50, 0.10], #3C 1N | hiRes group 2
     ]
 
     def __init__(self):
         IsobaricTag.__init__(self, 'iTRAQ4plex', self._reporterMz,
             self._impurityMatrix, 2, 2, labelReagents=self._labelReagents)
 
-    def _processImpurityMatrix(self):
-        raise NotImplementedError()
-
 
 class Itraq8plex(IsobaricTag):
-    """#TODO:
+    """Representation of an iTRAQ 8-plex labeling strategy.
+
+    .. Note:
+            Explain why isotope impurity correction only works properly for low
+            resolation data.
 
     :ivar reagentName: "iTRAQ8plex", name of the isobaric labeling reagent
     :ivar reporterMz: A list of reporter ion mz values observed after
@@ -324,33 +332,25 @@ class Itraq8plex(IsobaricTag):
 
     #TODO: Describe init here
     """
-    _labelReagents = ['113', '114', '115', '116', '117', '118', '119', '121']
+    _labelReagents = ['113', '114', '115', '116',
+                      '117', '118', '119', 'fImmonium' '121']
     _reporterMz = [113.10787, 114.11123, 115.10826, 116.11162,
-                   117.11497, 118.11201, 119.11530, 121.12200]
+                   117.11497, 118.11201, 119.11530, 120.08077, 121.12200]
     _impurityMatrix = [
-        [0.00, 0.00, 92.87, 6.89, 0.24],
-        [0.00, 0.94, 93.00, 5.90, 0.16],
-        [0.00, 1.88, 93.12, 4.90, 0.10],
-        [0.00, 2.82, 93.21, 3.90, 0.07],
-        [0.06, 3.77, 93.29, 2.88, 0.00],
-        [0.09, 4.71, 93.29, 1.91, 0.00],
-        [0.14, 5.66, 93.33, 0.87, 0.00],
-        [0.27, 7.44, 92.11, 0.18, 0.00]
+        [0.00, 0.00, 92.87, 6.89, 0.24], #0C    | hiRes group 1
+        [0.00, 0.94, 93.00, 5.90, 0.16], #1C    | hiRes group 1
+        [0.00, 1.88, 93.12, 4.90, 0.10], #2C    | hiRes group 1
+        [0.00, 2.82, 93.21, 3.90, 0.07], #2C 1N | hiRes group 2
+        [0.06, 3.77, 93.29, 2.88, 0.00], #3C 1N | hiRes group 2
+        [0.09, 4.71, 93.29, 1.91, 0.00], #3C 2N | hiRes group 3
+        [0.14, 5.66, 93.33, 0.87, 0.00], #4C 2N | hiRes group 3
+        [0.00, 0.00, 91.86, 8.14, 0.00], #Phenylalanine immonium ion
+        [0.27, 7.44, 92.11, 0.18, 0.00], #6C 2N | hiRes group 3
     ]
 
     def __init__(self):
         IsobaricTag.__init__(self, 'iTRAQ8plex', self._reporterMz,
             self._impurityMatrix, 2, 2, labelReagents=self._labelReagents)
-
-    def _processImpurityMatrix(self):
-        raise NotImplementedError()
-        processedMatrix = _normalizeImpurityMatrix(self.impurityMatrix)
-        _rearrangeItraq8plexMatrix(processedMatrix)
-        processedMatrix = _padImpurityMatrix(
-            processedMatrix, self.matrixPreChannels, self.matrixPostChannels
-            )
-        processedMatrix = _transposeMatrix(processedMatrix)
-        return processedMatrix
 
 
 def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
@@ -378,7 +378,6 @@ def _extractReporterIons(ionArrays, reporterMz, mzTolerance):
 
         matchingValues = ionArrays['mz'][loPos:upPos]
         if matchingValues.size == 0:
-            #reporterIons['i'].append(numpy.nan)
             reporterIons['i'].append(0)
             reporterIons['mz'].append(numpy.nan)
         elif matchingValues.size == 1:
@@ -420,10 +419,18 @@ def _rearrangeItraq8plexMatrix(matrix):
     of 119 and 121 are positioned appropriately.
 
     #TODO: explain why
+        Isotope distribution from 119:
+        |  117  |  118  |  119  |  ---  |  121  |
+        |  0.14%|  5.66%| 93.33%|  0.87%|  0.00%|
+
+        Isotope distribution from 1211:
+        |  119  |  ---  |  121  |  ---  |  ---  |
+        |  0.27%|  7.44%| 92.11%|  0.18%|  0.00%|
 
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
         channel must be present as a row.
     """
+    #TODO: deprecated
     matrix[6][3] = matrix[6][4]
     matrix[6][4] = 0
     matrix[7][1] = matrix[7][0]
@@ -435,7 +442,18 @@ def _rearrangeTmt10plexMatrix(matrix):
     are positioned appropriately.
 
     #TODO: explain why
-
+    impurityMatrix = [
+        [0.00, 0.00, 100.00, 5.00, 0.00], #126(C) -> affects C series only
+        [0.00, 0.20, 100.00, 5.00, 0.00], #127N   -> affects N series only
+        [0.00, 0.60, 100.00, 6.40, 0.00], #127C   -> affects C series only
+        [0.00, 0.40, 100.00, 4.10, 0.00], #128N   -> affects N series only
+        [0.00, 0.60, 100.00, 3.00, 0.00], #128C   -> affects C series only
+        [0.10, 0.80, 100.00, 3.10, 0.00], #129N   -> affects N series only
+        [0.00, 1.40, 100.00, 2.40, 0.00], #129C   -> affects C series only
+        [0.10, 1.50, 100.00, 2.40, 3.20], #130N   -> affects N series only
+        [0.00, 1.80, 100.00, 2.10, 0.00], #130C   -> affects C series only
+        [0.00, 1.80, 100.00, 1.70, 0.00], #131(N) -> affects N series only
+    ]
     :params matrix: a matrix (2d nested list) containing numbers, each isobaric
         channel must be present as a row.
     """
