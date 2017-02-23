@@ -8,7 +8,8 @@ peptides; defining proteins that share equal evidence and protein subgroups;
 defining protein redundancy groups.
 
 Protein group
-    A protein group is a collection of proteins that is necessary
+    A protein group is a collection of proteins that is essential to explain at
+    least one peptide.
 
 .. Note:
     Whenever possible, we use the PSI-MS ontology terms to describe protein
@@ -262,11 +263,12 @@ class ProteinInference(object):
 class ProteinGroup(object):
     """A protein amiguity group.
 
-    :ivar proteins: set, all proteins that are associated with this group
+    :ivar proteins: set, all leading proteins, subset proteins and the
+        representative protein. Subsumable proteins are not included here!
     :ivar representative: a single protein that represents the group
     :ivar leading: set, leading proteins (MS:1002401)
     :ivar subset: a list of sub-set proteins
-    :ivar subsumable: a list of sub-sumable proteins
+    :ivar subsumableProteins: a list of sub-sumable proteins
     """
     def __init__(self, groupId, representative):
         self.id = groupId
@@ -274,19 +276,21 @@ class ProteinGroup(object):
         self.proteins = set()
         self.leading = set()
         self.subset = set()
-        self.subsumable = set()
+        self.subsumableProteins = set()
 
-    def _addProteins(self, proteinIds, containerName):
+    def _addProteins(self, proteinIds, containerNames):
         """Add one or multiple proteinIds to the respective container.
 
         :param proteinIds: a proteinId or a list of proteinIds, a proteinId
             must be a string.
-        :param containerName: must be either 'leading', 'subset' or 'subsumable'
+        :param containerNames: list, entries must be one or multiple of
+            'leading', 'subset', 'subsumableProteins' or 'proteins'
+        :param addToProteins: bool, if True the proteinIds are added to the
         """
         proteinIds = AUX.toList(proteinIds)
-        proteinContainer = getattr(self, containerName)
-        proteinContainer.update(proteinIds)
-        self.proteins.update(proteinIds)
+        for containerName in containerNames:
+            proteinContainer = getattr(self, containerName)
+            proteinContainer.update(proteinIds)
 
     def addLeadingProteins(self, proteinIds):
         """Add one or multiple proteinIds as leading proteins.
@@ -294,7 +298,7 @@ class ProteinGroup(object):
         :param proteinIds: a proteinId or a list of proteinIds, a proteinId
             must be a string.
         """
-        self._addProteins(proteinIds, 'leading')
+        self._addProteins(proteinIds, ['leading', 'proteins'])
 
     def addSubsetProteins(self, proteinIds):
         """Add one or multiple proteinIds as subset proteins.
@@ -302,7 +306,7 @@ class ProteinGroup(object):
         :param proteinIds: a proteinId or a list of proteinIds, a proteinId
             must be a string.
         """
-        self._addProteins(proteinIds, 'subset')
+        self._addProteins(proteinIds, ['subset', 'proteins'])
 
     def addSubsumableProteins(self, proteinIds):
         """Add one or multiple proteinIds as subsumable proteins.
@@ -310,7 +314,7 @@ class ProteinGroup(object):
         :param proteinIds: a proteinId or a list of proteinIds, a proteinId
             must be a string.
         """
-        self._addProteins(proteinIds, 'subsumable')
+        self._addProteins(proteinIds, ['subsumableProteins'])
 
 
 def mappingBasedGrouping(protToPeps):
@@ -326,6 +330,7 @@ def mappingBasedGrouping(protToPeps):
             subsetProteins can be put into function
             The First part that defines various sets of proteins can be put into
             a function
+            Finally remove asserts
 
         Proteins
             Generate protein objects and characterize peptides
@@ -400,8 +405,10 @@ def mappingBasedGrouping(protToPeps):
             inference.addSubsetToGroups(proteinIds, superGroupIds)
             assert superGroupIds
 
-    allProteins = reduce(lambda i,j: i.union(j),
-                         [pg.proteins for pg in viewvalues(inference.groups)])
+    allProteins = set()
+    for proteinGroup in viewvalues(inference.groups):
+        allProteins.update(proteinGroup.proteins)
+        allProteins.update(proteinGroup.subsumableProteins)
     assert len(allProteins) == len(protToPeps)
     return inference
 
@@ -659,120 +666,3 @@ def _flattenMergedProteins(proteins):
         else:
             proteinSet.add(protein)
     return proteinSet
-
-
-# - Deprecated early version of grouping - #
-"""
-def makeInference(protToPeps):
-    proteinInference = ProteinInference(protToPeps)
-    summary = doTheGrouping(protToPeps, proteinInference.pepToProts)
-    proteinInference.groups = summary['proteinGroups']
-    proteinInference._proteinToGroupIds = summary['proteinToGroupIds']
-    return proteinInference
-
-
-def getGroupIds(idLookup, entries):
-    """ """
-    setUnion = lambda i,j: i.union(j)
-    return reduce(setUnion, [idLookup[e] for e in entries])
-
-
-def doTheGrouping(protToPeps, pepToProts):
-    proteinClusters = _findProteinClusters(protToPeps, pepToProts)
-    proteinGroups = {}
-    proteins = {}
-    proteinToGroupIds = ddict(set)
-    currGroupId = 1
-    for clusterId, proteinCluster in enumerate(proteinClusters, 1):
-        clusterProtToPeps = {p: protToPeps[p] for p in proteinCluster}
-
-        #Find sameset proteins, define unique and non unique sameset proteins
-        #NOTE: already unique proteins could be excluded to find sameset proteins
-        samesetProteins = _findSamesetProteins(clusterProtToPeps)
-        mergedProtToPeps = _mergeProteinEntries(samesetProteins,
-                                                clusterProtToPeps)
-        mergedPepToProts = _invertMapping(mergedProtToPeps)
-        uniqueProteins = _findUniqueProteins(mergedPepToProts)
-        remainingProteins = set(mergedProtToPeps).difference(uniqueProteins)
-
-        # Remove subset proteins and check if remaining proteins become unique
-        subsetProteinInfo = _findSubsetProteins(remainingProteins,
-                                                mergedProtToPeps,
-                                                mergedPepToProts)
-        subsetProteins = [p for p, _ in subsetProteinInfo]
-        subsetRemovedProtToPeps = _reducedProtToPeps(mergedProtToPeps,
-                                                     subsetProteins)
-        subsetRemovedPepToProts = _invertMapping(subsetRemovedProtToPeps)
-        uniqueSubsetRemoved = _findUniqueProteins(subsetRemovedPepToProts)
-        remainingProteins = remainingProteins.difference(subsetProteins)
-        remainingProteins = remainingProteins.difference(uniqueSubsetRemoved)
-
-        # Find redundant proteins #
-        redundantProteins = _findRedundantProteins(subsetRemovedProtToPeps,
-                                                   subsetRemovedPepToProts)
-        remainingNonRedundant = remainingProteins.difference(redundantProteins)
-
-
-        # - Generate protein groups and sssign protein to groups - #
-        groupInitiatingProteins = uniqueSubsetRemoved.union(remainingNonRedundant)
-        for protein in groupInitiatingProteins:
-            proteinIds = AUX.toList(protein)
-
-            proteinGroup = ProteinGroup(currGroupId, proteinIds[0])
-            proteinGroup.addLeadingProteins(proteinIds)
-            proteinGroups[proteinGroup.id] = proteinGroup
-
-            #Code duplication, nearly#
-            for proteinId in proteinIds:
-                proteinToGroupIds[proteinId].add(currGroupId)
-                proteinToGroupIds[protein].add(currGroupId)
-            #-------#
-            currGroupId += 1
-
-        #Add redundant proteins here (must be subsumable I guess)
-        for protein in redundantProteins:
-            proteinIds = AUX.toList(protein)
-
-            connectedProteins = set()
-            for peptide in mergedProtToPeps[protein]:
-                connectedProteins.update(mergedPepToProts[peptide])
-            superGroupIds = getGroupIds(proteinToGroupIds, connectedProteins)
-            #-Tests-#
-            assert superGroupIds
-            assert len(superGroupIds) > 1
-            #-------#
-
-            #Code duplication, nearly#
-            for groupId in superGroupIds:
-                proteinGroups[groupId].addSubsumableProteins(proteinIds)
-            for proteinId in proteinIds:
-                proteinToGroupIds[proteinId].update(superGroupIds)
-            proteinToGroupIds[protein].update(superGroupIds)
-            #-------#
-
-        #Add subgroup proteins to the respective groups
-        for protein, supersetProteins in subsetProteinInfo:
-            proteinIds = AUX.toList(protein)
-
-            superGroupIds = getGroupIds(proteinToGroupIds, supersetProteins)
-            #-Tests-#
-            assert superGroupIds
-            #-------#
-
-            #Code duplication, nearly#
-            for groupId in superGroupIds:
-                proteinGroups[groupId].addSubsetProteins(proteinIds)
-            for proteinId in proteinIds:
-                proteinToGroupIds[proteinId].update(superGroupIds)
-            #-------#
-
-    allProteins = set()
-    for proteinGroup in viewvalues(proteinGroups):
-        allProteins.update(proteinGroup.proteins)
-    #assert len(allProteins) == len(protToPeps)
-
-    summary = {'proteinGroups': proteinGroups, 'proteins': proteins,
-               'proteinToGroupIds': proteinToGroupIds}
-    return summary
-"""
-#"""
