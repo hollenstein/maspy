@@ -1,4 +1,4 @@
-""" 
+"""
 The protein database module allows the import of protein sequences from fasta
 files, parsing of fasta entry headers and performing in silico digestion by
 specified cleavage rules to generate peptides.
@@ -355,11 +355,11 @@ class ProteinDatabase(object):
             ``.coverageMaskShared`` = coverage mask of shared peptides
         """
         for proteinId, proteinEntry in viewitems(proteindb):
-            coverageMaskUnique = numpy.zeros(proteinEntry.length, dtype='bool')
+            coverageMaskUnique = numpy.zeros(proteinEntry.length(), dtype='bool')
             for peptide in proteinEntry.uniquePeptides:
                 startPos, endPos = peptidedb[peptide].proteinPositions[proteinId]
                 coverageMaskUnique[startPos-1:endPos] = True
-            coverageMaskShared = numpy.zeros(proteinEntry.length, dtype='bool')
+            coverageMaskShared = numpy.zeros(proteinEntry.length(), dtype='bool')
             for peptide in proteinEntry.sharedPeptides:
                 startPos, endPos = peptidedb[peptide].proteinPositions[proteinId]
                 coverageMaskShared[startPos-1:endPos] = True
