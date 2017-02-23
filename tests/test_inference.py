@@ -253,29 +253,29 @@ class SetupMappingExamples(unittest.TestCase):
 
         #Expected grouping results on the protein level
         groupingProteinResults = {
-            '01_P1': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '02_P1': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '02_P2': {'subsetOf': {'02_P1'}, 'samesetOf': set(), 'isSubsumable': False},
-            '03_P1': {'subsetOf': set(), 'samesetOf': {'03_P2'}, 'isSubsumable': False},
-            '03_P2': {'subsetOf': set(), 'samesetOf': {'03_P1'}, 'isSubsumable': False},
-            '04_P1': {'subsetOf': set(), 'samesetOf': {'04_P2'}, 'isSubsumable': False},
-            '04_P2': {'subsetOf': set(), 'samesetOf': {'04_P1'}, 'isSubsumable': False},
-            '04_P3': {'subsetOf': {'04_P1', '04_P2'}, 'samesetOf': set(), 'isSubsumable': False},
-            '05_P1': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '05_P2': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': True},
-            '05_P3': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '06_P1': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '06_P2': {'subsetOf': {'06_P1', '06_P4'}, 'samesetOf': set(), 'isSubsumable': False},
-            '06_P3': {'subsetOf': {'06_P4'}, 'samesetOf': {'06_P5'}, 'isSubsumable': False},
-            '06_P4': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '06_P5': {'subsetOf': {'06_P4'}, 'samesetOf': {'06_P3'}, 'isSubsumable': False},
-            '07_P1': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '07_P2': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '07_P3': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': True},
-            '07_P4': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '08_P1': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '08_P2': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': False},
-            '08_P3': {'subsetOf': set(), 'samesetOf': set(), 'isSubsumable': True},
+            '01_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '02_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '02_P2': {'subsetOf': {'02_P1'}, 'sameset': set(), 'isSubsumable': False},
+            '03_P1': {'subsetOf': set(), 'sameset': {'03_P1', '03_P2'}, 'isSubsumable': False},
+            '03_P2': {'subsetOf': set(), 'sameset': {'03_P1', '03_P2'}, 'isSubsumable': False},
+            '04_P1': {'subsetOf': set(), 'sameset': {'04_P1', '04_P2'}, 'isSubsumable': False},
+            '04_P2': {'subsetOf': set(), 'sameset': {'04_P1', '04_P2'}, 'isSubsumable': False},
+            '04_P3': {'subsetOf': {'04_P1', '04_P2'}, 'sameset': set(), 'isSubsumable': False},
+            '05_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '05_P2': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
+            '05_P3': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '06_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '06_P2': {'subsetOf': {'06_P1', '06_P4'}, 'sameset': set(), 'isSubsumable': False},
+            '06_P3': {'subsetOf': {'06_P4'}, 'sameset': {'06_P3', '06_P5'}, 'isSubsumable': False},
+            '06_P4': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '06_P5': {'subsetOf': {'06_P4'}, 'sameset': {'06_P3', '06_P5'}, 'isSubsumable': False},
+            '07_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '07_P2': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '07_P3': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
+            '07_P4': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '08_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '08_P2': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '08_P3': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
         }
 
         #Expected grouping results on the peptide level
@@ -376,12 +376,6 @@ class TestProteinGroupClass(unittest.TestCase):
         self.assertSetEqual({g.id for g in inference.getGroups('subset2')}, {id_1})
         self.assertSetEqual({g.id for g in inference.getGroups('subsumable1')}, {id_1, id_2})
 
-
-class TestHelperFunctions(SetupMappingExamples):
-    #def test_flattenMergedProteins(self):
-    #    flatProteins = MODULE.flattenMergedProteins(self.mergedProteinToPeptides)
-    #    self.assertSetEqual(set(flatProteins), set(self.proteinToPeptides))
-    pass
 
 
 class TestProteinInferenceFunctions(SetupMappingExamples):
@@ -512,12 +506,31 @@ class TestMappingBasedGrouping(SetupMappingExamples):
             group = groups[0]
             self.assertEqual(group.leading, groupingResults['leading'])
             self.assertSetEqual(group.subset, groupingResults['subset'])
-            #self.assertSetEqual(group.subsumable, groupingResults['subsumable'])
+            self.assertSetEqual(group.subsumableProteins, groupingResults['subsumable'])
 
     def test_mappingBasedGrouping_proteins(self):
         proteinInference = MODULE.mappingBasedGrouping(self.proteinToPeptides)
-        #for proteinId, expectedResults in viewitems(self.groupingProteinResults):
-        #    proteinEntry = proteinInference.proteins[proteinId]
+        #Compore protein entries to expected results
+        for proteinId, expectedResults in viewitems(self.groupingProteinResults):
+            proteinEntry = proteinInference.proteins[proteinId]
+            self.assertSetEqual(proteinEntry.isSubset, expectedResults['subsetOf'])
+            self.assertSetEqual(proteinEntry.isSameset, expectedResults['sameset'])
+            self.assertEqual(proteinEntry.isSubsumable, expectedResults['isSubsumable'])
+        #Assert agreement of protein entry relations and protein groups.
+        for proteinId, proteinEntry in viewitems(proteinInference.proteins):
+            if proteinEntry.isLeading:
+                proteinGroup = proteinInference.getGroups(proteinId)[0]
+                self.assertIn(proteinId, proteinGroup.leading)
+            if proteinEntry.isSubset:
+                proteinGroup = proteinInference.getGroups(proteinId)[0]
+                self.assertIn(proteinId, proteinGroup.subset)
+            if proteinEntry.isSubsumable:
+                for proteinGroup in proteinInference.getGroups(proteinId):
+                    self.assertIn(proteinId, proteinGroup.subsumableProteins)
+
+    def test_mappingBasedGrouping_proteinPeptideMapping(self):
+        proteinInference = MODULE.mappingBasedGrouping(self.proteinToPeptides)
+        #Todo, check peptide assignment
 
 
 

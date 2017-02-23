@@ -317,6 +317,38 @@ class ProteinGroup(object):
         self._addProteins(proteinIds, ['subsumableProteins'])
 
 
+class Protein(object):
+    """Protein represents one entry from a protein database. Describes the
+    protein relations and how a set of observed peptides are mapped to it.
+
+    :ivar id: unique identifier of the protein, should allow mapping to a
+        protein database
+    :ivar peptides: a list of all peptides that are mapped onto a protein
+    :ivar uniquePeptides: unique to one single protein (or one protein after
+        merging sameset proteins)
+    :ivar groupUniquePeptides: shared only with proteins of the same group
+    :ivar groupSubsumablePeptides: shared only with subsumable proteins, but
+        not with multiple other protein groups
+    :ivar sharedPeptides: shared between proteins of multiple protein groups
+    :ivar isSubset: set, protein is a subset of these proteins
+    :ivar isSameset: set, protein set that shares identical evidence
+    :ivar isLeading: bool, True if protein is a leading protein of its group.
+    :ivar isSubsumable: bool, True if protein is associated with multiple
+        protein groups as a subsumable protein.
+    """
+    def __init__(self, proteinId, peptides):
+        self.id = proteinId
+        self.peptides = peptides
+        self.uniquePeptides = set()
+        self.groupUniquePeptides = set()
+        self.groupSubsumablePeptides = set()
+        self.sharedPeptides = set()
+        self.isSubset = set()
+        self.isSameset = set()
+        self.isLeading = False
+        self.isSubsumable = False
+
+
 def mappingBasedGrouping(protToPeps):
     """Performs protein grouping based only on protein to peptide mappings.
 
@@ -331,7 +363,8 @@ def mappingBasedGrouping(protToPeps):
             The First part that defines various sets of proteins can be put into
             a function
             Finally remove asserts
-
+            Maybe it is not necessary to work with merged proteins, after
+            defining them...
         Proteins
             Generate protein objects and characterize peptides
 
@@ -370,15 +403,34 @@ def mappingBasedGrouping(protToPeps):
         redundantProteins = _findRedundantProteins(subsetRemovedProtToPeps,
                                                    subsetRemovedPepToProts)
         remainingNonRedundant = remainingProteins.difference(redundantProteins)
+        groupInitiatingProteins = uniqueSubsetRemoved.union(remainingNonRedundant)
 
+
+        #Generate protein entries and add them to the inference.proteins dict
+        subsetProteinInfoDict = dict(subsetProteinInfo)
+        for protein, peptides in viewitems(mergedProtToPeps):
+            proteinIds = AUX.toList(protein)
+            for proteinId in proteinIds:
+                proteinEntry = Protein(proteinId, peptides)
+                if protein in groupInitiatingProteins:
+                    proteinEntry.isLeading = True
+                elif protein in redundantProteins:
+                    proteinEntry.isSubsumable = True
+                elif protein in subsetProteins:
+                    superset = subsetProteinInfoDict[protein]
+                    proteinEntry.isSubset = _flattenMergedProteins(superset)
+                if len(proteinIds) > 1:
+                    proteinEntry.isSameset = set(proteinIds)
+                inference.proteins[proteinId] = proteinEntry
 
         #Generate protein groups
-        groupInitiatingProteins = uniqueSubsetRemoved.union(remainingNonRedundant)
+        clusterGroupIds = list()
         for protein in groupInitiatingProteins:
             proteinIds = AUX.toList(protein)
 
             groupId = inference.addProteinGroup(proteinIds[0])
             inference.addLeadingToGroups(proteinIds, groupId)
+            clusterGroupIds.append(groupId)
 
         #Add redundant proteins here (must be subsumable I guess)
         for protein in redundantProteins:
