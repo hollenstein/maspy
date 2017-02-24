@@ -44,6 +44,22 @@ maspy.featuremethods module
     :undoc-members:
     :show-inheritance:
 
+maspy.inference module
+----------------------
+
+.. automodule:: maspy.inference
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+maspy.isobar module
+-------------------
+
+.. automodule:: maspy.isobar
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 maspy.mit_stats module
 ----------------------
 

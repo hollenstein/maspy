@@ -222,7 +222,7 @@ all ``Sii`` elements of the specified specfiles. ::
                            )
 
 It is also possible to calculate the exact mass for all ``Sii`` elements of the
-specified specfiles by using the function :func:`SiContainer.calcMz()
+specified specfiles by using the function :func:`SiiContainer.calcMz()
 <maspy.core.SiiContainer.calcMz()>`. The calculated mass to charge ratio is
 written to the attribute ``.excMz``. ::
 
