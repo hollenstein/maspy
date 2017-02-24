@@ -432,10 +432,10 @@ class TestProteinInferenceFunctions(SetupMappingExamples):
             self.assertNotIn(protein, reduceProteinToPeptides)
             self.assertIn(protein, self.proteinToPeptides)
 
-    def test_findUniqueProteins(self):
-        uniqueProteins = MODULE._findUniqueProteins(self.peptideToProteins)
+    def test_findUniqueMappingValues(self):
+        uniqueProteins = MODULE._findUniqueMappingValues(self.peptideToProteins)
         self.assertSetEqual(uniqueProteins, self.uniqueProteins)
-        uniqueMergedProteins = MODULE._findUniqueProteins(self.mergedPeptideToProteins)
+        uniqueMergedProteins = MODULE._findUniqueMappingValues(self.mergedPeptideToProteins)
         self.assertSetEqual(uniqueMergedProteins, self.uniqueMergedProteins)
 
     def test_findSubsetProteins(self):
@@ -461,7 +461,7 @@ class TestProteinInferenceFunctions(SetupMappingExamples):
         #least one peptide.
         protToPeps = MODULE._reducedProtToPeps(self.proteinToPeptides, redundantProteins)
         pepToProts = MODULE._invertMapping(protToPeps)
-        uniqueProteins = MODULE._findUniqueProteins(pepToProts)
+        uniqueProteins = MODULE._findUniqueMappingValues(pepToProts)
         self.assertSetEqual(uniqueProteins, set(protToPeps))
 
         for peptide, proteins in viewitems(pepToProts):
@@ -532,7 +532,27 @@ class TestMappingBasedGrouping(SetupMappingExamples):
         proteinInference = MODULE.mappingBasedGrouping(self.proteinToPeptides)
         #Todo, check peptide assignment
 
+        for peptide, proteinIds in viewitems(proteinInference.pepToProts):
+            for proteinId in proteinIds:
+                proteinEntry = proteinInference.proteins[proteinId]
 
+                #Assert that all peptides have been characterized
+                combinedProteinPeps = set()
+                combinedProteinPeps.update(proteinEntry.uniquePeptides)
+                combinedProteinPeps.update(proteinEntry.groupUniquePeptides)
+                combinedProteinPeps.update(proteinEntry.groupSubsumablePeptides)
+                combinedProteinPeps.update(proteinEntry.sharedPeptides)
+                self.assertSetEqual(combinedProteinPeps, proteinEntry.peptides)
+
+                #Assert that characterization of peptides is as expected
+                for peptide in proteinEntry.uniquePeptides:
+                    self.assertIn(peptide, self.groupingPeptideResults['uniquePeptides'])
+                for peptide in proteinEntry.groupUniquePeptides:
+                    self.assertIn(peptide, self.groupingPeptideResults['groupUniquePeptides'])
+                for peptide in proteinEntry.groupSubsumablePeptides:
+                    self.assertIn(peptide, self.groupingPeptideResults['groupSubsumablePeptides'])
+                for peptide in proteinEntry.sharedPeptides:
+                    self.assertIn(peptide, self.groupingPeptideResults['sharedPeptides'])
 
 
 
