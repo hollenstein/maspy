@@ -11,8 +11,6 @@ except ImportError:
     pass
 ################################################################################
 
-import sys
-
 from collections import defaultdict as ddict
 import numpy
 import unittest
@@ -45,6 +43,15 @@ class SetupMappingExamples(unittest.TestCase):
             '08_P1': {'08_p1', '08_p2'},
             '08_P2': {'08_p3', '08_p4'},
             '08_P3': {'08_p2', '08_p3'},
+            '09_P1': {'09_p1', '09_p3', '09_p4', '09_p5', '09_p7'},
+            '09_P2': {'09_p1', '09_p2'},
+            '09_P3': {'09_p2', '09_p3'},
+            '09_P4': {'09_p5', '09_p6'},
+            '09_P5': {'09_p6', '09_p7'},
+            '10_P1': {'10_p1', '10_p2'},
+            '10_P2': {'10_p3', '10_p4', '10_p5'},
+            '10_P3': {'10_p2', '10_p3'},
+            '10_P4': {'10_p2', '10_p3', '10_p4'},
             }
         peptideToProteins = {
             '01_p1': {'01_P1'},
@@ -72,58 +79,43 @@ class SetupMappingExamples(unittest.TestCase):
             '08_p2': {'08_P1', '08_P3'},
             '08_p3': {'08_P2', '08_P3'},
             '08_p4': {'08_P2'},
+            '09_p1': {'09_P1', '09_P2'},
+            '09_p2': {'09_P2', '09_P3'},
+            '09_p3': {'09_P1', '09_P3'},
+            '09_p4': {'09_P1'},
+            '09_p5': {'09_P1', '09_P4'},
+            '09_p6': {'09_P4', '09_P5'},
+            '09_p7': {'09_P1', '09_P5'},
+            '10_p1': {'10_P1'},
+            '10_p2': {'10_P1', '10_P3', '10_P4'},
+            '10_p3': {'10_P2', '10_P3', '10_P4'},
+            '10_p4': {'10_P2', '10_P4'},
+            '10_p5': {'10_P2'},
             }
         #Expected protein to peptide mapping after merging "samesetProteins"
-        mergedProteinToPeptides = {
-            '01_P1': {'01_p1', '01_p2'},
-            '02_P1': {'02_p1', '02_p2'},
-            '02_P2': {'02_p2'},
-            tuple(['03_P1', '03_P2']): {'03_p1', '03_p2'},
-            tuple(['04_P1', '04_P2']): {'04_p1', '04_p2'},
-            '04_P3': {'04_p2'},
-            '05_P1': {'05_p1', '05_p2', '05_p3'},
-            '05_P2': {'05_p1', '05_p4'},
-            '05_P3': {'05_p2', '05_p3', '05_p4'},
-            '06_P1': {'06_p1', '06_p2', '06_p3'},
-            '06_P2': {'06_p2', '06_p3'},
-            tuple(['06_P3', '06_P5']): {'06_p2', '06_p4'},
-            '06_P4': {'06_p2', '06_p3', '06_p4'},
-            '07_P1': {'07_p1', '07_p2'},
-            '07_P2': {'07_p1', '07_p3', '07_p4'},
-            '07_P3': {'07_p2', '07_p3'},
-            '07_P4': {'07_p3', '07_p5'},
-            '08_P1': {'08_p1', '08_p2'},
-            '08_P2': {'08_p3', '08_p4'},
-            '08_P3': {'08_p2', '08_p3'},
-        }
+        mergedProteins = [
+            tuple(['03_P1', '03_P2']),
+            tuple(['04_P1', '04_P2']),
+            tuple(['06_P3', '06_P5']),
+        ]
+        mergedProteinToPeptides = dict(proteinToPeptides)
+        for proteins in mergedProteins:
+            for protein in proteins:
+                peptides = mergedProteinToPeptides.pop(protein)
+            mergedProteinToPeptides[proteins] = peptides
+
         #Expected peptide to protein mapping after merging "samesetProteins"
-        mergedPeptideToProteins = {
-            '01_p1': {'01_P1'},
-            '01_p2': {'01_P1'},
-            '02_p1': {'02_P1'},
-            '02_p2': {'02_P1', '02_P2'},
+        mergedPeptideToProteins = dict(peptideToProteins)
+        changedEntriesDueToMerging = {
             '03_p1': {tuple(['03_P1', '03_P2'])},
             '03_p2': {tuple(['03_P1', '03_P2'])},
             '04_p1': {tuple(['04_P1', '04_P2'])},
             '04_p2': {tuple(['04_P1', '04_P2']), '04_P3'},
-            '05_p1': {'05_P1', '05_P2'},
-            '05_p2': {'05_P1', '05_P3'},
-            '05_p3': {'05_P1', '05_P3'},
-            '05_p4': {'05_P2', '05_P3'},
-            '06_p1': {'06_P1'},
             '06_p2': {'06_P1', '06_P2' , '06_P4', tuple(['06_P3', '06_P5'])},
-            '06_p3': {'06_P1', '06_P2' , '06_P4'},
             '06_p4': {'06_P4', tuple(['06_P3', '06_P5'])},
-            '07_p1': {'07_P1', '07_P2'},
-            '07_p2': {'07_P1', '07_P3'},
-            '07_p3': {'07_P2', '07_P3', '07_P4'},
-            '07_p4': {'07_P2'},
-            '07_p5': {'07_P4'},
-            '08_p1': {'08_P1'},
-            '08_p2': {'08_P1', '08_P3'},
-            '08_p3': {'08_P2', '08_P3'},
-            '08_p4': {'08_P2'},
             }
+        mergedPeptideToProteins.update(changedEntriesDueToMerging)
+
         #All peptides that are present in the protein and peptide mappings
         observedPeptides = set(peptideToProteins)
         #All proteins that are present in the protein and peptide mappings
@@ -136,29 +128,31 @@ class SetupMappingExamples(unittest.TestCase):
         #All "uniqueProtein" entries, ie. proteins with at least one peptide that
         #is only connected to one single protein entry.
         uniqueProteins = {'01_P1', '02_P1', '06_P1', '07_P2', '07_P4',
-                          '08_P1', '08_P2'}
+                          '08_P1', '08_P2', '09_P1', '10_P1', '10_P2'}
         #All unique protein entries after merging "samesetProteins"
         uniqueMergedProteins = {'01_P1', '02_P1', tuple(['03_P1', '03_P2']),
                                 tuple(['04_P1', '04_P2']), '06_P1', '07_P2',
-                                '07_P4', '08_P1', '08_P2'
+                                '07_P4', '08_P1', '08_P2', '09_P1', '10_P1',
+                                '10_P2'
                                 }
         #All expected "subsetProteins"
         subsetProteins = [
             ('02_P2', {'02_P1'}), ('04_P3', {'04_P1', '04_P2'}),
             ('06_P2', {'06_P1', '06_P4'}), ('06_P3', {'06_P4'}),
-            ('06_P5', {'06_P4'})
+            ('06_P5', {'06_P4'}), ('10_P3', {'10_P4'}),
         ]
         #All expected "subsetProteins" after merging "samesetProteins"
         subsetMergedProteins = [
             ('02_P2', {'02_P1'}), ('04_P3', {tuple(['04_P1', '04_P2'])}),
             ('06_P2', {'06_P1', '06_P4'}),
-            (tuple(['06_P3', '06_P5']), {'06_P4'})
+            (tuple(['06_P3', '06_P5']), {'06_P4'}), ('10_P3', {'10_P4'}),
         ]
         #All proteins expected to be defined as "redundantProtein" by the
         #function inference._findRedundantProteins(), for details see docstring
-        redundantProteins = {'02_P2', '03_P2', '04_P2', '04_P3',
-                             '05_P2', '06_P2', '06_P3', '06_P5',
-                             '07_P3', '08_P3'}
+        redundantProteins = {'02_P2', '03_P2', '04_P2', '04_P3', '05_P2',
+                             '06_P2', '06_P3', '06_P5', '07_P3', '08_P3',
+                             '09_P3', '09_P5', '10_P3', '10_P4',
+                             }
 
         ########################################################################
         # This section describes the expected results of the protein grouping  #
@@ -245,6 +239,36 @@ class SetupMappingExamples(unittest.TestCase):
                 'subset': set(),
                 'subsumable': {'08_P3'},
             },
+            '09_P1': {
+                'representative': '09_P1',
+                'leading': {'09_P1'},
+                'subset': set(),
+                'subsumable': {'09_P3', '09_P5'},
+            },
+            '09_P2': {
+                'representative': '09_P2',
+                'leading': {'09_P2'},
+                'subset': set(),
+                'subsumable': {'09_P3'},
+            },
+            '09_P4': {
+                'representative': '09_P4',
+                'leading': {'09_P4'},
+                'subset': set(),
+                'subsumable': {'09_P5'},
+            },
+            '10_P1': {
+                'representative': '10_P1',
+                'leading': {'10_P1'},
+                'subset': set(),
+                'subsumable': {'10_P3', '10_P4'},
+            },
+            '10_P2': {
+                'representative': '10_P2',
+                'leading': {'10_P2'},
+                'subset': set(),
+                'subsumable': {'10_P3', '10_P4'},
+            },
         }
         for groupingResults in listvalues(groupingGroupResults):
             groupingResults['proteins'] = set(groupingResults['representative'])
@@ -276,22 +300,33 @@ class SetupMappingExamples(unittest.TestCase):
             '08_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
             '08_P2': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
             '08_P3': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
+            '09_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '09_P2': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '09_P3': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
+            '09_P4': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '09_P5': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
+            '10_P1': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '10_P2': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': False},
+            '10_P3': {'subsetOf': {'10_P4'}, 'sameset': set(), 'isSubsumable': True},
+            '10_P4': {'subsetOf': set(), 'sameset': set(), 'isSubsumable': True},
         }
 
         #Expected grouping results on the peptide level
         groupingPeptideResults = {
             'uniquePeptides': {
                 '01_p1', '01_p2', '02_p1', '03_p1', '03_p2', '04_p1', '06_p1',
-                '07_p4', '07_p5', '08_p1', '08_p4'
+                '07_p4', '07_p5', '08_p1', '08_p4', '09_p4', '10_p1', '10_p5'
             },
             'groupUniquePeptides': {
                 '02_p2', '04_p2', '06_p4'
             },
             'groupSubsumablePeptides': {
-                '05_p1', '05_p4', '07_p2', '08_p2', '08_p3'
+                '05_p1', '05_p4', '07_p2', '08_p2', '08_p3', '09_p2', '09_p3',
+                '09_p6', '09_p7', '10_p2', '10_p3', '10_p4'
             },
             'sharedPeptides': {
-                '05_p2', '05_p3', '06_p2', '06_p3', '07_p1', '07_p3'
+                '05_p2', '05_p3', '06_p2', '06_p3', '07_p1', '07_p3', '09_p1',
+                '09_p5'
             },
         }
 
@@ -521,12 +556,12 @@ class TestMappingBasedGrouping(SetupMappingExamples):
             if proteinEntry.isLeading:
                 proteinGroup = proteinInference.getGroups(proteinId)[0]
                 self.assertIn(proteinId, proteinGroup.leading)
-            if proteinEntry.isSubset:
-                proteinGroup = proteinInference.getGroups(proteinId)[0]
-                self.assertIn(proteinId, proteinGroup.subset)
             if proteinEntry.isSubsumable:
                 for proteinGroup in proteinInference.getGroups(proteinId):
                     self.assertIn(proteinId, proteinGroup.subsumableProteins)
+            if proteinEntry.isSubset and not proteinEntry.isSubsumable:
+                proteinGroup = proteinInference.getGroups(proteinId)[0]
+                self.assertIn(proteinId, proteinGroup.subset)
 
     def test_mappingBasedGrouping_proteinPeptideMapping(self):
         proteinInference = MODULE.mappingBasedGrouping(self.proteinToPeptides)
