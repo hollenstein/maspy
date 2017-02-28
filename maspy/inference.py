@@ -553,9 +553,11 @@ def mappingBasedGrouping(protToPeps):
 
             #If the protein is a subset of at least one protein, that is not a
             #subsumable protein, then it should be added to the group as subset.
-            nonSubsumableSuperProteins = supersetProteins.difference(subsumableProteins)
-            if nonSubsumableSuperProteins:
-                flatSupersetProteins = _flattenMergedProteins(nonSubsumableSuperProteins)
+            leadingSuperProteins = supersetProteins.intersection(
+                                                    groupInitiatingProteins)
+            if leadingSuperProteins:
+                flatSupersetProteins = _flattenMergedProteins(
+                                                    leadingSuperProteins)
                 superGroupIds = _mappingGetValueSet(
                     inference._proteinToGroupIds, flatSupersetProteins
                 )
