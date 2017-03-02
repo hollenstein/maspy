@@ -1,6 +1,9 @@
 Maspy
 =====
 
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.345118.svg
+   :target: https://doi.org/10.5281/zenodo.345118
+
 Introduction
 ------------
 Maspy is a Python library with the aim to provide simple, convenient and
