@@ -402,7 +402,7 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]',
     proteindb = ProteinDatabase() if proteindb is None else proteindb
     fastaRead = _readFastaFile(filePath)
 
-    for header, sequence, comments in fastaRead:
+    for header, sequence in fastaRead:
         proteinTags = list()
         if header.startswith(decoyTag):
             isDecoy = True
@@ -503,46 +503,44 @@ def importProteinDatabase(filePath, proteindb=None, decoyTag='[decoy]',
     return proteindb
 
 
-def _readFastaFile(fastaFileLocation):
-    """Reads a fasta file and seperates entries into 'header' and 'sequence'.)
+def _readFastaFile(filepath):
+    """Read a FASTA file and yields tuples of 'header' and 'sequence' entries.
 
-    :param fastaFileLocation: file path of the fasta file
+    :param filepath: file path of the FASTA file
 
-    :returns: A list of protein entry touples
-        ``[(fasta header, sequence, comments), ...]``. Comments are optional
-        entries of fasta files between the fasta header and the sequence,
-        starting with either ";" or ">".
+    :yields: FASTA entries in the format ('header', 'sequence').
+        The 'header' string does not contain the '>' and trailing white spaces.
+        The 'sequence' string does not contain trailing white spaces, a '*' at
+            the end of the sequence is removed.
 
     See also :func:`importProteinDatabase` and
     :func:`maspy.peptidemethods.digestInSilico`.
     """
-    fastaPattern = '(?P<header>([>;].+[\n\r])+)(?P<sequence>[A-Z\*\n\r]+)' #[\*\n)
-    _stripSequence = lambda s: s.replace('\n', '').replace('\r', '').strip('*')
-    with io.open(fastaFileLocation, 'rb') as openfile:
-        readfile = openfile.read()
-        entries = list()
+    processSequences = lambda i: ''.join([s.rstrip() for s in i]).rstrip('*')
+    processHeaderLine = lambda line: line[1:].rstrip()
+    with io.open(filepath) as openfile:
+        #Iterate through lines until the first header is encountered
+        try:
+            line = openfile.next()
+            while line[0] != '>':
+                line = openfile.next()
+            header = processHeaderLine(line)
+            sequences = list()
+        except StopIteration:
+            errorText = 'File does not contain fasta entries.'
+            raise maspy.errors.FileFormatError(errorText)
 
-        rePattern = re.compile(fastaPattern, re.VERBOSE)
-        reResult = rePattern.finditer(str(readfile))
-
-        comments = str()
-        isHeader = True
-        for entry in reResult:
-            if isHeader:
-                header = entry.group('header').replace('>', '').strip()
-                if entry.group('sequence').strip():
-                    sequence = _stripSequence(entry.group('sequence'))
-                    entries.append([header, sequence, comments])
-                else:
-                    isHeader = False
+        for line in openfile:
+            if line[0] == '>':
+                yield header, processSequences(sequences)
+                header = processHeaderLine(line)
+                sequences = list()
             else:
-                comments += entry.group('header')
-                if entry.group('sequence').strip():
-                    sequence = _stripSequence(entry.group('sequence'))
-                    entries.append((header, sequence, comments))
-                    isHeader = True
-                    comments = str()
-    return entries
+                sequences.append(line)
+
+        #Yield last entry
+        if sequences:
+            yield header, processSequences(sequences)
 
 
 def _extractFastaHeader(fastaHeader, parser=None, forceId=False):
