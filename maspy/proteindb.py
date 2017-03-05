@@ -567,7 +567,7 @@ def _extractFastaHeader(fastaHeader, parser=None, forceId=False):
         except pyteomics.auxiliary.PyteomicsError as pyteomicsError:
             #If forceId is set True, it uses the whole header as an id
             if forceId:
-                headerInfo = {'id':fastaHeader}
+                headerInfo = {'id': fastaHeader}
             else:
                 raise pyteomicsError
     else:
