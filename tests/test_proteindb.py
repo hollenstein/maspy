@@ -12,8 +12,6 @@ except ImportError:
 ################################################################################
 
 import sys
-sys.path.append("D:/Dropbox/python/maspy")
-sys.path.append("C:/Users/David/Dropbox/python/maspy")
 
 import os
 import tempfile
@@ -64,7 +62,7 @@ class SetupFastaTestFiles(unittest.TestCase):
 
         proteinEntry = MODULE.ProteinEntry(
             uniprotHeaderInfo[0]['id'], uniprotHeaderInfo[0]['name'],
-            uniprotFastaSequences[0], uniprotHeaderInfo[0], uniprotHeaders[0],
+            uniprotFastaSequences[0], uniprotHeaders[0], uniprotHeaderInfo[0],
             isDecoy=False, isContaminant=False
         )
 
@@ -183,16 +181,66 @@ class TestBasicProteindbFunctions(SetupFastaTestFiles):
 class TestProteindbClass(SetupFastaTestFiles):
     def test_addProtein(self):
         proteindb = MODULE.ProteinDatabase()
-        proteindb.addProtein(self.proteinEntry)
-        proteinId = self.proteinEntry.id
+        protein = self.proteinEntry
+        proteindb._addProtein(
+            protein.id, protein.name, protein.sequence, protein.fastaHeader,
+            protein.headerInfo, isDecoy=protein.isDecoy,
+            isContaminant=protein.isContaminant
+        )
+        self.assertIn(protein.id, proteindb.proteins)
+        self.assertEqual(proteindb.proteins[protein.id].sequence, protein.sequence)
 
-        self.assertIn(proteinId, proteindb.proteins)
-        self.assertEqual(proteindb.proteins[proteinId].sequence,
-                         self.proteinEntry.sequence)
+    def test_getStdSequence(self):
+        proteindb_ignoreTrue = MODULE.ProteinDatabase(ignoreIsoleucine=True)
+        proteindb_ignoreFalse = MODULE.ProteinDatabase(ignoreIsoleucine=False)
+        sequence = 'PEPTIDEK'
+        stdSequence = 'PEPTLDEK'
+        self.assertEqual(proteindb_ignoreTrue.getStdSequence(sequence), stdSequence)
+        self.assertEqual(proteindb_ignoreFalse.getStdSequence(sequence), sequence)
+
 
     def test_addPeptide(self):
-        proteindb = MODULE.ProteinDatabase()
+        sequence = 'PEPTIDEK'
+        stdSequence = 'PEPTLDEK'
+        proteinId = self.proteinEntry.id
+        info = {'missedCleavage': 0, 'startPos': 1, 'endPos': 10}
 
+        # Without ignoreIsoleucine
+        proteindb = MODULE.ProteinDatabase(ignoreIsoleucine=False)
+        proteindb.proteins[self.proteinEntry.id] = self.proteinEntry
+        proteindb._addPeptide(sequence, proteinId, info)
+
+        self.assertIn(sequence, proteindb.peptides)
+        self.assertNotIn(stdSequence, proteindb.peptides)
+
+        self.assertIn(sequence, proteindb.proteins[proteinId].peptides)
+        self.assertNotIn(stdSequence, proteindb.proteins[proteinId].peptides)
+
+        self.assertEqual(proteindb.peptides[sequence].sequence, sequence)
+        self.assertEqual(proteindb.peptides[sequence].missedCleavage,info['missedCleavage'])
+        self.assertIn(proteinId, proteindb.peptides[sequence].proteins)
+        self.assertDictEqual({proteinId: (1, 10)},
+                             proteindb.peptides[sequence].proteinPositions
+                             )
+
+        # With ignoreIsoleucine
+        proteindb = MODULE.ProteinDatabase(ignoreIsoleucine=True)
+        proteindb.proteins[self.proteinEntry.id] = self.proteinEntry
+        proteindb._addPeptide(sequence, proteinId, info)
+
+        self.assertIn(sequence, proteindb.peptides)
+        self.assertIn(stdSequence, proteindb.peptides)
+
+        self.assertIn(sequence, proteindb.proteins[proteinId].peptides)
+        self.assertNotIn(stdSequence, proteindb.proteins[proteinId].peptides)
+
+        self.assertEqual(proteindb.peptides[stdSequence].sequence, stdSequence)
+        self.assertEqual(proteindb.peptides[sequence].sequence, stdSequence)
+        self.assertEqual(proteindb.peptides[stdSequence].missedCleavage,info['missedCleavage'])
+        self.assertIn(proteinId, proteindb.peptides[stdSequence].proteins)
+        self.assertDictEqual({proteinId: (1, 10)},
+                             proteindb.peptides[stdSequence].proteinPositions
+                             )
 
 
 

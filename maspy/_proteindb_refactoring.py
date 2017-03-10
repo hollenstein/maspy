@@ -39,55 +39,99 @@ import maspy.peptidemethods
 
 
 class ProteinDatabase(object):
-    def __init__(self):
+    """A database of protein entries from a fasta file.
+
+    In addition to protein entries, it stores peptides generate by an in silico
+    digestion of the protein sequences. Also contains the protein and peptide
+    relationship.
+
+    :ivar proteins: dict, links proteinIds to ProteinEntry instances
+    :ivar peptides: dict, links peptide sequences to PeptideEntry instances
+    :ivar ignoreIsoleucine: bool,
+    """
+    def __init__(self, ignoreIsoleucine=False):
         self.proteins = dict()
         self.peptides = dict()
+        self.ignoreIsoleucine = ignoreIsoleucine
 
-    def addProtein(self, proteinEntry):
+    def getProtein(self, proteinId):
+        #Return one protein entry
+        raise NotImplementedError
+
+    def getPeptide(self, peptide):
+        #Return one peptide entry
+        raise NotImplementedError
+
+    def getProteins(self, proteinId):
+        #Iterator for all proteins
+        raise NotImplementedError
+
+    def getPeptides(self, peptide):
+        #Iterator for all peptides
+        raise NotImplementedError
+
+    def getStdSequence(self, sequence):
+        """Transform a peptide sequence into a standard sequence, i.e. replace
+        all isoleucines with leucines if ignore isoleucine is set.
+
+        :param sequence: an amino acid sequence
+        :returns: standard sequence
+        """
+        if self.ignoreIsoleucine:
+            sequence = sequence.replace('I', 'L')
+        return sequence
+
+    def _addProtein(self, proteinId, proteinName, sequence, header, headerInfo,
+                   isDecoy=False, isContaminant=False):
+        """#TODO"""
+        proteinEntry = ProteinEntry(
+            proteinId, proteinName, sequence, headerInfo, header,
+            isDecoy=isDecoy, isContaminant=isContaminant
+        )
         self.proteins[proteinEntry.id] = proteinEntry
 
-    def addPeptides(self, peptide):
-        pass
-        """
-        pepSequence, info
-        if ignoreIsoleucine:
-            pepSequenceRepr = pepSequence.replace('I', 'L')
-        else:
-            pepSequenceRepr = pepSequence
+    def _addPeptide(self, sequence, proteinId, digestInfo):
+        """Add a peptide to the protein database.
 
-        if pepSequenceRepr in proteindb.peptides:
-            peptideEntry = proteindb.peptides[pepSequenceRepr]
-        else:
-            peptideEntry = PeptideEntry(
-                pepSequenceRepr, mc=info['missedCleavage']
+        :param sequence: str, amino acid sequence
+        :param proteinId: str, proteinId
+        :param digestInfo: dict, contains information about the in silico digest
+            must contain the keys 'missedCleavage', 'startPos' and 'endPos'
+        """
+        stdSequence = self.getStdSequence(sequence)
+
+        if stdSequence not in self.peptides:
+            self.peptides[stdSequence] = PeptideEntry(
+                stdSequence, mc=digestInfo['missedCleavage']
             )
-            proteindb.peptides[pepSequenceRepr] = peptideEntry
+        if sequence not in self.peptides:
+            self.peptides[sequence] = self.peptides[stdSequence]
 
-        if pepSequence not in proteindb.peptides:
-            proteindb.peptides[pepSequence] = peptideEntry
-
-        if proteinId not in peptideEntry.proteins:
-            #FUTURE:
+        if proteinId not in self.peptides[stdSequence].proteins:
+            #FUTURE: peptide can appear at multiple positions per protein.
             #peptideEntry.addSource(proteinId, startPos, endPos)
+            self.peptides[stdSequence].proteins.add(proteinId)
+            self.peptides[stdSequence].proteinPositions[proteinId] = (
+                                    digestInfo['startPos'], digestInfo['endPos']
+                                    )
+            self.proteins[proteinId].peptides.add(sequence)
 
-            #TODO: peptide can appear at multiple positions per protein.
-            peptideEntry.proteins.add(proteinId)
-            peptideEntry.proteinPositions[proteinId] = (
-                                        info['startPos'], info['endPos']
-                                        )
-        """
 
 
 class ProteinEntry(object):
-    def __init__(self, identifier, name, sequence, headerInfo, fastaHeader,
+    """#TODO"""
+    def __init__(self, identifier, name, sequence, fastaHeader, headerInfo,
                  isDecoy=False, isContaminant=False):
         self.id = identifier
         self.name = name
         self.sequence = sequence
         self.isDecoy = isDecoy
-        self.isCont = isContaminant
-        self.headerInfo = headerInfo
+        self.isContaminant = isContaminant
         self.fastaHeader = fastaHeader
+        self.headerInfo = headerInfo #Formerly fastaInfo
+
+        self.peptides = set()
+        self.isUnique = None
 
         #FUTURE: remove these attributes
         self.uniquePeptides = set()
@@ -95,6 +139,7 @@ class ProteinEntry(object):
 
 
 class PeptideEntry(object):
+    """#TODO"""
     def __init__(self, sequence, mc=None):
         self.sequence = sequence
         self.missedCleavage = mc
@@ -103,7 +148,10 @@ class PeptideEntry(object):
         self.proteinPositions = dict()
 
 
-def nan():
+def importProteinDatabase(filePath, proteindb=None, headerParser=None,
+        forceId=False, decoyTag='[decoy]', contaminationTag='[cont]',
+        ignoreIsoleucine=False,  cleavageRule='[KR]', minLength=5, maxLength=40,
+        missedCleavage=0, removeNtermM=False):
     """
     header='sp|ID001|geneId1_taxon Protein description 1 OS=organism GN=gene_name1 PE=1 SV=1'
     decoyTag='[rev]'; contTag='[cont]'; headerParser=None; forceId=False; proteindb=None
@@ -113,86 +161,58 @@ def nan():
     cleavageRule='[KR]'; missedCleavage=0; removeNtermM=True;
     minLength=5; maxLength=55
     """
-    proteindb = ProteinDatabase() if proteindb is None else proteindb
-    for header, sequence in _readFastaFile(filePath):
+    if proteindb is None:
+        proteindb = ProteinDatabase(ignoreIsoleucine=ignoreIsoleucine)
 
+    # - Add protein entries to the protein database - #
+    for header, sequence in _readFastaFile(filePath):
+        #TODO: function, make protein entry or something like this.
         header, isDecoy = _removeHeaderTag(header, decoyTag)
-        header, isContaminant = _removeHeaderTag(header, contTag)
+        header, isContaminant = _removeHeaderTag(header, contaminationTag)
 
         headerInfo = _parseFastaHeader(header, headerParser, forceId)
         proteinId = _idFromHeaderInfo(headerInfo, isDecoy, decoyTag)
         proteinName = _nameFromHeaderInfo(headerInfo, isDecoy, decoyTag)
 
-        proteinEntry = ProteinEntry(
-            proteinId, proteinName, sequence, headerInfo, header,
+        proteindb._addProtein(
+            proteinId, proteinName, sequence, header, headerInfo,
             isDecoy=isDecoy, isContaminant=isContaminant
         )
 
-        proteindb.addProtein(proteinEntry)
-
-        #Perform the insilico digestion
-        #Add peptides to the protein database
+    # - Perform an insilico digestion and add peptides to the proteindb - #
+    for proteinId in proteindb.proteins:
+        sequence = proteindb.proteins[proteinId].sequence
         digestInfo = maspy.peptidemethods.digestInSilico(
             sequence, cleavageRule, missedCleavage, removeNtermM,
             minLength, maxLength
         )
-        #CONTINUE REFACTORING FROM HERE
+        for sequence, info in digestInfo:
+            proteindb._addPeptide(sequence, proteinId, info)
 
-        #Add peptides to the protein database
-        for pepSequence, info in digestInfo:
-            if ignoreIsoleucine:
-                pepSequenceRepr = pepSequence.replace('I', 'L')
-            else:
-                pepSequenceRepr = pepSequence
+    ### CONTINUE REFACTORING FROM HERE ###
 
-            if pepSequenceRepr in proteindb.peptides:
-                peptideEntry = proteindb.peptides[pepSequenceRepr]
-            else:
-                peptideEntry = PeptideEntry(
-                    pepSequenceRepr, mc=info['missedCleavage']
-                )
-                proteindb.peptides[pepSequenceRepr] = peptideEntry
-
-            if pepSequence not in proteindb.peptides:
-                proteindb.peptides[pepSequence] = peptideEntry
-
-            if proteinId not in peptideEntry.proteins:
-                #FUTURE:
-                #peptideEntry.addSource(proteinId, startPos, endPos)
-
-                #TODO: peptide can appear at multiple positions per protein.
-                peptideEntry.proteins.add(proteinId)
-                peptideEntry.proteinPositions[proteinId] = (
-                                            info['startPos'], info['endPos']
-                                            )
-
-    #Add peptide entries to the protein entries, define wheter a peptide can be
-    #uniquely assigend to a single protein (.isUnique = True).
+    #Define wheter a peptide is unique to one protein entry
     for peptide, peptideEntry in viewitems(proteindb.peptides):
-        numProteinMatches = len(peptideEntry.proteins)
-        if numProteinMatches == 1:
+        if len(peptideEntry.proteins) == 1:
             peptideEntry.isUnique = True
-        elif numProteinMatches > 1:
-            peptideEntry.isUnique = False
         else:
-            raise Exception('No protein matches in proteindb for peptide' +
-                            'sequence: ' + peptide)
+            peptideEntry.isUnique = False
 
+    #Add peptide as shared or unique to its protein entries
+    for peptide, peptideEntry in viewitems(proteindb.peptides):
         for proteinId in peptideEntry.proteins:
             if peptideEntry.isUnique:
                 proteindb.proteins[proteinId].uniquePeptides.add(peptide)
             else:
                 proteindb.proteins[proteinId].sharedPeptides.add(peptide)
 
-    #Check protein entries if the digestions generated at least one peptide that
-    #is uniquely assigned to the protein (.isUnique = True)
+    #Define unique proteins, i.e. have at least one unique peptide
     for proteinEntry in viewvalues(proteindb.proteins):
         if len(proteinEntry.uniquePeptides) > 0:
             proteinEntry.isUnique = True
         else:
             proteinEntry.isUnique = False
-    #Note: TODO, altough isoleucin is ignored, the protein entry should only
-    #show the actually present ILE / LEU occurence, not any possibilities
+
     return proteindb
 
 
