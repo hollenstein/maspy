@@ -12,8 +12,13 @@ except ImportError:
 ################################################################################
 
 from collections import defaultdict as ddict
+import os
+import sys
+
 import numpy
 import unittest
+
+sys.path.append(os.path.abspath('..'))
 import maspy.inference as MODULE
 
 
@@ -376,6 +381,7 @@ class TestProteinGroupClass(unittest.TestCase):
                             )
 
     #class TestProteinInferenceClass(unittest.TestCase):
+    #Somehow only the first Class inheriting from unittest.TestCase is executed
     def TestAddProteinGroup(self):
         inference = MODULE.ProteinInference(dict())
         groupId = inference.addProteinGroup('leader1')

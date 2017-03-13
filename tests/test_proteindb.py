@@ -11,13 +11,14 @@ except ImportError:
     pass
 ################################################################################
 
-import sys
 import os
+import sys
 import tempfile
 
 import pyteomics.auxiliary
-
 import unittest
+
+sys.path.append(os.path.abspath('..'))
 import maspy.errors
 import maspy._proteindb_refactoring as MODULE
 
@@ -103,12 +104,26 @@ class TestBasicProteindbFunctions(SetupFastaTestFiles):
         with self.assertRaises(maspy.errors.FileFormatError):
             fastaEntryIter.next()
 
-    #Test _fastaParseSgd()
+    #Test fastaParseSgd()
     def test_fastaParseSgd(self):
         for headerString, expectedHeaderInfo in zip(self.sgdHeaders,
                                                     self.sgdHeaderInfo):
             headerInfo = MODULE.fastaParseSgd(headerString)
             self.assertDictEqual(headerInfo, expectedHeaderInfo)
+
+    #Test fastaParserSpectraClusterPy()
+    def test_fastaParserSpectraClusterPy(self):
+        headers = [
+            'ID_001|geneId1_taxon Protein description 1',
+            'ID_001 geneId1_taxon Protein description 1',
+            'ID_001 geneId1_taxon|Protein|description 1',
+            'ID_001',
+        ]
+        for headerString in headers:
+            headerInfo = MODULE.fastaParserSpectraClusterPy(headerString)
+            self.assertEqual(headerInfo['id'], 'ID_001')
+        #Entry contains a '|' but not a ' ' symbol
+
 
     #Test _parseFastaHeader()
     def test_parseFastaHeader_uniprotHeader(self):

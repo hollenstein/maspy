@@ -11,40 +11,43 @@ except ImportError:
     pass
 ################################################################################
 
+import os
 import sys
+
 import unittest
 try:
     import unittest.mock as MOCK
 except ImportError:
     import mock as MOCK
 
-import maspy.auxiliary as module
+sys.path.append(os.path.abspath('..'))
+import maspy.auxiliary as MODULE
 
 class TestOtherAuxiliaryMethods(unittest.TestCase):
     def test_findAllSubstrings(self):
-        self.assertEqual(module.findAllSubstrings('AASDITSLYK', 'S'), [2, 6])
-        self.assertEqual(module.findAllSubstrings('AADISPLYSKABSPR', 'SP'), [4, 12])
-        self.assertEqual(module.findAllSubstrings('AAADISPLYSKAABSPR', 'AA'), [0, 1, 11])
-        self.assertEqual(module.findAllSubstrings('folder/filname.ext', '/'), [6])
-        self.assertEqual(module.findAllSubstrings('folder/filname.ext', '.'), [14])
+        self.assertEqual(MODULE.findAllSubstrings('AASDITSLYK', 'S'), [2, 6])
+        self.assertEqual(MODULE.findAllSubstrings('AADISPLYSKABSPR', 'SP'), [4, 12])
+        self.assertEqual(MODULE.findAllSubstrings('AAADISPLYSKAABSPR', 'AA'), [0, 1, 11])
+        self.assertEqual(MODULE.findAllSubstrings('folder/filname.ext', '/'), [6])
+        self.assertEqual(MODULE.findAllSubstrings('folder/filname.ext', '.'), [14])
 
     def test_toList(self):
-        self.assertEqual(module.toList((1, 2, 3, 'A')), (1, 2, 3, 'A'))
-        self.assertEqual(module.toList('A'), ['A'])
-        self.assertEqual(module.toList(123), [123])
+        self.assertEqual(MODULE.toList((1, 2, 3, 'A')), (1, 2, 3, 'A'))
+        self.assertEqual(MODULE.toList('A'), ['A'])
+        self.assertEqual(MODULE.toList(123), [123])
 
     def test_joinpath(self):
-        self.assertEqual(module.joinpath('C:/basedir', 'adir', 'afile.ext'), 'C:/basedir/adir/afile.ext')
+        self.assertEqual(MODULE.joinpath('C:/basedir', 'adir', 'afile.ext'), 'C:/basedir/adir/afile.ext')
 
     def test_Memoize(self):
-        memoize = module.Memoize(lambda n: n)
+        memoize = MODULE.Memoize(lambda n: n)
         memoize(1); memoize(2); memoize(3)
         self.assertDictEqual(memoize.memo, {1: 1, 2: 2, 3: 3})
         self.assertEqual(memoize(1), 1)
 
-        self.assertEqual(module.factorial(10), 3628800)
-        self.assertDictEqual(module.factorial.memo, {10: 3628800})
-        self.assertEqual(round(module.log10factorial(3), 6), 0.778151)
+        self.assertEqual(MODULE.factorial(10), 3628800)
+        self.assertDictEqual(MODULE.factorial.memo, {10: 3628800})
+        self.assertEqual(round(MODULE.log10factorial(3), 6), 0.778151)
 
 
 
@@ -65,38 +68,38 @@ class TestLookUpFileLocationMethods(unittest.TestCase):
     @MOCK.patch('os.listdir', mock_os_listdir)
     @MOCK.patch('os.path.isfile', mock_os_path_isfile_true)
     def test_searchFileLocation_isfile_true(self):
-        self.assertIsNone(module.searchFileLocation('test.tsv', 'csv', 'mockdir', recursive=False))
-        self.assertEqual(module.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=False), 'mockdir/test.xml')
-        self.assertEqual(module.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=True), 'mockdir/test.xml')
+        self.assertIsNone(MODULE.searchFileLocation('test.tsv', 'csv', 'mockdir', recursive=False))
+        self.assertEqual(MODULE.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=False), 'mockdir/test.xml')
+        self.assertEqual(MODULE.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=True), 'mockdir/test.xml')
 
     @MOCK.patch('os.listdir', mock_os_listdir)
     @MOCK.patch('os.path.isfile', mock_os_path_isfile_false)
     def test_searchFileLocation_isfile_false(self):
-        self.assertIsNone(module.searchFileLocation('test.tsv', 'csv', 'mockdir', recursive=False))
-        self.assertIsNone(module.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=False))
+        self.assertIsNone(MODULE.searchFileLocation('test.tsv', 'csv', 'mockdir', recursive=False))
+        self.assertIsNone(MODULE.searchFileLocation('test.tsv', 'xml', 'mockdir', recursive=False))
 
 
     def test_matchingFilePaths(self):
         pass
-        #module.matchingFilePaths
+        #MODULE.matchingFilePaths
 
     @MOCK.patch('os.listdir', mock_os_listdir)
     @MOCK.patch('os.path.isfile', mock_os_path_isfile_true)
     def test_listFiletypes_isfile_true(self):
-        self.assertEqual(module.listFiletypes('test', 'mockdir'), ['xml', 'txt', 'txt.zip'])
+        self.assertEqual(MODULE.listFiletypes('test', 'mockdir'), ['xml', 'txt', 'txt.zip'])
 
     @MOCK.patch('os.listdir', mock_os_listdir)
     @MOCK.patch('os.path.isfile', mock_os_path_isfile_false)
     def test_listFiletypes_isfile_false(self):
-        self.assertEqual(module.listFiletypes('test', 'mockdir'), [])
+        self.assertEqual(MODULE.listFiletypes('test', 'mockdir'), [])
 
 
 class TestRunningAverageMethods(unittest.TestCase):
     def test_runningAverageMethods(self):
         testData = [0, 1, 2, 3, 3, 6, 7, 10, 4, 5.5]
         N = len(testData)
-        self.assertEqual(module.runningMean(testData, N, 5), [1.8, 3.0, 4.2, 5.8, 6.0, 6.5])
-        self.assertEqual(module.runningMedian(testData, 5), [2, 3, 3, 6, 6, 6])
+        self.assertEqual(MODULE.runningMean(testData, N, 5), [1.8, 3.0, 4.2, 5.8, 6.0, 6.5])
+        self.assertEqual(MODULE.runningMedian(testData, 5), [2, 3, 3, 6, 6, 6])
 
 
 #PartiallySafeReplace

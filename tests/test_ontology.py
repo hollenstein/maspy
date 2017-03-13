@@ -11,8 +11,12 @@ except ImportError:
     pass
 ################################################################################
 
+import os
 import sys
+
 import unittest
+
+sys.path.append(os.path.abspath('..'))
 import maspy.ontology as module
 
 class TestOntology(unittest.TestCase):

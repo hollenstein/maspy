@@ -11,10 +11,13 @@ except ImportError:
     pass
 ################################################################################
 
+import os
 import sys
 
 import numpy
 import unittest
+
+sys.path.append(os.path.abspath('..'))
 import maspy.isobar as MODULE
 
 
