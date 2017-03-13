@@ -12,7 +12,6 @@ except ImportError:
 ################################################################################
 
 import sys
-
 import os
 import tempfile
 
@@ -92,7 +91,7 @@ class SetupFastaTestFiles(unittest.TestCase):
 
 
 class TestBasicProteindbFunctions(SetupFastaTestFiles):
-    #Test _readFastaFile()
+    #Tests for _readFastaFile()
     def test_readUniprotFastaFile(self):
         fastaEntryIter = MODULE._readFastaFile(self.uniprotTempfile.name)
         for i, (header, sequence) in enumerate(fastaEntryIter):
@@ -177,6 +176,33 @@ class TestBasicProteindbFunctions(SetupFastaTestFiles):
         proteinId = MODULE._nameFromHeaderInfo(headerInfo, False, decoyTag)
         self.assertEqual(proteinId, 'ID001')
 
+    def test_proteinTagPresent(self):
+        tag = '[decoy]'
+        for header in self.uniprotHeaders:
+            self.assertFalse(MODULE._proteinTagPresent(header, tag))
+        decoyHeader = self.uniprotHeaders[0].replace('ID001', tag+'ID001')
+        self.assertTrue(MODULE._proteinTagPresent(decoyHeader, tag))
+
+
+class TestProteinEntryClass(SetupFastaTestFiles):
+    def test_calculateLength(self):
+        protein = self.proteinEntry
+        self.assertEqual(protein.length(), len(protein.sequence))
+
+    def test_calculateMass(self):
+        protein = self.proteinEntry
+        self.assertAlmostEqual(protein.mass(), 3294.52736188385)
+
+
+class TestPeptideEntryClass(SetupFastaTestFiles):
+    def test_calculateLength(self):
+        peptide = MODULE.PeptideEntry(self.uniprotFastaSequences[0])
+        self.assertEqual(peptide.length(), len(peptide.sequence))
+
+    def test_calculateMass(self):
+        peptide = MODULE.PeptideEntry(self.uniprotFastaSequences[0])
+        self.assertAlmostEqual(peptide.mass(), 3294.52736188385)
+
 
 class TestProteindbClass(SetupFastaTestFiles):
     def test_addProtein(self):
@@ -197,7 +223,6 @@ class TestProteindbClass(SetupFastaTestFiles):
         stdSequence = 'PEPTLDEK'
         self.assertEqual(proteindb_ignoreTrue.getStdSequence(sequence), stdSequence)
         self.assertEqual(proteindb_ignoreFalse.getStdSequence(sequence), sequence)
-
 
     def test_addPeptide(self):
         sequence = 'PEPTIDEK'
