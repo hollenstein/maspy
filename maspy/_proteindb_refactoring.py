@@ -101,11 +101,11 @@ class ProteinDatabase(object):
             sequence = sequence.replace('I', 'L')
         return sequence
 
-    def _addProtein(self, proteinId, proteinName, sequence, header, headerInfo,
-                   isDecoy=False, isContaminant=False):
+    def _addProtein(self, proteinId, proteinName, sequence, fastaHeader,
+                    headerInfo, isDecoy=False, isContaminant=False):
         """#TODO"""
         proteinEntry = ProteinEntry(
-            proteinId, proteinName, sequence, headerInfo, header,
+            proteinId, proteinName, sequence, fastaHeader, headerInfo,
             isDecoy=isDecoy, isContaminant=isContaminant
         )
         self.proteins[proteinEntry.id] = proteinEntry
@@ -315,9 +315,9 @@ def importProteinDatabase(filePath, proteindb=None, headerParser=None,
         proteindb = ProteinDatabase(ignoreIsoleucine=ignoreIsoleucine)
 
     # - Add protein entries to the protein database - #
-    for header, sequence in _readFastaFile(filePath):
+    for fastaHeader, sequence in _readFastaFile(filePath):
         #TODO: function, make protein entry or something like this.
-        header, isDecoy = _removeHeaderTag(header, decoyTag)
+        header, isDecoy = _removeHeaderTag(fastaHeader, decoyTag)
         header, isContaminant = _removeHeaderTag(header, contaminationTag)
 
         headerInfo = _parseFastaHeader(header, headerParser, forceId)
@@ -330,7 +330,7 @@ def importProteinDatabase(filePath, proteindb=None, headerParser=None,
             isContaminant = _proteinTagPresent(header, contaminationTag)
 
         proteindb._addProtein(
-            proteinId, proteinName, sequence, header, headerInfo,
+            proteinId, proteinName, sequence, fastaHeader, headerInfo,
             isDecoy=isDecoy, isContaminant=isContaminant
         )
 
@@ -381,6 +381,29 @@ def fastaParseSgd(header):
     ID, name, description = re.match(rePattern, header).groups()
     info = {'id': ID, 'name': name, 'description': description}
     return info
+
+
+def fastaParserSpectraClusterPy(header):
+    """Custom parser for fasta headers adapted from
+    https://github.com/spectra-cluster/spectra-cluster-py
+
+    :param header: str, protein entry header from a fasta file
+
+    :returns: dict, parsed header
+    """
+
+    isUniprot = lambda h: h[0:3] in ['sp|', 'tr|', 'up|']
+
+    if isUniprot(header):
+        start = 3
+        end = header.find('|', start)
+    else:
+        start = 0
+        breakPositions = [header.find(' '), header.find('|')]
+        breakPositions = [i if i > 0 else len(header) for i in breakPositions]
+        end = min(breakPositions)
+
+    return {'id': header[start:end]}
 
 
 def _readFastaFile(filepath):
