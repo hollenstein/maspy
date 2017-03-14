@@ -391,7 +391,6 @@ def fastaParserSpectraClusterPy(header):
 
     :returns: dict, parsed header
     """
-
     isUniprot = lambda h: h[0:3] in ['sp|', 'tr|', 'up|']
 
     if isUniprot(header):
@@ -424,9 +423,9 @@ def _readFastaFile(filepath):
     with io.open(filepath, 'r') as openfile:
         #Iterate through lines until the first header is encountered
         try:
-            line = openfile.next()
+            line = next(openfile)
             while line[0] != '>':
-                line = openfile.next()
+                line = next(openfile)
             header = processHeaderLine(line)
             sequences = list()
         except StopIteration:
