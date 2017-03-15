@@ -517,7 +517,7 @@ def mappingBasedGrouping(protToPeps):
 
         # Find redundant proteins #
         subsumableProteins = _findRedundantProteins(subsetRemovedProtToPeps,
-                                                   subsetRemovedPepToProts)
+                                                    subsetRemovedPepToProts)
         remainingNonRedundant = remainingProteins.difference(subsumableProteins)
         groupInitiatingProteins = uniqueSubsetRemoved.union(remainingNonRedundant)
 
@@ -779,8 +779,20 @@ def _findRedundantProteins(protToPeps, pepToProts, proteins=None):
     getCount = operator.itemgetter(1)
     getProt = operator.itemgetter(0)
 
+    #TODO: quick and dirty solution
+    #NOTE: add a test for merged proteins
+    proteinTuples = list()
+    for protein in proteins:
+        if isinstance(protein, tuple):
+            proteinTuples.append(protein)
+        else:
+            proteinTuples.append(tuple([protein]))
+
     sort = list()
-    for protein in sorted(proteins, reverse=True):
+    for protein in sorted(proteinTuples, reverse=True):
+        if len(protein) == 1:
+            protein = protein[0]
+
         protPepFreq = [pepFrequency[pep] for pep in protToPeps[protein]]
         if min(protPepFreq) > 1:
             sortValue = (len(protPepFreq)*-1, sorted(protPepFreq, reverse=True))

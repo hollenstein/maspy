@@ -521,9 +521,9 @@ def _readFastaFile(filepath):
     with io.open(filepath) as openfile:
         #Iterate through lines until the first header is encountered
         try:
-            line = openfile.next()
+            line = next(openfile)
             while line[0] != '>':
-                line = openfile.next()
+                line = next(openfile)
             header = processHeaderLine(line)
             sequences = list()
         except StopIteration:
