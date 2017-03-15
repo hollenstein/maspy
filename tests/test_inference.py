@@ -8,6 +8,7 @@ try:
     from itertools import izip as zip
 except ImportError:
     #python 3 series
+    from functools import reduce
     pass
 ################################################################################
 
@@ -24,6 +25,12 @@ import maspy.inference as MODULE
 
 class SetupMappingExamples(unittest.TestCase):
     def setUp(self):
+        # - Python 3 compatibility - #
+        try:
+            self.assertItemsEqual([], [])
+        except AttributeError:
+            self.assertItemsEqual = self.assertCountEqual
+
         proteinToPeptides = {
             '01_P1': {'01_p1', '01_p2'},
             '02_P1': {'02_p1', '02_p2'},
@@ -350,8 +357,8 @@ class SetupMappingExamples(unittest.TestCase):
         self.uniqueProteins = uniqueProteins
         self.uniqueMergedProteins = uniqueMergedProteins
 
-        self.subsetProteins = sorted(subsetProteins)
-        self.subsetMergedProteins = sorted(subsetMergedProteins)
+        self.subsetProteins = subsetProteins
+        self.subsetMergedProteins = subsetMergedProteins
         self.redundantProteins = redundantProteins
 
         self.groupingGroupResults = groupingGroupResults
@@ -424,7 +431,7 @@ class TestProteinInferenceFunctions(SetupMappingExamples):
         proteinClusters = MODULE._findProteinClusters(self.proteinToPeptides,
                                                      self.peptideToProteins)
         self.assertEqual(len(proteinClusters), len(self.expectedClusters))
-        allClusteredProteins = reduce(lambda c1, c2: c1.union(c2), proteinClusters)
+        allClusteredProteins = reduce(set.union, proteinClusters)
         self.assertSetEqual(allClusteredProteins, self.potentialProteins)
 
         #Assert that all proteins withing a cluster belong the correct cluster,
@@ -483,11 +490,11 @@ class TestProteinInferenceFunctions(SetupMappingExamples):
         subsetProteins = MODULE._findSubsetProteins(self.proteinToPeptides,
                                                     self.proteinToPeptides,
                                                     self.peptideToProteins)
-        self.assertListEqual(sorted(subsetProteins), self.subsetProteins)
+        self.assertItemsEqual(subsetProteins, self.subsetProteins)
         subsetMergedProteins = MODULE._findSubsetProteins(self.mergedProteinToPeptides,
                                                           self.mergedProteinToPeptides,
                                                           self.mergedPeptideToProteins)
-        self.assertListEqual(sorted(subsetMergedProteins), self.subsetMergedProteins)
+        self.assertItemsEqual(subsetMergedProteins, self.subsetMergedProteins)
 
     def test_findRedundantProteins(self):
         redundantProteins = MODULE._findRedundantProteins(self.proteinToPeptides,

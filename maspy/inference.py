@@ -898,8 +898,10 @@ def _mappingGetValueSet(mapping, keys):
 
     returns a set of combined entries
     """
-    setUnion = lambda i,j: i.union(j)
-    return reduce(setUnion, [mapping[k] for k in keys])
+    setUnion = set()
+    for k in keys:
+        setUnion = setUnion.union(mapping[k])
+    return setUnion
 
 
 def _flattenMergedProteins(proteins):

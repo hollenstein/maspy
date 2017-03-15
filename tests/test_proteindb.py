@@ -66,9 +66,9 @@ class SetupFastaTestFiles(unittest.TestCase):
             isDecoy=False, isContaminant=False
         )
 
-        with tempfile.NamedTemporaryFile(delete=False) as uniprotTempfile:
+        with tempfile.NamedTemporaryFile(delete=False, mode='w') as uniprotTempfile:
             uniprotTempfile.file.write(uniprotString)
-        with tempfile.NamedTemporaryFile(delete=False) as noFastaTempfile:
+        with tempfile.NamedTemporaryFile(delete=False, mode='w') as noFastaTempfile:
             noFastaTempfile.file.write('\n'.join(uniprotFastaSequences))
 
         self.uniprotHeaders = uniprotHeaders
@@ -102,7 +102,7 @@ class TestBasicProteindbFunctions(SetupFastaTestFiles):
     def test_readEmptyFastaFile(self):
         fastaEntryIter = MODULE._readFastaFile(self.noFastaTempfile.name)
         with self.assertRaises(maspy.errors.FileFormatError):
-            fastaEntryIter.next()
+            next(fastaEntryIter)
 
     #Test fastaParseSgd()
     def test_fastaParseSgd(self):

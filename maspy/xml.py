@@ -509,7 +509,7 @@ class MzmlReader(object):
                 metadataNode = ETREE.Element(self.elementTag,
                                              self.element.attrib
                                              )
-                _, _, targetTag = self.next()
+                _, _, targetTag = next(self)
                 break
 
         while targetTag != 'mzML':
