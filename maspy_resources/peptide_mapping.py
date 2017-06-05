@@ -35,14 +35,23 @@ import maspy.inference as INFERENCE
 import maspy._proteindb_refactoring as PROTEINDB
 
 #Import your proteindb file
-def the_magic_mapping_function(peptides, fastaPath, importAttributes=None):
-    """ TODO
+def the_magic_mapping_function(peptides, fastaPath, importAttributes=None,
+        ignoreUnmapped=True):
+    """Returns a dictionary mapping peptides to protein group leading proteins.
 
     :param peptides: a set of peptide sequences
-    :parm fastaPath: FASTA file path
+    :param fastaPath: FASTA file path
     :param importAttributes: dict, can be used to override default parameters
         passed to the function maspy.proteindb.importProteinDatabase().
-    :returns: TODO
+        Default attribtues are:
+        {'cleavageRule': '[KR]', 'removeNtermM': True, 'ignoreIsoleucine': True,
+         forceId': True, 'headerParser': PROTEINDB.fastaParserSpectraClusterPy}
+    :param ignoreUnmapped: bool, if True ignores peptides that cannot be mapped
+        to any protein present in the FASTA file
+
+    :returns: dict, {peptide: set([groupLeaders1, ...])}
+        where groupLeaders is a string joining all leading proteins of a group
+        with a ";", for example {'peptide': {"protein1;proetin2;protein3"}}
     """
 
     missedCleavage = max([p.count('K') + p.count('R') for p in peptides]) - 1
@@ -62,6 +71,10 @@ def the_magic_mapping_function(peptides, fastaPath, importAttributes=None):
     #This could be automated by adding a function to the inference module
     proteinToPeptides = ddict(set)
     for peptide in peptides:
+        #ignore any peptide that's not mapped
+        if peptide not in proteindb.peptides and ignoreUnmapped:
+            continue
+
         proteins = proteindb.peptides[peptide].proteins
         for protein in proteins:
             proteinToPeptides[protein].add(peptide)
