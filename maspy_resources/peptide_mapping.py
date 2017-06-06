@@ -71,12 +71,17 @@ def the_magic_mapping_function(peptides, fastaPath, importAttributes=None,
     #This could be automated by adding a function to the inference module
     proteinToPeptides = ddict(set)
     for peptide in peptides:
-        #ignore any peptide that's not mapped
-        if peptide not in proteindb.peptides and ignoreUnmapped:
-            continue
+        #ignore any peptide that's not mapped if "ignoreUnmapped" is True
+        try:
+            peptideDbEntry = proteindb.peptides[peptide]
+        except KeyError as exception:
+            if ignoreUnmapped:
+                continue
+            else:
+                exceptionText = 'No protein mappings for peptide "'+peptide+'"'
+                raise KeyError(exceptionText)
 
-        proteins = proteindb.peptides[peptide].proteins
-        for protein in proteins:
+        for protein in peptideDbEntry.proteins:
             proteinToPeptides[protein].add(peptide)
 
     #Generate the ProteinInference instance
